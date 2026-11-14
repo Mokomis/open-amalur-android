@@ -24,6 +24,18 @@ Veil takes its visual cues from [Edge UI for Skyrim](https://www.nexusmods.com/s
 - An updated character screen with an animated waterfall backdrop and appearance changes for armor and same-type weapons.
 - Graphics options for shadow quality and distance, draw distance, ambient occlusion, and depth of field. Camera Bounding reduces the extra camera pullback during group combat.
 
+### Screenshots
+
+Captured on the OPPO Pad Mini. Select an image to open it at full size.
+
+| Touch controls | Inventory and weapon appearance |
+| --- | --- |
+| [![Gameplay with movable touch controls](screenshots/touch-controls.jpg)](screenshots/touch-controls.jpg) | [![Weapon list, stats and equipped appearance](screenshots/inventory.jpg)](screenshots/inventory.jpg) |
+| **Character screen** | **Quest log** |
+| [![Character screen with the waterfall backdrop](screenshots/character.jpg)](screenshots/character.jpg) | [![Quest list alongside objectives](screenshots/quest-log.jpg)](screenshots/quest-log.jpg) |
+| **Dialogue wheel** | **Save confirmation** |
+| [![Dialogue wheel in a conversation with Agarth](screenshots/dialogue.jpg)](screenshots/dialogue.jpg) | [![Confirmation before overwriting a save](screenshots/save.jpg)](screenshots/save.jpg) |
+
 ## Game files
 
 You will need your own supported PC installation of Re-Reckoning. This repository contains project documentation. Commercial game files, extracted game assets, generated engine translations, saves, and signing keys stay private.
