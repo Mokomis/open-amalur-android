@@ -42,6 +42,7 @@ Veil takes its visual cues from Edge UI for Skyrim. It uses compact lists, full-
 
 ### Graphics and Android integration
 
+- **Android Hardware Scaling** offers Off, 25%, 50%, 75%, and 100%. The setting defaults to 100% and takes effect after a restart.
 - **Shadow Map Resolution** offers 512, 1024, 1536, and 2048 px.
 - **Shadow Distance** and **Vegetation Draw Distance** each offer 75, 100, 125, and 150 percent.
 - **Ambient Occlusion** offers Off, On, and High. **Depth of Field** offers 0, 50, 100, and 150 percent. The menu identifies settings that take effect after a restart.
@@ -64,12 +65,14 @@ Captured on the OPPO Pad Mini. Select an image to open it at full size.
 | [![Dialogue wheel in a conversation with Agarth](screenshots/dialogue.jpg)](screenshots/dialogue.jpg) | [![Confirmation before overwriting a save](screenshots/save.jpg)](screenshots/save.jpg) |
 | **Title screen and update status** | **First-launch folder setup** |
 | [![Main menu showing GitHub release status](screenshots/title-updates.jpg)](screenshots/title-updates.jpg) | [![First-launch prompt to choose the Re-Reckoning folder](screenshots/setup.jpg)](screenshots/setup.jpg) |
+| **Veil Graphics** | |
+| [![Graphics options with Android hardware scaling, shadow resolution and distance, ambient occlusion, and depth of field](screenshots/graphics.jpg)](screenshots/graphics.jpg) | |
 
 ## Game files
 
 You will need your own supported PC installation of Re-Reckoning. This repository contains project documentation. Commercial game files, extracted game assets, generated engine translations, saves, and signing keys stay private.
 
-The tested candidate recognizes Steam build 10619381 of Re-Reckoning. First-launch setup asks for the game folder and the matching 32-bit Microsoft DirectX shader compiler file. Keep the English, French, and German game archives together because the engine opens all three at startup.
+The tested candidate recognizes Steam build 10619381 of Re-Reckoning. First-launch setup asks for the game folder and the matching 32-bit Microsoft DirectX shader compiler file. Keep the English, French, and German game archives together because the engine opens all three at startup. Keep `data/videos/well.bik` in the source folder for the animated main menu. Setup can restore that file to an existing install.
 
 The Android folder picker can see game folders on shared storage. If your DroidDeck library is installed inside DroidDeck's private storage, copy the game folder into a shared Steam library or a folder such as `Documents/Amalur` before importing. [Android file picker access](https://developer.android.com/training/data-storage/shared/documents-files) · [DroidDeck](https://github.com/Droid-Deck/DroidDeck)
 
