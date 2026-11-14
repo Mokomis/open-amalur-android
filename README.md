@@ -17,14 +17,39 @@ The live tests so far are concentrated on the OPPO Pad Mini. Performance varies 
 
 [Read the engine and threading notes](ENGINE.md).
 
-## Veil
+## Added features
 
-Veil takes its visual cues from [Edge UI for Skyrim](https://www.nexusmods.com/skyrimspecialedition/mods/130983). It brings compact lists and item details to inventory, quests, saves, and other menus while keeping the original game's actions behind them.
+### Veil interface
 
-- Touch controls with movable, resizable buttons, menu shortcuts, two sticks, and a tappable numbered ability bar.
-- Tap and drag selection on the dialogue wheel, touch confirmations for key prompts, and double-tap saving with the original overwrite confirmation.
-- An updated character screen with an animated waterfall backdrop and appearance changes for armor and same-type weapons.
-- Graphics options for shadow quality and distance, draw distance, ambient occlusion, and depth of field. Camera Bounding reduces the extra camera pullback during group combat.
+Veil takes its visual cues from Edge UI for Skyrim. It uses compact lists, full-screen layouts, and a consistent set of buttons, tabs, prompts, and type. [Edge UI](https://www.nexusmods.com/skyrimspecialedition/mods/130983)
+
+- **Main and pause menus** with a redesigned options sidebar and dedicated settings lists.
+- **Inventory, stash, and equipment** with compact item lists, a separate details pane, equipped-item markers, and appearance controls.
+- **Character and progression screens** for stats, skills, abilities, destinies, and character creation. The character portrait has an animated waterfall backdrop from the game.
+- **Quest log and maps** with side-by-side quest lists and objectives, Veil map controls, and touch confirmation for quest tutorials.
+- **Save and load** with full-screen slots and a touch action for creating or overwriting a save. Overwriting keeps the game's confirmation prompt.
+- **Dialogue** with tap selection, a draggable dialogue wheel, and an on-screen Skip control.
+- **Trading, stash, and NPC services** including buying, selling, repair, training, and healing. Veil also covers alchemy, blacksmithing, sagecrafting, lockpicking, and the timed Dispel screen.
+
+### Gameplay and controls
+
+- **Transmog** changes the look of equipped armor and same-type weapons, such as a sword taking the appearance of another sword. The equipped item retains its stats. Appearance choices are saved with the character.
+- **Tablet controls** provide separate movement and camera sticks, Run/Leap, attacks, dodge, block, interaction, abilities, and shortcuts for the game menu, inventory, world map, and quests.
+- **Touch layout editor** moves and resizes individual controls and saves the layout.
+- **Ability and Reckoning controls** include a tappable 1–9/0 ability bar, on-screen LT and RT prompts, touch finishers, and Continue buttons on screens that require a controller button or key.
+- **Controller support** covers gameplay and menu navigation. Prompts follow the active input method.
+- **Camera Bounding** limits how far the camera pulls back during group fights.
+
+### Graphics and Android integration
+
+- **Shadow Map Resolution** offers 512, 1024, 1536, and 2048 px.
+- **Shadow Distance** and **Vegetation Draw Distance** each offer 75, 100, 125, and 150 percent.
+- **Ambient Occlusion** offers Off, On, and High. **Depth of Field** offers 0, 50, 100, and 150 percent. The menu identifies settings that take effect after a restart.
+- **Direct startup** skips the intro videos and the press-any-key screen.
+- **First-launch import** uses Android's folder picker to copy a supported PC installation into Open Amalur, with local profiles and saves.
+- **GitHub release status** appears on the main menu and links to the release page when a newer version is available.
+
+Fatesworn support is under test.
 
 ### Screenshots
 
