@@ -15,6 +15,8 @@ The first approach reconstructed parts of the engine from the game's data. It ma
 
 The live tests so far are concentrated on the OPPO Pad Mini. Performance varies with scene, resolution, device, and temperature. Compatibility across the full campaign and the Fatesworn expansion is still being checked.
 
+[Read the engine and threading notes](ENGINE.md).
+
 ## Veil
 
 Veil takes its visual cues from [Edge UI for Skyrim](https://www.nexusmods.com/skyrimspecialedition/mods/130983). It brings compact lists and item details to inventory, quests, saves, and other menus while keeping the original game's actions behind them.
