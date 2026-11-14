@@ -1,0 +1,33 @@
+# Open Amalur for Android
+
+Open Amalur is an unofficial Android project for **Kingdoms of Amalur: Re-Reckoning**. Its aim is to preserve the PC game's combat, quests, characters, and world while making the game practical to play on a tablet with touch controls or a controller.
+
+This repository is the project page for the current original-engine work. The earlier [Open Amalur research archive](https://github.com/Mokomis/open-amalur) remains available. The first downloadable build is being prepared. Supported game versions and installation instructions will accompany the release.
+
+## How the engine runs
+
+The first approach reconstructed parts of the engine from the game's data. It made selected locations playable, but the work exposed how much behavior and rendering would need to be recreated. The current project starts from the original Windows x86 engine and uses its behavior on Windows as a reference.
+
+1. Recover and test bounded parts of the original engine. The early comparisons followed animation jobs through expression evaluation, blend trees, transforms, skinning, and GPU submission. The tests checked Windows results against the original x86 program and then ran the corresponding compiled code on ARM.
+2. Repair the x86-to-C translation path. We qualified instruction handling, register and flag behavior, floating-point operations, and Windows calling conventions against the original program. The current Android build compiles translated code to ARM64 ahead of time.
+3. Provide the Windows services the game expects. Android adapters handle threads and synchronization, file access, input, audio, local profiles and saves, and window and surface events. The graphics layer maps the game's Direct3D 11 work to Vulkan. On-device tests progressed from isolated scenes and captured graphics to live gameplay.
+4. Recheck the original timing on Android. Correct CPU reporting allowed the engine to see the tablet's available cores. Profiling found two especially busy threads, one recording graphics work and one running the simulation. We measured the effect of CPU placement, retained improvements to job-completion wakeups and resource tracking, and checked the results against original behavior before using them in gameplay. Presentation tests measured displayed frames separately from the rate at which the renderer submitted them.
+
+The live tests so far are concentrated on the OPPO Pad Mini. Performance varies with scene, resolution, device, and temperature. Compatibility across the full campaign and the Fatesworn expansion is still being checked.
+
+## Veil
+
+Veil takes its visual cues from [Edge UI for Skyrim](https://www.nexusmods.com/skyrimspecialedition/mods/130983). It brings compact lists and item details to inventory, quests, saves, and other menus while keeping the original game's actions behind them.
+
+- Touch controls with movable, resizable buttons, menu shortcuts, two sticks, and a tappable numbered ability bar.
+- Tap and drag selection on the dialogue wheel, touch confirmations for key prompts, and double-tap saving with the original overwrite confirmation.
+- An updated character screen with an animated waterfall backdrop and appearance changes for armor and same-type weapons.
+- Graphics options for shadow quality and distance, draw distance, ambient occlusion, and depth of field. Camera Bounding reduces the extra camera pullback during group combat.
+
+## Game files
+
+You will need your own supported PC installation of Re-Reckoning. This repository contains project documentation. Commercial game files, extracted game assets, generated engine translations, saves, and signing keys stay private.
+
+The Android folder picker can see game folders on shared storage. If your DroidDeck library is installed inside DroidDeck's private storage, copy the game folder into a shared Steam library or a folder such as `Documents/Amalur` before importing.
+
+Open Amalur is a fan project and is independent of THQ Nordic and Kaiko.
