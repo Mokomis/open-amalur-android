@@ -37,11 +37,15 @@ Captured on the OPPO Pad Mini. Select an image to open it at full size.
 | [![Character screen with the waterfall backdrop](screenshots/character.jpg)](screenshots/character.jpg) | [![Quest list alongside objectives](screenshots/quest-log.jpg)](screenshots/quest-log.jpg) |
 | **Dialogue wheel** | **Save confirmation** |
 | [![Dialogue wheel in a conversation with Agarth](screenshots/dialogue.jpg)](screenshots/dialogue.jpg) | [![Confirmation before overwriting a save](screenshots/save.jpg)](screenshots/save.jpg) |
+| **Title screen and update status** | **First-launch folder setup** |
+| [![Main menu showing GitHub release status](screenshots/title-updates.jpg)](screenshots/title-updates.jpg) | [![First-launch prompt to choose the Re-Reckoning folder](screenshots/setup.jpg)](screenshots/setup.jpg) |
 
 ## Game files
 
 You will need your own supported PC installation of Re-Reckoning. This repository contains project documentation. Commercial game files, extracted game assets, generated engine translations, saves, and signing keys stay private.
 
-The Android folder picker can see game folders on shared storage. If your DroidDeck library is installed inside DroidDeck's private storage, copy the game folder into a shared Steam library or a folder such as `Documents/Amalur` before importing.
+The tested candidate recognizes Steam build 10619381 of Re-Reckoning. First-launch setup asks for the game folder and the matching 32-bit Microsoft DirectX shader compiler file. Keep the English, French, and German game archives together because the engine opens all three at startup.
+
+The Android folder picker can see game folders on shared storage. If your DroidDeck library is installed inside DroidDeck's private storage, copy the game folder into a shared Steam library or a folder such as `Documents/Amalur` before importing. [Android file picker access](https://developer.android.com/training/data-storage/shared/documents-files) · [DroidDeck](https://github.com/Droid-Deck/DroidDeck)
 
 Open Amalur is a fan project and is independent of THQ Nordic and Kaiko.
