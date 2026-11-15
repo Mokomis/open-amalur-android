@@ -55,8 +55,13 @@ $env:JAVA_HOME = "$java"
     --library build/liboaoriginal.so --keystore build/local.jks --key-alias openamalur `
     --application-id org.openamalur.local --output build/OpenAmalur-local.apk
 ```
- Use a distinct `--application-id` when installing a build signed with your own key alongside an existing build.
+
+Use a distinct `--application-id` when installing a build signed with your own key alongside an existing build.
 
 `tools/generate_veil_edits.py` takes your original game directory, a locally modded `patch_0.pak`, and output paths for the recipe, properties and a local reference archive. Use the original and modded archives from the same supported game version. The captured portrait waterfall and current Veil font assets are not part of this source checkout. You can build with a recipe for your own menus, and the portrait capture can be supplied separately for local testing.
 
-The launcher works from shared game files without Steam or Internet access. It verifies the executable and archives against the supported build, creates a local profile, and detects Fatesworn from its optional archive in `data_1278260`. The GitHub update badge is independent of game startup.
+The launcher works from shared game files without Steam or Internet access. It checks the game version and validates the copied files, creates a local profile, and detects Fatesworn from its optional archive in `data_1278260`. The GitHub update badge is independent of game startup.
+
+## Verification
+
+A fresh Windows checkout regenerated the game, Bink and DirectX compiler translations from local files, compiled the 362 native objects, and linked the Android library. The stock-menu development APK built with that library imported a copied game folder on an OPPO Pad Mini (OPD2515) with Android Internet permission omitted. The engine mounted Fatesworn `cs:13757` when the matching archive was present and reached the base-game menu after the archive was removed from the test installation.

@@ -72,9 +72,9 @@ Captured on the OPPO Pad Mini. Select an image to open it at full size.
 
 You will need your own supported PC installation of Re-Reckoning. This repository contains the project source, native build instructions, and documentation. Commercial game files, extracted game assets, generated engine translations, saves, and signing keys stay private.
 
-The tested candidate recognizes Steam build 10619381 of Re-Reckoning. First-launch setup asks for the game folder and the matching 32-bit Microsoft DirectX shader compiler file. Keep the English, French, and German game archives together because the engine opens all three at startup. Keep `data/videos/well.bik` in the source folder for the animated main menu. Setup can restore that file to an existing install.
+The tested candidate recognizes Steam build 10619381 of Re-Reckoning. First-launch setup asks for the game folder. Keep the English, French, and German game archives together because the engine opens all three at startup. Keep `data/videos/well.bik` in the source folder for the animated main menu. Setup can restore that file to an existing install.
 
-The importer reads the selected folder directly. Steam, a Steam sign-in, and an internet connection are unnecessary for play. The update badge uses GitHub when a connection is available. Setup can read the matching DirectX compiler DLL from the selected folder, or you can select it separately. A supported `data_1278260/dlc_mit_0.pak` in the selected folder is imported as Fatesworn.
+The importer reads the selected folder directly. Steam, a Steam sign-in, and an internet connection are unnecessary for play. The update badge uses GitHub when a connection is available. Put the matching 32-bit Microsoft `d3dcompiler_43.dll` in that folder to import everything in one step. Setup can also ask for the DLL separately. A supported `data_1278260/dlc_mit_0.pak` in the selected folder is imported as Fatesworn.
 
 The Android folder picker can see game folders on shared storage. If your DroidDeck library is installed inside DroidDeck's private storage, copy the game folder into a shared Steam library or a folder such as `Documents/Amalur` before importing. [Android file picker access](https://developer.android.com/training/data-storage/shared/documents-files) · [DroidDeck](https://github.com/Droid-Deck/DroidDeck)
 
