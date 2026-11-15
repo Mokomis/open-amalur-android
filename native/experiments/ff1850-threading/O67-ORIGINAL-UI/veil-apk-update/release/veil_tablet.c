@@ -28,6 +28,8 @@ static _Atomic unsigned mash_taps;
 static _Atomic unsigned tutorial_mode;
 static _Atomic bool tutorial_tap;
 static _Atomic bool name_dialog;
+static _Atomic uint64_t death_menu_update;
+static _Atomic bool death_menu_tap;
 static _Atomic bool item_radial;
 static _Atomic bool map_open;
 static _Atomic unsigned touch_ability_slot;
@@ -175,6 +177,12 @@ HIDDEN int veil_tablet_command(const char *section, const char *key, const char 
             __android_log_print(ANDROID_LOG_INFO, "VeilTablet", "Name dialog %d", open);
         return 1;
     }
+    if (!strcasecmp(key, "VeilDeathMenu")) {
+        bool active = value[0] == '1';
+        atomic_store(&death_menu_update, active ? now_ms() : 0);
+        if (!active) atomic_store(&death_menu_tap, false);
+        return 1;
+    }
     if (!strcasecmp(key, "VeilItemRadial")) {
         atomic_store(&item_radial, value[0] == '1');
         return 1;
@@ -217,6 +225,8 @@ HIDDEN int veil_tablet_read(const char *section, const char *key, char *value)
         }
     } else if (!strcasecmp(key, "VeilTabletTutorialTap")) {
         result = atomic_exchange(&tutorial_tap, false);
+    } else if (!strcasecmp(key, "VeilDeathMenuTap")) {
+        result = atomic_exchange(&death_menu_tap, false);
     } else if (!strcasecmp(key, "VeilTabletInput")) {
         result = atomic_load(&controller_active) ? 2 :
                  atomic_load(&enabled) ? 1 : 0;
@@ -398,6 +408,17 @@ HIDDEN void veil_tablet_poll_actions(void)
 HIDDEN int veil_tablet_map_open(void)
 {
     return atomic_load(&map_open);
+}
+
+HIDDEN int veil_tablet_death_menu_active(void)
+{
+    uint64_t updated = atomic_load(&death_menu_update);
+    return updated && now_ms() - updated < 200;
+}
+
+HIDDEN void veil_tablet_death_menu_tap(void)
+{
+    if (veil_tablet_death_menu_active()) atomic_store(&death_menu_tap, true);
 }
 
 HIDDEN int veil_tablet_gameplay_active(void)

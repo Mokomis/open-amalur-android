@@ -181,10 +181,94 @@ def fix_workbench_tutorials(data):
     return insert_callback(data, 1, 226, edit)
 
 
+def death_menu_touch(data):
+    def edit(fn):
+        tree, rows, row, index, button, x, y, call, arg1, arg2 = range(
+            fn["maximum_stack_size"], fn["maximum_stack_size"] + 10
+        )
+        code = Code(fn)
+
+        def report(value):
+            code.glob(call, "GAME")
+            code.field(call, call, "set_personal_ini_entry_str")
+            code.load(arg1, "VeilDeathMenu")
+            code.load(arg2, value)
+            code.op("CALL_I", call, 3, 1)
+
+        code.glob(tree, "m_button_tree")
+        code.op("TEST", tree)
+        code.jump("inactive")
+        code.op("SELF", call, tree, code.index("is_root") + 256)
+        code.op("CALL_I", call, 2, 2)
+        code.op("TEST", call)
+        code.jump("inactive")
+        report("1")
+        code.glob(call, "GAME")
+        code.field(call, call, "get_personal_ini_entry_num")
+        code.load(arg1, "VeilDeathMenuTap")
+        code.load(arg2, 0)
+        code.op("CALL_I", call, 3, 2)
+        code.op("EQ", 1, call, code.index(1) + 256)
+        code.jump("hit_test")
+        code.op("EQ", 0, call, code.index("1") + 256)
+        code.jump("done")
+
+        code.mark("hit_test")
+        code.field(rows, tree, "m_ui")
+        code.field(rows, rows, "repeater_wins")
+        code.load(index, 1)
+        code.mark("row")
+        code.op("GETTABLE_S", row, rows, index)
+        code.op("DATA")
+        code.op("DATA")
+        code.op("TEST", row)
+        code.jump("done")
+        code.field(button, row, "button")
+        code.native(call, "is_visible")
+        code.op("MOVE", arg1, button)
+        code.op("CALL_I", call, 2, 2)
+        code.op("TEST", call)
+        code.jump("next_row")
+        code.native(call, "get_mouse_pos_local_to_window")
+        code.op("MOVE", arg1, button)
+        code.op("CALL_I", call, 2, 3)
+        code.op("MOVE", x, call)
+        code.op("MOVE", y, arg1)
+        for point, dimension in ((x, "get_width"), (y, "get_height")):
+            code.op("LT", 1, point, code.index(0) + 256)
+            code.jump("next_row")
+            code.native(call, dimension)
+            code.op("MOVE", arg1, button)
+            code.op("CALL_I", call, 2, 2)
+            code.op("LT", 0, point, call)
+            code.jump("next_row")
+
+        report("0")
+        code.op("SELF", call, tree, code.index("set_highlight") + 256)
+        code.op("MOVE", arg2, index)
+        code.op("CALL_I", call, 3, 1)
+        code.glob(call, "on_inputdeviceaction_event")
+        code.op("LOADNIL", arg1, arg1)
+        code.load(arg2, "a")
+        code.op("CALL_I", call, 3, 1)
+        code.op("RETURN", 0, 1, 0)
+
+        code.mark("next_row")
+        code.op("ADD", index, index, code.index(1) + 256)
+        code.jump("row")
+        code.mark("inactive")
+        report("0")
+        code.mark("done")
+        return code, arg2 + 1
+
+    return insert_callback(data, 17, 15, edit)
+
+
 def patch_batch(batch):
     count, = unpack_from("<I", batch)
     offset = 4 + count * 8
     edits = {
+        13503: ("306d628f5a36c327df4fe9de83b7c53945a51831e32007255a7b7d722555beba", death_menu_touch),
         13517: ("97640493b79252e5021fe7926d350cf8b07e2ef77ec9e99e6625c8256fd9e22b", fit_inventory_actions),
         13519: ("11d6e7136727c5f5f4de9893a3213fa7c67db1eb5d6cf1ebe6840ae6d2c29a20", mark_map),
         249501: ("c3e3ded912e0b540f37355d5c40b016c1ccec8de08e477b395b510f986ca8e00", mark_radial),

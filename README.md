@@ -68,9 +68,9 @@ Veil uses compact lists and a consistent set of buttons, tabs, and prompts acros
 - **Tablet controls** provide separate movement and camera sticks, Run/Leap, attacks, dodge, block, interaction, and shortcuts for the game menu, inventory, world map, quests, and Item Radial.
 - **Touch layout editor** moves and resizes individual controls and saves the layout.
 - **Ability and Reckoning controls** include a tappable 1–9/0 ability bar, a Cast button for the selected spell, on-screen LT and RT prompts, touch finishers, and Continue buttons on screens that require a controller button or key.
-- **Controller support** covers gameplay and menu navigation.
+- **Controller support** covers gameplay, menu navigation and vibration on controllers that expose a vibrator to Android.
 - **Camera Bounding** limits how far the camera pulls back during group fights.
-- **Outdoor ambience** plays occasional wildlife sounds according to the in-game clock. Day Ambience and Night Ambience can be turned on or off independently in Audio and follow the Effects Volume setting.
+- **Outdoor ambience** plays occasional wildlife sounds according to the in-game clock. Day Ambience and Night Ambience have separate switches in Audio and follow Effects Volume. Wildlife gets quieter during loud game effects.
 
 ### Graphics and Android integration
 

@@ -225,7 +225,7 @@ static __thread MsgQueue *my_queue;
 
 typedef struct { int used; pid_t owner; int w, h; } HostWindow;
 static HostWindow windows[16];
-static volatile int app_in_front = 1;
+static _Atomic int app_in_front = 1;
 
 static MsgQueue *queue_of(pid_t tid)
 {
@@ -310,6 +310,7 @@ void rt_android_set_window(ANativeWindow *w)
 }
 ANativeWindow *rt_android_window(void) { return surface; }
 void rt_android_set_foreground(int in_front) { app_in_front = in_front; }
+int rt_android_is_foreground(void) { return atomic_load(&app_in_front); }
 void rt_ue_request_turn(int degrees); /* rt_ue3.c */
 void rt_android_turn(int degrees) { rt_ue_request_turn(degrees); }
 
@@ -409,13 +410,17 @@ uint32_t host_pad_get(uint32_t index, uint8_t state[16])
 
 uint32_t host_pad_rumble(uint32_t index, uint16_t left, uint16_t right)
 {
+    extern void veil_tablet_wake_input(void);
     pthread_mutex_lock(&pad_lock);
     int connected = index < 4 && pad_connected[index];
+    int changed = 0;
     if (connected) {
+        changed = pad_rumble[index][0] != left || pad_rumble[index][1] != right;
         pad_rumble[index][0] = left;
         pad_rumble[index][1] = right;
     }
     pthread_mutex_unlock(&pad_lock);
+    if (changed) veil_tablet_wake_input();
     return connected ? 0 : 1167u;
 }
 

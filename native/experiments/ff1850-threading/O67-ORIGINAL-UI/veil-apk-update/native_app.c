@@ -2,12 +2,15 @@
 #include "veil_native_scaling.h"
 #include "waterfall_state.h"
 #include "veil_dialogue_touch.h"
+#include "veil_environment.h"
 #include "../../../../runtime/rt.h"
 __attribute__((visibility("hidden"))) void veil_shadow_init(void);
 __attribute__((visibility("hidden"))) void veil_tablet_viewport(unsigned, unsigned);
 __attribute__((visibility("hidden"))) void veil_tablet_touch_mode(void);
 __attribute__((visibility("hidden"))) void veil_tablet_poll_actions(void);
 __attribute__((visibility("hidden"))) int veil_tablet_map_open(void);
+__attribute__((visibility("hidden"))) int veil_tablet_death_menu_active(void);
+__attribute__((visibility("hidden"))) void veil_tablet_death_menu_tap(void);
 /* Full original-engine host; no scene replay and no replacement game logic. */
 #include <android/native_window.h>
 #include <dlfcn.h>
@@ -111,7 +114,7 @@ snprintf(koa,sizeof koa,"%s/koa.exe",install);snprintf(game,sizeof game,"%s/game
 FILE*f=fopen("nocull","wb");if(f){fputs("Disabled during initial native parity bring-up; original engine decides visibility.\n",f);fclose(f);}/* runtime option, no original game state patched */
 snprintf(path,sizeof path,"%s/latest-run.txt",root);f=fopen(path,"w");if(f){fputs(run,f);fclose(f);}__android_log_print(ANDROID_LOG_INFO,"OpenAmalur","starting original compiled game, native ARM64; log=%s",run);
 oa_perf_start(root);char*argv[]={"OpenAmalur",koa,game,overlay,NULL};int rc=main(4,argv);__android_log_print(ANDROID_LOG_INFO,"OpenAmalur","original entry returned %d",rc);return NULL;}
-void oa_gamepad_init(JNIEnv *);
+void oa_gamepad_init(JNIEnv *, jobject);
 void oa_gamepad_focus(int);
 void oa_gamepad_poll(void);
 int oa_gamepad_input(AInputEvent *);
@@ -176,6 +179,27 @@ static void touch_event(int action, int x, int y)
         if (touch.pressed) finish_touch();
         else touch.ended = 1;
     }
+}
+
+static int death_menu_touch(int action, int x, int y)
+{
+    static int captured, start_x, start_y;
+    if (action == AMOTION_EVENT_ACTION_DOWN) {
+        captured = veil_tablet_death_menu_active();
+        start_x = x;
+        start_y = y;
+    }
+    if (!captured) return 0;
+    if (action == AMOTION_EVENT_ACTION_UP) {
+        if (abs(x - start_x) * 80 < render_width && abs(y - start_y) * 80 < render_height) {
+            rt_android_mouse_move(x, y);
+            veil_tablet_death_menu_tap();
+        }
+        captured = 0;
+    } else if (action == AMOTION_EVENT_ACTION_CANCEL) {
+        captured = 0;
+    }
+    return 1;
 }
 
 static int map_pinch(AInputEvent *event, int action, int x, int y)
@@ -263,6 +287,7 @@ static int32_t input(struct android_app*app,AInputEvent*e){(void)app;if(intro_mo
     if(oa_pause_input(e,x,y,render_width,render_height))return 1;
     if ((AInputEvent_getSource(e) & AINPUT_SOURCE_TOUCHSCREEN) == AINPUT_SOURCE_TOUCHSCREEN) {
         if (action == AMOTION_EVENT_ACTION_DOWN) veil_tablet_touch_mode();
+        if (death_menu_touch(action, x, y)) return 1;
         if (map_pinch(e, action, x, y)) return 1;
         if (veil_dialogue_touch(action, x, y, render_width, render_height)) return 1;
         touch_event(action, x, y);
@@ -281,6 +306,7 @@ void android_main(struct android_app *app)
     input_looper = app->looper;
     pthread_mutex_unlock(&input_looper_lock);
     veil_waterfall_assets(app->activity->assetManager);
+    veil_ambience_load(app->activity->assetManager);
     oa_pause_configure(app->activity->assetManager, app->activity->externalDataPath);
     app->onAppCmd = app_cmd;
     app->onInputEvent = input;
@@ -288,7 +314,7 @@ void android_main(struct android_app *app)
     JavaVM *vm = app->activity->vm;
     int attach = (*vm)->GetEnv(vm, (void **)&env, JNI_VERSION_1_6) == JNI_EDETACHED;
     if (attach && (*vm)->AttachCurrentThread(vm, &env, NULL) != JNI_OK) env = NULL;
-    if (env) oa_gamepad_init(env);
+    if (env) oa_gamepad_init(env, app->activity->clazz);
 
     ANativeActivity_setWindowFlags(app->activity, AWINDOW_FLAG_FULLSCREEN | AWINDOW_FLAG_KEEP_SCREEN_ON, 0);
     while (!app->destroyRequested) {

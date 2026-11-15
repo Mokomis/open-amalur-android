@@ -10,7 +10,11 @@ import android.graphics.RectF;
 import android.graphics.Typeface;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
+import android.util.SparseArray;
 import android.view.Display;
+import android.view.InputDevice;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowInsets;
@@ -34,7 +38,7 @@ public final class VeilActivity extends NativeActivity {
     private static native int titleVisible();
 
     private TouchControls overlay;
-    private VeilAmbience ambience;
+    private final SparseArray<Vibrator> activeRumble = new SparseArray<>();
     private UpdateBadge updateBadge;
     private GameFileActions gameFileActions;
 
@@ -47,7 +51,6 @@ public final class VeilActivity extends NativeActivity {
         super.onCreate(state);
         requestDisplayMode();
         overlay = new TouchControls();
-        ambience = new VeilAmbience(this);
         gameFileActions = new GameFileActions(this);
         updateBadge = new UpdateBadge(this, gameFileActions::show);
         getWindow().getDecorView().post(() -> {
@@ -112,17 +115,60 @@ public final class VeilActivity extends NativeActivity {
     }
 
     @Override protected void onDestroy() {
-        ambience.release();
         updateBadge.show(false);
         if (overlay.isAttachedToWindow()) getWindowManager().removeViewImmediate(overlay);
         super.onDestroy();
     }
 
     @Override protected void onPause() {
-        ambience.stop();
         updateBadge.show(false);
         overlay.suspend();
         super.onPause();
+    }
+
+    private synchronized void rumbleController(int deviceId, int left, int right) {
+        int strength = Math.max(left, right);
+        Vibrator vibrator = activeRumble.get(deviceId);
+        if (strength == 0) {
+            if (vibrator != null) vibrator.cancel();
+            activeRumble.remove(deviceId);
+            return;
+        }
+        if (vibrator == null) {
+            InputDevice device = InputDevice.getDevice(deviceId);
+            if (device == null) return;
+            vibrator = controllerVibrator(device);
+            if (vibrator == null) return;
+            activeRumble.put(deviceId, vibrator);
+            android.util.Log.i("VeilRumble", "Vibration enabled for " + device.getName());
+        }
+        int amplitude = 1 + (strength * 254 + 32767) / 65535;
+        vibrator.vibrate(VibrationEffect.createWaveform(new long[]{100}, new int[]{amplitude}, 0));
+    }
+
+    private static Vibrator controllerVibrator(InputDevice device) {
+        Vibrator direct = inputVibrator(device);
+        if (direct.hasVibrator()) return direct;
+
+        // Ember can expose the controller's motors on a separate input device.
+        Vibrator companion = null;
+        for (int id : InputDevice.getDeviceIds()) {
+            InputDevice candidate = InputDevice.getDevice(id);
+            if (candidate == null || !candidate.getName().endsWith(" (rumble)") ||
+                candidate.getVendorId() != device.getVendorId() ||
+                candidate.getProductId() != device.getProductId()) continue;
+            Vibrator vibration = inputVibrator(candidate);
+            if (!vibration.hasVibrator()) continue;
+            if (companion != null) return null;
+            companion = vibration;
+        }
+        return companion;
+    }
+
+    @SuppressWarnings("deprecation")
+    private static Vibrator inputVibrator(InputDevice device) {
+        return Build.VERSION.SDK_INT >= 31 ? device.getVibratorManager().getDefaultVibrator()
+                : device.getVibrator();
     }
 
     private void enterImmersiveMode() {
@@ -143,7 +189,6 @@ public final class VeilActivity extends NativeActivity {
     @Override public void onWindowFocusChanged(boolean focused) {
         super.onWindowFocusChanged(focused);
         if (focused) enterImmersiveMode();
-        if (!focused && ambience != null) ambience.stop();
         if (overlay != null) {
             if (focused) overlay.resume();
             else overlay.releaseAll();
@@ -227,7 +272,6 @@ public final class VeilActivity extends NativeActivity {
         private boolean hasGesture;
         private final Runnable pulse = new Runnable() {
             @Override public void run() {
-                if (VeilActivity.this.hasWindowFocus()) ambience.update();
                 updateBadge.show(VeilActivity.this.hasWindowFocus() && titleVisible() != 0);
                 int current = mode();
                 if (current == 2) openEditor();

@@ -1,5 +1,6 @@
 /* FAudio platform services for an Android NativeActivity. */
 #include "FAudio_internal.h"
+#include "experiments/ff1850-threading/O67-ORIGINAL-UI/veil-apk-update/veil_environment.h"
 #include <aaudio/AAudio.h>
 #include <android/log.h>
 #include <errno.h>
@@ -18,6 +19,9 @@ typedef struct {
     atomic_bool stop;
     int started;
 } AudioDevice;
+
+static _Atomic(AudioDevice *) ambience_output;
+extern int rt_android_is_foreground(void);
 
 void FAudio_Log(const char *message)
 {
@@ -84,6 +88,13 @@ static void *mix_output(void *opaque)
                 }
             }
         }
+        if (logged_audio && device->channels == 2) {
+            AudioDevice *unassigned = NULL;
+            if (atomic_load(&ambience_output) == NULL)
+                atomic_compare_exchange_strong(&ambience_output, &unassigned, device);
+            if (atomic_load(&ambience_output) == device)
+                veil_ambience_mix(device->buffer, device->quantum, device->rate, rt_android_is_foreground());
+        }
         int written = 0;
         while (written < device->quantum && !atomic_load_explicit(&device->stop, memory_order_relaxed)) {
             aaudio_result_t frames = AAudioStream_write(device->stream,
@@ -96,6 +107,8 @@ static void *mix_output(void *opaque)
             written += frames;
         }
     }
+    AudioDevice *current = device;
+    atomic_compare_exchange_strong(&ambience_output, &current, NULL);
     return NULL;
 }
 

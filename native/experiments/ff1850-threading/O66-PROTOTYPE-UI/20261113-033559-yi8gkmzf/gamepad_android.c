@@ -10,6 +10,7 @@
 extern void rt_android_pad(uint32_t index, int connected, uint16_t buttons,
                            uint8_t lt, uint8_t rt, int16_t lx, int16_t ly,
                            int16_t rx, int16_t ry);
+extern void rt_android_pad_rumble(uint32_t index, uint16_t *left, uint16_t *right);
 
 enum { MAX_PADS = 4, NO_DEVICE = -1 };
 enum {
@@ -27,12 +28,15 @@ typedef struct {
     int16_t sticks[4];
     int right_x, right_y;
     Axis triggers[2];
+    uint16_t rumble[2];
 } Pad;
 
 static Pad pads[MAX_PADS];
 static jclass input_device;
-static jmethodID get_ids, get_device, get_sources, get_range, range_min, range_max;
+static jmethodID get_ids, get_device, get_name, get_sources, get_range, range_min, range_max;
 static JNIEnv *env;
+static jobject rumble_activity;
+static jmethodID rumble_method;
 static int focused;
 static time_t last_scan = -1;
 
@@ -73,6 +77,24 @@ static Axis get_axis(jobject device, int axis)
     return result;
 }
 
+static int is_rumble_endpoint(jobject device)
+{
+    if (!device) return 0;
+    jstring name = (*env)->CallObjectMethod(env, device, get_name);
+    if (!name) return 0;
+    const char *text = (*env)->GetStringUTFChars(env, name, NULL);
+    int endpoint = 0;
+    if (text) {
+        static const char suffix[] = " (rumble)";
+        size_t length = strlen(text);
+        size_t suffix_length = sizeof suffix - 1;
+        endpoint = length >= suffix_length && !strcmp(text + length - suffix_length, suffix);
+        (*env)->ReleaseStringUTFChars(env, name, text);
+    }
+    (*env)->DeleteLocalRef(env, name);
+    return endpoint;
+}
+
 static int pad_slot(int id, jobject device)
 {
     int free_slot = NO_DEVICE;
@@ -80,7 +102,7 @@ static int pad_slot(int id, jobject device)
         if (pads[i].id == id) return i;
         if (free_slot == NO_DEVICE && pads[i].id == NO_DEVICE) free_slot = i;
     }
-    if (free_slot == NO_DEVICE) return NO_DEVICE;
+    if (free_slot == NO_DEVICE || is_rumble_endpoint(device)) return NO_DEVICE;
     Pad *pad = &pads[free_slot];
     *pad = (Pad){ .id = id, .right_x = AMOTION_EVENT_AXIS_Z, .right_y = AMOTION_EVENT_AXIS_RZ };
     pad->triggers[0] = (Axis){ AMOTION_EVENT_AXIS_LTRIGGER, 0, 1 };
@@ -104,13 +126,19 @@ static int pad_slot(int id, jobject device)
     return free_slot;
 }
 
-void oa_gamepad_init(JNIEnv *thread_env)
+void oa_gamepad_init(JNIEnv *thread_env, jobject activity)
 {
     env = thread_env;
+    rumble_activity = activity;
+    jclass activity_class = (*env)->GetObjectClass(env, activity);
+    rumble_method = (*env)->GetMethodID(env, activity_class, "rumbleController", "(III)V");
+    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+    (*env)->DeleteLocalRef(env, activity_class);
     for (unsigned i = 0; i < MAX_PADS; ++i) pads[i].id = NO_DEVICE;
     input_device = (*env)->FindClass(env, "android/view/InputDevice");
     get_ids = (*env)->GetStaticMethodID(env, input_device, "getDeviceIds", "()[I");
     get_device = (*env)->GetStaticMethodID(env, input_device, "getDevice", "(I)Landroid/view/InputDevice;");
+    get_name = (*env)->GetMethodID(env, input_device, "getName", "()Ljava/lang/String;");
     get_sources = (*env)->GetMethodID(env, input_device, "getSources", "()I");
     get_range = (*env)->GetMethodID(env, input_device, "getMotionRange", "(II)Landroid/view/InputDevice$MotionRange;");
     jclass range = (*env)->FindClass(env, "android/view/InputDevice$MotionRange");
@@ -119,11 +147,32 @@ void oa_gamepad_init(JNIEnv *thread_env)
     (*env)->DeleteLocalRef(env, range);
 }
 
+static void update_rumble(unsigned slot, uint16_t left, uint16_t right)
+{
+    Pad *pad = &pads[slot];
+    if (!rumble_method || pad->id == NO_DEVICE ||
+        (left == pad->rumble[0] && right == pad->rumble[1])) return;
+    pad->rumble[0] = left;
+    pad->rumble[1] = right;
+    (*env)->CallVoidMethod(env, rumble_activity, rumble_method, pad->id, (int)left, (int)right);
+    if ((*env)->ExceptionCheck(env)) {
+        (*env)->ExceptionClear(env);
+        __android_log_print(ANDROID_LOG_WARN, "OpenAmalur", "Controller vibration request failed");
+    }
+}
+
 void oa_gamepad_poll(void)
 {
+    if (!env || !focused) return;
+    for (unsigned slot = 0; slot < MAX_PADS; ++slot) {
+        if (pads[slot].id == NO_DEVICE) continue;
+        uint16_t left, right;
+        rt_android_pad_rumble(slot, &left, &right);
+        update_rumble(slot, left, right);
+    }
     struct timespec now;
     clock_gettime(CLOCK_MONOTONIC, &now);
-    if (!env || !focused || last_scan == now.tv_sec) return;
+    if (last_scan == now.tv_sec) return;
     last_scan = now.tv_sec;
     jintArray ids = (*env)->CallStaticObjectMethod(env, input_device, get_ids);
     if (!ids) return;
@@ -137,6 +186,7 @@ void oa_gamepad_poll(void)
             (*env)->DeleteLocalRef(env, dev);
             seen |= 1u << i;
         } else {
+            update_rumble(i, 0, 0);
             pads[i] = (Pad){ .id = NO_DEVICE };
             publish(i);
         }
@@ -164,6 +214,7 @@ void oa_gamepad_focus(int active)
     } else {
         for (unsigned i = 0; i < MAX_PADS; ++i) {
             Pad *pad = &pads[i];
+            update_rumble(i, 0, 0);
             pad->buttons = pad->hat = 0;
             memset(pad->sticks, 0, sizeof pad->sticks);
             memset(pad->trigger, 0, sizeof pad->trigger);

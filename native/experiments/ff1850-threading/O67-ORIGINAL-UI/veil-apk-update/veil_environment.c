@@ -1,8 +1,8 @@
 #include "veil_environment.h"
 
 #include <android/log.h>
-#include <jni.h>
 #include <limits.h>
+#include <math.h>
 #include <pthread.h>
 #include <stdatomic.h>
 #include <stdint.h>
@@ -143,14 +143,108 @@ float veil_night_darkness(void)
     return .62f * (transition < 120 ? transition / 120.0f : 1.0f);
 }
 
-JNIEXPORT jint JNICALL Java_org_openamalur_originalengine_VeilAmbience_current(JNIEnv *env, jclass cls)
+enum { CUE_RATE = 24000, CUES_PER_PERIOD = 3 };
+static struct {
+    const char *name;
+    int16_t *samples;
+    uint32_t count;
+} cues[] = {
+    { .name = "day-thrush" }, { .name = "day-flicker" }, { .name = "day-grasshopper" },
+    { .name = "night-crickets" }, { .name = "night-owl" }, { .name = "night-treefrog" },
+};
+static uint32_t randomness = 1;
+
+void veil_ambience_load(AAssetManager *assets)
 {
-    (void)env;
-    (void)cls;
-    unsigned sample = current_sample();
+    randomness = (uint32_t)now_ms() | 1;
+    for (unsigned i = 0; i < sizeof cues / sizeof cues[0]; ++i) {
+        if (cues[i].samples) continue;
+        char path[64];
+        snprintf(path, sizeof path, "ambience/%s.pcm", cues[i].name);
+        AAsset *asset = AAssetManager_open(assets, path, AASSET_MODE_BUFFER);
+        if (!asset) continue;
+        const off_t bytes = AAsset_getLength(asset);
+        const void *data = AAsset_getBuffer(asset);
+        if (data && bytes >= 2 && !(bytes % 2) && bytes <= CUE_RATE * 2 * 20) {
+            cues[i].samples = malloc(bytes);
+            if (cues[i].samples) {
+                memcpy(cues[i].samples, data, bytes);
+                cues[i].count = bytes / 2;
+            }
+        }
+        AAsset_close(asset);
+    }
+}
+
+static uint32_t ambience_random(void)
+{
+    randomness ^= randomness << 13;
+    randomness ^= randomness >> 17;
+    randomness ^= randomness << 5;
+    return randomness;
+}
+
+void veil_ambience_mix(float *output, uint32_t frames, uint32_t rate, int foreground)
+{
+    static int active_period, previous = -1, cue = -1;
+    static uint64_t wait_frames;
+    static double position;
+    static float pan, envelope;
+    unsigned sample = foreground ? current_sample() : 0;
     unsigned volume = sample % VOLUME_STEPS;
     int period = outdoor_period((int)(sample / VOLUME_STEPS) - 1);
-    if (period == INDOORS || !volume) return 0;
     unsigned option = period == DAY ? DAY_AMBIENCE : NIGHT_AMBIENCE;
-    return (atomic_load(&options) & option) ? (period << 7) | volume : 0;
+    if (!volume || !(atomic_load(&options) & option)) period = INDOORS;
+    if (period != active_period) {
+        active_period = period;
+        cue = -1;
+        envelope = 0;
+        wait_frames = (uint64_t)rate * (2500 + ambience_random() % 5000) / 1000;
+    }
+    if (period == INDOORS || !rate) return;
+    if (cue < 0) {
+        if (wait_frames > frames) {
+            wait_frames -= frames;
+            return;
+        }
+        wait_frames = (uint64_t)rate * (16 + ambience_random() % 28);
+        int start = ambience_random() % CUES_PER_PERIOD;
+        for (int offset = 0; offset < CUES_PER_PERIOD; ++offset) {
+            int index = (period - 1) * CUES_PER_PERIOD + (start + offset) % CUES_PER_PERIOD;
+            if (index == previous || !cues[index].count) continue;
+            cue = previous = index;
+            position = 0;
+            pan = (int)(ambience_random() % 41) * .01f - .20f;
+            __android_log_print(ANDROID_LOG_INFO, "VeilAmbience", "Mixing %s at effects volume %u",
+                                cues[cue].name, volume);
+            break;
+        }
+        if (cue < 0) {
+            previous = -1;
+            return;
+        }
+    }
+
+    const double step = (double)CUE_RATE / rate;
+    const float gain = volume * (.0014f / 32768);
+    const float attack = fminf(1, 200.0f / rate), release = fminf(1, 5.0f / rate);
+    const float side[] = {1 - fmaxf(0, pan), 1 + fminf(0, pan)};
+    for (uint32_t i = 0; i < frames; ++i, position += step) {
+        uint32_t index = (uint32_t)position;
+        if (index + 1 >= cues[cue].count) {
+            cue = -1;
+            break;
+        }
+        float *stereo = output + 2 * i;
+        float peak = fmaxf(fabsf(stereo[0]), fabsf(stereo[1]));
+        envelope += (peak - envelope) * (peak > envelope ? attack : release);
+        float duck = 1 - .92f * fminf(1, fmaxf(0, (envelope - .067f) / .232f));
+        const int16_t *pcm = cues[cue].samples;
+        float sound = pcm[index] + (float)(position - index) * (pcm[index + 1] - pcm[index]);
+        float wildlife = sound * gain * duck;
+        for (unsigned channel = 0; channel < 2; ++channel) {
+            float headroom = fmaxf(0, 1 - fabsf(stereo[channel]));
+            stereo[channel] += fmaxf(-headroom, fminf(headroom, wildlife * side[channel]));
+        }
+    }
 }
