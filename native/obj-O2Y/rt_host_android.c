@@ -322,8 +322,12 @@ void rt_android_key(uint32_t vk, uint32_t scan, int extended, int down)
 }
 
 /* Pointer in view coordinates; buttons: 0 left, 1 right, 2 middle. */
+static int android_mouse_x, android_mouse_y;
+
 void rt_android_mouse_move(int x, int y)
 {
+    android_mouse_x = x;
+    android_mouse_y = y;
     if (windows[0].used) post_to(windows[0].owner, &windows[0], 0x0200, 0, (uint32_t)(x & 0xFFFF) | (uint32_t)y << 16);
 }
 
@@ -332,6 +336,18 @@ void rt_android_mouse_button(int button, int down, int x, int y)
     static const uint32_t msgs[3][2] = {{0x0202, 0x0201}, {0x0205, 0x0204}, {0x0208, 0x0207}};
     if (windows[0].used && button >= 0 && button < 3)
         post_to(windows[0].owner, &windows[0], msgs[button][down ? 1 : 0], 0, (uint32_t)(x & 0xFFFF) | (uint32_t)y << 16);
+}
+
+void rt_android_mouse_wheel(int delta, int x, int y)
+{
+    if (windows[0].used && delta)
+        post_to(windows[0].owner, &windows[0], 0x020a, (uint32_t)(uint16_t)delta << 16,
+                (uint32_t)(x & 0xffff) | (uint32_t)y << 16);
+}
+
+void rt_android_touch_cast(int down)
+{
+    rt_android_mouse_button(1, down, android_mouse_x, android_mouse_y);
 }
 
 int host_mouse_poll(int32_t *dx, int32_t *dy, uint8_t buttons[3]) { (void)dx; (void)dy; (void)buttons; return 0; }

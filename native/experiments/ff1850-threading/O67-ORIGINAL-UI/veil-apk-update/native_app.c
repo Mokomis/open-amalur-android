@@ -7,6 +7,7 @@ __attribute__((visibility("hidden"))) void veil_shadow_init(void);
 __attribute__((visibility("hidden"))) void veil_tablet_viewport(unsigned, unsigned);
 __attribute__((visibility("hidden"))) void veil_tablet_touch_mode(void);
 __attribute__((visibility("hidden"))) void veil_tablet_poll_actions(void);
+__attribute__((visibility("hidden"))) int veil_tablet_map_open(void);
 /* Full original-engine host; no scene replay and no replacement game logic. */
 #include <android/native_window.h>
 #include <dlfcn.h>
@@ -19,6 +20,7 @@ __attribute__((visibility("hidden"))) void veil_tablet_poll_actions(void);
 #include <android/keycodes.h>
 #include <android/log.h>
 #include <jni.h>
+#include <math.h>
 #include <pthread.h>
 #include <stdatomic.h>
 #include <stdio.h>
@@ -29,6 +31,16 @@ __attribute__((visibility("hidden"))) void veil_tablet_poll_actions(void);
 #include <sys/stat.h>
 #include <time.h>
 static struct android_app*oa_app;static int started;
+static pthread_mutex_t input_looper_lock = PTHREAD_MUTEX_INITIALIZER;
+static ALooper *input_looper;
+
+__attribute__((visibility("hidden"))) void veil_tablet_wake_input(void)
+{
+    pthread_mutex_lock(&input_looper_lock);
+    if (input_looper) ALooper_wake(input_looper);
+    pthread_mutex_unlock(&input_looper_lock);
+}
+
 #include "display_android.h"
 #include "oa_pause.h"
 #include <time.h>
@@ -84,6 +96,7 @@ extern void rt_android_set_window(ANativeWindow*),rt_android_set_foreground(int)
 extern ANativeWindow*rt_android_window(void);
 extern void rt_android_key(uint32_t,uint32_t,int,int);
 extern void rt_android_mouse_move(int,int),rt_android_mouse_button(int,int,int,int);
+extern void rt_android_mouse_wheel(int,int,int);
 extern void oa_vk_android_initialize_log(const char*);
 ANativeWindow*oa_android_window(void){return rt_android_window();}
 int oa_android_width(void){int width=atomic_load(&render_width);return width>0?width:BASE_WIDTH;}
@@ -165,6 +178,51 @@ static void touch_event(int action, int x, int y)
     }
 }
 
+static int map_pinch(AInputEvent *event, int action, int x, int y)
+{
+    static int pinching;
+    static float last_span;
+    if (action == AMOTION_EVENT_ACTION_DOWN) pinching = 0;
+    if (action == AMOTION_EVENT_ACTION_POINTER_DOWN && !pinching && veil_tablet_map_open()) {
+        finish_touch();
+        pinching = 1;
+        last_span = 0;
+    }
+    if (!pinching) return 0;
+    if (action == AMOTION_EVENT_ACTION_UP || action == AMOTION_EVENT_ACTION_CANCEL)
+        pinching = 0;
+    if (AMotionEvent_getPointerCount(event) < 2 || !veil_tablet_map_open()) return 1;
+    float span = hypotf(AMotionEvent_getX(event, 1) - AMotionEvent_getX(event, 0),
+                         AMotionEvent_getY(event, 1) - AMotionEvent_getY(event, 0));
+    if (action == AMOTION_EVENT_ACTION_POINTER_DOWN || last_span == 0) last_span = span;
+    if (action == AMOTION_EVENT_ACTION_MOVE && span > 0 &&
+        (span > last_span * 1.15f || span < last_span / 1.15f)) {
+        rt_android_mouse_move(x, y);
+        rt_android_mouse_wheel(span > last_span ? 120 : -120, x, y);
+        last_span = span;
+    }
+    return 1;
+}
+
+static void mouse_event(AInputEvent *event, int action, int x, int y)
+{
+    static int previous_buttons;
+    static const int button_mask[] = {
+        AMOTION_EVENT_BUTTON_PRIMARY, AMOTION_EVENT_BUTTON_SECONDARY, AMOTION_EVENT_BUTTON_TERTIARY
+    };
+    rt_android_mouse_move(x, y);
+    if (action == AMOTION_EVENT_ACTION_SCROLL) {
+        float scroll = AMotionEvent_getAxisValue(event, AMOTION_EVENT_AXIS_VSCROLL, 0);
+        rt_android_mouse_wheel((int)lroundf(fminf(100, fmaxf(-100, scroll)) * 120), x, y);
+    }
+    int buttons = action == AMOTION_EVENT_ACTION_CANCEL ? 0 : AMotionEvent_getButtonState(event);
+    for (int i = 0; i < 3; ++i) {
+        if ((buttons ^ previous_buttons) & button_mask[i])
+            rt_android_mouse_button(i, !!(buttons & button_mask[i]), x, y);
+    }
+    previous_buttons = buttons;
+}
+
 static int intro_movie_input(AInputEvent *event)
 {
     int source = AInputEvent_getSource(event);
@@ -205,8 +263,13 @@ static int32_t input(struct android_app*app,AInputEvent*e){(void)app;if(intro_mo
     if(oa_pause_input(e,x,y,render_width,render_height))return 1;
     if ((AInputEvent_getSource(e) & AINPUT_SOURCE_TOUCHSCREEN) == AINPUT_SOURCE_TOUCHSCREEN) {
         if (action == AMOTION_EVENT_ACTION_DOWN) veil_tablet_touch_mode();
+        if (map_pinch(e, action, x, y)) return 1;
         if (veil_dialogue_touch(action, x, y, render_width, render_height)) return 1;
         touch_event(action, x, y);
+        return 1;
+    }
+    if ((AInputEvent_getSource(e) & AINPUT_SOURCE_MOUSE) == AINPUT_SOURCE_MOUSE) {
+        mouse_event(e, action, x, y);
         return 1;
     }
     rt_android_mouse_move(x,y);if(action==AMOTION_EVENT_ACTION_DOWN)rt_android_mouse_button(0,1,x,y);else if(action==AMOTION_EVENT_ACTION_UP||action==AMOTION_EVENT_ACTION_CANCEL)rt_android_mouse_button(0,0,x,y);return 1;}return 0;}
@@ -214,6 +277,9 @@ void android_main(struct android_app *app)
 {
     extern int oa_pause_poll_timeout(void);
     oa_app = app;
+    pthread_mutex_lock(&input_looper_lock);
+    input_looper = app->looper;
+    pthread_mutex_unlock(&input_looper_lock);
     veil_waterfall_assets(app->activity->assetManager);
     oa_pause_configure(app->activity->assetManager, app->activity->externalDataPath);
     app->onAppCmd = app_cmd;
@@ -228,7 +294,8 @@ void android_main(struct android_app *app)
     while (!app->destroyRequested) {
         int events;
         struct android_poll_source *source = NULL;
-        int id = ALooper_pollOnce(touch.due ? 10 : oa_pause_poll_timeout(), NULL, &events, (void **)&source);
+        int timeout = touch.due ? 10 : oa_pause_poll_timeout();
+        int id = ALooper_pollOnce(timeout, NULL, &events, (void **)&source);
         if (id >= 0 && source) source->process(app, source);
         oa_gamepad_poll();
         veil_tablet_poll_actions();
@@ -236,6 +303,9 @@ void android_main(struct android_app *app)
         if (!oa_app->window) finish_touch();
         else poll_touch();
     }
+    pthread_mutex_lock(&input_looper_lock);
+    input_looper = NULL;
+    pthread_mutex_unlock(&input_looper_lock);
     oa_gamepad_focus(0);
     rt_android_set_foreground(0);
     if (attach && env) (*vm)->DetachCurrentThread(vm);

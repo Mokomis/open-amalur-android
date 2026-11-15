@@ -25,7 +25,7 @@ public final class VeilActivity extends NativeActivity {
 
     private static native int mode();
     private static native int aspect();
-    private static native int input(int enabled, int buttons, int lt, int rt,
+    private static native int input(int enabled, int buttons, int lt, int rt, int cast,
                                     int lx, int ly, int rx, int ry);
     private static native int menu(int destination);
     private static native int mash();
@@ -194,8 +194,10 @@ public final class VeilActivity extends NativeActivity {
             new Control("Reckoning\nLT + RT", "fate", .832f, .49f, .084f, 0, 0),
             new Control("Quests", "book", .589f, .150f, .078f, 0, 4),
             new Control("Edit\nLayout", "edit", .646f, .150f, .078f, 0, 5),
+            new Control("Item\nRadial", "items", .703f, .150f, .078f, 0, 6),
+            new Control("Cast", "cast", .762f, .723f, .081f, 0, 0),
         };
-        private static final int BLOCK = 5, INTERACT = 6, MAGIC = 7, SPRINT = 8;
+        private static final int BLOCK = 5, INTERACT = 6, MAGIC = 7, SPRINT = 8, CAST = 16;
         private final SharedPreferences preferences = getSharedPreferences("veil-touch", MODE_PRIVATE);
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final RectF screen = new RectF();
@@ -565,7 +567,7 @@ public final class VeilActivity extends NativeActivity {
         }
 
         private void send() {
-            int buttons = 0, lt = 0, rt = 0;
+            int buttons = 0, lt = 0, rt = 0, cast = 0;
             long now = android.os.SystemClock.uptimeMillis();
             for (int i = 0; i < controls.length; i++) {
                 if (controls[i].pointer < 0 && now >= releasedUntil[i]) continue;
@@ -573,8 +575,9 @@ public final class VeilActivity extends NativeActivity {
                 if (i == BLOCK || i == FATE) lt = 255;
                 if (i == MAGIC || i == FATE) rt = 255;
                 if (i == SPRINT) buttons |= 0x40;
+                if (i == CAST) cast = 1;
             }
-            input(enabled ? 1 : 0, buttons, lt, rt, (int)(32767*moveX), (int)(32767*moveY),
+            input(enabled ? 1 : 0, buttons, lt, rt, cast, (int)(32767*moveX), (int)(32767*moveY),
                   (int)(32767*lookX), (int)(32767*lookY));
         }
 

@@ -90,7 +90,7 @@ int veil_waterfall_command(const char *section, const char *key, const char *val
         pthread_mutex_unlock(&portrait_lock);
         return 1;
     }
-    VeilWaterfallRect next = {0};
+    VeilWaterfallRect next = {.framed = !strcmp(value, "1")};
     if (strcmp(value, "1")) {
         next.framed = !strncmp(value, "frame,", 6);
         const char *coordinates = next.framed ? value + 6 : !strncmp(value, "rect,", 5) ? value + 5 : NULL;

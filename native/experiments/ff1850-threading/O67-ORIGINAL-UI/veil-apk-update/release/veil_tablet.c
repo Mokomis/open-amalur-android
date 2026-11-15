@@ -29,7 +29,10 @@ static _Atomic unsigned mash_taps;
 static _Atomic unsigned tutorial_mode;
 static _Atomic bool tutorial_tap;
 static _Atomic bool name_dialog;
+static _Atomic bool item_radial;
+static _Atomic bool map_open;
 static _Atomic unsigned touch_ability_slot;
+static _Atomic bool touch_cast;
 static _Atomic uint64_t finisher_packet;
 static _Atomic uint64_t finisher_update;
 static _Atomic bool finisher_request;
@@ -48,6 +51,8 @@ static struct {
     int16_t lx, ly, rx, ry;
 } pad;
 static pthread_mutex_t pad_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+HIDDEN void veil_tablet_wake_input(void);
 
 static uint64_t now_ms(void)
 {
@@ -171,6 +176,14 @@ HIDDEN int veil_tablet_command(const char *section, const char *key, const char 
             __android_log_print(ANDROID_LOG_INFO, "VeilTablet", "Name dialog %d", open);
         return 1;
     }
+    if (!strcasecmp(key, "VeilItemRadial")) {
+        atomic_store(&item_radial, value[0] == '1');
+        return 1;
+    }
+    if (!strcasecmp(key, "VeilMap")) {
+        atomic_store(&map_open, value[0] == '1');
+        return 1;
+    }
     if (!strcasecmp(key, "VeilTabletMash")) {
         __android_log_print(ANDROID_LOG_INFO, "VeilTablet", "Mash prompt %s", value);
         atomic_store(&mash_taps, 0);
@@ -242,7 +255,7 @@ JNI_API(mode)(JNIEnv *env, jclass type)
     (void)type;
     uint64_t now = now_ms();
     // The original name window handles its own OK, Cancel, and edit-field taps.
-    if (atomic_load(&name_dialog))
+    if (atomic_load(&name_dialog) || atomic_load(&item_radial))
         return 0;
     if (atomic_exchange(&ui_request, 0))
         return 2;
@@ -313,7 +326,7 @@ JNI_API(titleVisible)(JNIEnv *env, jclass type)
     return veil_title_is_visible();
 }
 
-JNI_API(input)(JNIEnv *env, jclass type, jint on, jint buttons, jint lt, jint rt,
+JNI_API(input)(JNIEnv *env, jclass type, jint on, jint buttons, jint lt, jint rt, jint cast,
                jint lx, jint ly, jint rx, jint ry)
 {
     (void)env;
@@ -338,6 +351,8 @@ JNI_API(input)(JNIEnv *env, jclass type, jint on, jint buttons, jint lt, jint rt
     atomic_store(&enabled, on != 0);
     atomic_store(&initialized, true);
     pthread_mutex_unlock(&pad_mutex);
+    bool casting = on && cast;
+    if (atomic_exchange(&touch_cast, casting) != casting) veil_tablet_wake_input();
     return 0;
 }
 
@@ -345,7 +360,7 @@ JNI_API(menu)(JNIEnv *env, jclass type, jint destination)
 {
     (void)env;
     (void)type;
-    if (destination >= 1 && destination <= 5)
+    if (destination >= 1 && destination <= 6)
         atomic_store(&menu_request, destination);
     else if (destination >= 11 && destination <= 20) {
         __android_log_print(ANDROID_LOG_INFO, "VeilTablet", "Touch ability slot %d", destination - 10);
@@ -354,9 +369,12 @@ JNI_API(menu)(JNIEnv *env, jclass type, jint destination)
     return 0;
 }
 
+extern void rt_android_touch_cast(int down);
+
 HIDDEN void veil_tablet_poll_actions(void)
 {
     static uint64_t release_at;
+    static bool casting;
     uint64_t now = now_ms();
     pthread_mutex_lock(&pad_mutex);
     if (release_at && now >= release_at) {
@@ -370,6 +388,18 @@ HIDDEN void veil_tablet_poll_actions(void)
         ++packet;
     }
     pthread_mutex_unlock(&pad_mutex);
+    bool cast = atomic_load(&touch_cast) && !atomic_load(&controller_active) &&
+                !atomic_load(&item_radial) && !atomic_load(&map_open) &&
+                now - atomic_load(&hud_update) < 150;
+    if (cast != casting) {
+        rt_android_touch_cast(cast);
+        casting = cast;
+    }
+}
+
+HIDDEN int veil_tablet_map_open(void)
+{
+    return atomic_load(&map_open);
 }
 
 HIDDEN void veil_tablet_touch_mode(void)
