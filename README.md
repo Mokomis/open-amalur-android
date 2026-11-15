@@ -1,6 +1,24 @@
 # Open Amalur for Android
 
-Open Amalur is an unofficial Android project for **Kingdoms of Amalur: Re-Reckoning**. Its aim is to preserve the PC game's combat, quests, characters, and world while making the game practical to play on a tablet with touch controls or a controller.
+Right. Let’s get this out of the way so we don’t waste each other’s time.
+
+This started as a personal experiment. I wanted to see if I could use AI to get *Kingdoms of Amalur: Re-Reckoning* running natively on Android.
+
+Open Amalur is unequivocally an AI-first project. I led the work and used ChatGPT, Claude, and Qwen throughout. If that’s a deal-breaker for you, this is your cue to walk away.
+
+Getting the game running was easier than I expected, thanks to those tools. Making it feel good to play on a tablet turned a small experiment into a much bigger project. The result is a version of Amalur I actually want to play on Android.
+
+Open Amalur is a native Android recompilation of the original *Re-Reckoning* engine. The translator and Android runtime are open source, and you build the engine from your own copy of the game.
+
+I substantially reworked the engine’s threading to improve how it schedules simulation, rendering, and background jobs across multiple CPU cores. Android was the first target. Some of the work on threading, graphics, and the interface could carry over to Windows, macOS, Linux, and iOS if someone wants to take it there.
+
+## About the UI
+
+The UI got a huge overhaul. I loathed the original interface with a passion, and this was my chance to change it. So I did.
+
+Veil draws visual inspiration from other interfaces, including Edge for Skyrim. I developed the UI changes and the other enhancements for Open Amalur without downloading, sampling, or reusing files or code from those mods.
+
+## Download and install
 
 Download the Android APK and Veil build assets from [GitHub Releases](https://github.com/Mokomis/open-amalur-android/releases/latest). The [build and install guide](BUILDING.md) explains how to use your copy of Re-Reckoning. The earlier [Open Amalur research archive](https://github.com/Mokomis/open-amalur) remains available.
 
