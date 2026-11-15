@@ -10,7 +10,7 @@ Open Amalur is a recompilation of the original *Re-Reckoning* engine. The transl
 
 I substantially reworked the engine’s threading to improve how it schedules simulation, rendering, and background jobs across multiple CPU cores.
 
-Android is the first release. I plan to build a Windows version next. Some of the work on threading, graphics, and the interface could also carry over to macOS, Linux, and iOS if someone wants to take it there.
+Android is the first release. I plan to build Windows and macOS versions next. Some of the work on threading, graphics, and the interface could also carry over to Linux and iOS if someone wants to take it there.
 
 ## About the UI
 
