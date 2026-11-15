@@ -34,6 +34,7 @@ public final class VeilActivity extends NativeActivity {
     private static native int titleVisible();
 
     private TouchControls overlay;
+    private VeilAmbience ambience;
     private UpdateBadge updateBadge;
     private GameFileActions gameFileActions;
 
@@ -46,6 +47,7 @@ public final class VeilActivity extends NativeActivity {
         super.onCreate(state);
         requestDisplayMode();
         overlay = new TouchControls();
+        ambience = new VeilAmbience(this);
         gameFileActions = new GameFileActions(this);
         updateBadge = new UpdateBadge(this, gameFileActions::show);
         getWindow().getDecorView().post(() -> {
@@ -110,12 +112,14 @@ public final class VeilActivity extends NativeActivity {
     }
 
     @Override protected void onDestroy() {
+        ambience.release();
         updateBadge.show(false);
         if (overlay.isAttachedToWindow()) getWindowManager().removeViewImmediate(overlay);
         super.onDestroy();
     }
 
     @Override protected void onPause() {
+        ambience.stop();
         updateBadge.show(false);
         overlay.suspend();
         super.onPause();
@@ -139,6 +143,7 @@ public final class VeilActivity extends NativeActivity {
     @Override public void onWindowFocusChanged(boolean focused) {
         super.onWindowFocusChanged(focused);
         if (focused) enterImmersiveMode();
+        if (!focused && ambience != null) ambience.stop();
         if (overlay != null) {
             if (focused) overlay.resume();
             else overlay.releaseAll();
@@ -222,6 +227,7 @@ public final class VeilActivity extends NativeActivity {
         private boolean hasGesture;
         private final Runnable pulse = new Runnable() {
             @Override public void run() {
+                if (VeilActivity.this.hasWindowFocus()) ambience.update();
                 updateBadge.show(VeilActivity.this.hasWindowFocus() && titleVisible() != 0);
                 int current = mode();
                 if (current == 2) openEditor();

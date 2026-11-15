@@ -402,6 +402,13 @@ HIDDEN int veil_tablet_map_open(void)
     return atomic_load(&map_open);
 }
 
+HIDDEN int veil_tablet_gameplay_active(void)
+{
+    return now_ms() - atomic_load(&hud_update) < 300 &&
+           !atomic_load(&item_radial) && !atomic_load(&map_open) &&
+           !atomic_load(&options_visible) && !atomic_load(&tutorial_mode);
+}
+
 HIDDEN void veil_tablet_touch_mode(void)
 {
     atomic_store(&controller_active, false);

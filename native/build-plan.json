@@ -7279,6 +7279,15 @@
       ]
     },
     {
+      "output": "veil_environment.o",
+      "source": "native/experiments/ff1850-threading/O67-ORIGINAL-UI/veil-apk-update/veil_environment.c",
+      "flags": [
+        "--target=aarch64-linux-android29",
+        "-O2",
+        "-fPIC"
+      ]
+    },
+    {
       "output": "veil_tablet_trampoline.o",
       "source": "native/experiments/ff1850-threading/O67-ORIGINAL-UI/veil-apk-update/tablet/veil_tablet_trampoline.S",
       "flags": [

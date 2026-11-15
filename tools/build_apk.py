@@ -87,6 +87,8 @@ def build(args):
             apk.write(apache, "assets/licenses/Vulkan-Headers.txt")
             for notice in sorted((ROOT / "android/licenses").glob("*.txt")):
                 apk.write(notice, "assets/licenses/" + notice.name)
+            for sound in sorted((ROOT / "android/ambience").glob("*.m4a")):
+                apk.write(sound, "assets/ambience/" + sound.name, compress_type=ZIP_STORED)
             for flag, name in (("waterfall", "veil-waterfall.bc3"), ("prototype_ui", "oa_prototype_ui.bin")):
                 value = getattr(args, flag)
                 if value is not None:
