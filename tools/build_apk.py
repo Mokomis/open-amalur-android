@@ -45,8 +45,10 @@ def build(args):
                 "-landroid", "-ldl", "-llog")
         template = work / "AndroidManifest.xml"
         template.write_text(manifest, encoding="utf-8")
-        base = work / "manifest.apk"
-        run(tools / "aapt2.exe", "link", "-I", android, "--manifest", template, "-o", base)
+        resources = work / "resources.zip"
+        run(tools / "aapt2.exe", "compile", "--dir", ROOT / "android/res", "-o", resources)
+        base = work / "base.apk"
+        run(tools / "aapt2.exe", "link", "-I", android, "--manifest", template, "-o", base, resources)
 
         classes = work / "classes"
         classes.mkdir()
@@ -61,7 +63,8 @@ def build(args):
 
         unsigned = work / "unsigned.apk"
         with ZipFile(base) as compiled, ZipFile(unsigned, "w", ZIP_DEFLATED) as apk:
-            apk.writestr("AndroidManifest.xml", compiled.read("AndroidManifest.xml"))
+            for entry in compiled.infolist():
+                apk.writestr(entry, compiled.read(entry))
             apk.write(work / "classes.dex", "classes.dex")
             library_name = "liboabootstrap.so" if engine_pin is not None else "liboaoriginal.so"
             apk.write(library, "lib/arm64-v8a/" + library_name, compress_type=ZIP_STORED)

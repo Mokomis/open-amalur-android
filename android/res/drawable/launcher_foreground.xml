@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- The ring and initials sit inside the launcher masking safe zone. -->
+    <path android:pathData="M46.3,27 A28,28 0,1 0,61.7 27"
+        android:strokeColor="#B7A06B" android:strokeWidth="2.8"
+        android:fillColor="#00000000" />
+    <path android:pathData="M54,22.5 L58,27 L54,31.5 L50,27 Z"
+        android:fillColor="#DCC48F" />
+    <path android:fillType="evenOdd"
+        android:pathData="M53.7,34.9 L68.3,68.4 L72,69.5 V72 H59.3 V69.6 L63,68.4
+            L59.4,59.9 H47.6 L44.1,68.4 L48,69.6 V72 H36 V69.6 L39.6,68.3 Z
+            M49.2,56.1 H57.8 L53.5,45.8 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:startX="41" android:startY="37"
+                android:endX="62" android:endY="71"
+                android:startColor="#F1E3BD" android:endColor="#BC9B62"
+                android:type="linear" />
+        </aapt:attr>
+    </path>
+</vector>
