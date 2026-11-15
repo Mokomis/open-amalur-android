@@ -68,7 +68,9 @@ Use a distinct `--application-id` when installing a build signed with your own k
 
 To assemble a release launcher, replace `--library build/liboaoriginal.so` with `--local-engine build/liboaoriginal.so --ndk "$ndk"` and supply the Veil recipe and pause overlay. The APK records the engine SHA-256 and packages the launcher. Pass the release application ID and use its existing signing key for a normal Android upgrade.
 
-Supply the prepared Allestar Glade loop with `--waterfall veil-waterfall.bc3`. The builder adds it as `assets/veil-waterfall.bc3`. The portrait renderer plays the five-second loop at 20 frames per second. `tools/make_waterfall_clip.py` can re-encode an existing capture during release preparation.
+Extract the build-assets ZIP from the matching [GitHub release](https://github.com/Mokomis/open-amalur-android/releases) and pass `veil-edits.bin` to `--veil-edits`, `veil-edits.properties` to `--veil-properties`, `oa_prototype_ui.bin` to `--prototype-ui`, and `veil-waterfall.bc3` to `--waterfall`. The included `engine.sha256` gives the expected hash of the locally built library.
+
+The builder adds the prepared Allestar Glade loop as `assets/veil-waterfall.bc3`. The portrait renderer plays the five-second loop at 20 frames per second. `tools/make_waterfall_clip.py` can re-encode an existing capture during release preparation.
 
 `tools/generate_veil_edits.py` takes your original game directory, a locally modded `patch_0.pak`, and output paths for the recipe, properties and a local reference archive. Use the original and modded archives from the same supported game version.
 

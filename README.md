@@ -2,7 +2,7 @@
 
 Open Amalur is an unofficial Android project for **Kingdoms of Amalur: Re-Reckoning**. Its aim is to preserve the PC game's combat, quests, characters, and world while making the game practical to play on a tablet with touch controls or a controller.
 
-This repository is the project page for the current original-engine work. The earlier [Open Amalur research archive](https://github.com/Mokomis/open-amalur) remains available. The first downloadable build is being prepared. Supported game versions and installation instructions will accompany the release.
+Download the Android APK and Veil build assets from [GitHub Releases](https://github.com/Mokomis/open-amalur-android/releases/latest). The [build and install guide](BUILDING.md) explains how to use your copy of Re-Reckoning. The earlier [Open Amalur research archive](https://github.com/Mokomis/open-amalur) remains available.
 
 ## How the engine runs
 
