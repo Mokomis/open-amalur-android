@@ -9,6 +9,7 @@ __attribute__((visibility("hidden"))) int veil_transmog_command(X86Ctx *, const 
 __attribute__((visibility("hidden"))) int veil_transmog_read(const char *, const char *, char[2]);
 __attribute__((visibility("hidden"))) int veil_tablet_read(const char *, const char *, char *);
 __attribute__((visibility("hidden"))) int veil_tablet_command(const char *, const char *, const char *);
+__attribute__((visibility("hidden"))) void veil_intro_cart_camera(int);
 static pthread_mutex_t ini_lock=PTHREAD_MUTEX_INITIALIZER;
 static char*ini_wide_string(uint32_t g){if(!g)return NULL;size_t n=0;while(ld16(g+2*n)){if(++n>32768)rt_fatal("INI string bound");}char*out=malloc(4*n+1);size_t at=0;for(size_t i=0;i<n;i++){uint32_t c=ld16(g+2*i);if(c>=0xd800&&c<=0xdbff&&i+1<n){uint32_t d=ld16(g+2*(i+1));if(d>=0xdc00&&d<=0xdfff){c=0x10000+((c-0xd800)<<10)+(d-0xdc00);i++;}}if(c<128)out[at++]=c;else if(c<2048){out[at++]=0xc0|(c>>6);out[at++]=0x80|(c&63);}else if(c<65536){out[at++]=0xe0|(c>>12);out[at++]=0x80|((c>>6)&63);out[at++]=0x80|(c&63);}else{out[at++]=0xf0|(c>>18);out[at++]=0x80|((c>>12)&63);out[at++]=0x80|((c>>6)&63);out[at++]=0x80|(c&63);}}out[at]=0;return out;}
 static uint32_t ini_next(const unsigned char**p){uint32_t c=*(*p)++;if(c<128)return c;unsigned more=c<0xe0?1:c<0xf0?2:3;c&=more==1?31:more==2?15:7;while(more--){if(!**p)return 0xfffd;c=(c<<6)|(*(*p)++&63);}return c;}
@@ -30,6 +31,10 @@ static void ini_read(X86Ctx*ctx){char*section=ini_wide_string(ARG(0)),*key=ini_w
 static void ini_write_utf16(FILE*f,const char*s){fputc(0xff,f);fputc(0xfe,f);const unsigned char*p=(const unsigned char*)s;while(*p){uint32_t c=ini_next(&p);if(c>65535){c-=65536;uint16_t a=0xd800+(c>>10),b=0xdc00+(c&1023);fputc(a&255,f);fputc(a>>8,f);fputc(b&255,f);fputc(b>>8,f);}else{fputc(c&255,f);fputc(c>>8,f);}}}
 static void ini_write(X86Ctx*ctx){char*section=ini_wide_string(ARG(0)),*key=ini_wide_string(ARG(1)),*value=ini_wide_string(ARG(2));if(!section&&!key&&!value){RET(1);return;}if(!section){free(key);free(value);RET(0);return;}
     int handled = veil_native_scaling_write(section, key, value);
+    if (handled < 0 && key && value && !strcasecmp(section, "DEFAULT") && !strcasecmp(key, "VeilIntroCart")) {
+        veil_intro_cart_camera(!strcmp(value, "1"));
+        handled = 1;
+    }
     if (handled < 0) handled = veil_waterfall_command(section, key, value);
     if (handled < 0) handled = veil_dialogue_command(section, key, value);
     if (handled < 0) handled = veil_tablet_command(section, key, value);

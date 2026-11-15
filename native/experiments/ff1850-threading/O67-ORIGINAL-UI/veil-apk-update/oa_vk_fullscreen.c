@@ -312,6 +312,7 @@ typedef struct {
     VkShaderModule module;
     oa_shader_info info;
     uint32_t hash;
+    int cart_depth_particle;
     uint32_t af_textures[16];
 } oa_shader;
 
@@ -1697,6 +1698,14 @@ static uint32_t hash_bytes(const void *p, size_t n);
 
 static void af_get_texture_pairs(oa_shader *shader, const uint32_t *spv, size_t words);
 
+static int intro_cart_camera;
+
+__attribute__((visibility("hidden"))) void veil_intro_cart_camera(int active)
+{
+    if (__atomic_exchange_n(&intro_cart_camera, active, __ATOMIC_RELAXED) != active)
+        logf_("Opening cart particle guard %s", active ? "active" : "inactive");
+}
+
 static HRESULT create_shader(const void *code, SIZE_T size, oa_shader **out, int kind) {
     oa_shader *s = (oa_shader *)new_obj(sizeof(oa_shader), kind);
     uint32_t *spv = NULL;
@@ -1712,6 +1721,7 @@ static HRESULT create_shader(const void *code, SIZE_T size, oa_shader **out, int
         af_get_texture_pairs(s, spv, words);
     if (kind == K_PS && s->info.texture_mask == 15 && s->info.cb_mask == 1)
         s->hash = hash_bytes(code, size);
+    s->cart_depth_particle = kind == K_PS && size == 2728 && hash_bytes(code, size) == 0x32e7f79fu;
     ci.codeSize = words * 4;
     ci.pCode = spv;
     if (pvkCreateShaderModule(g_dev, &ci, NULL, &s->module)) { logf_("shader module failed"); free(spv); free(s); return E_FAIL_; }
@@ -2890,9 +2900,17 @@ static void query_end(void) { pvkCmdEndQuery(g_cur->cmd, g_cur->qpool, g_cur->qu
 
 #include "oa_hdr_waterfall.inc"
 
+static int skip_intro_cart_particle(const oa_context *c)
+{
+    // This additive soft-particle draw flashes in the opening camera shot.
+    // Confine the workaround to that cinematic.
+    return c->ps && c->ps->cart_depth_particle &&
+           __atomic_load_n(&intro_cart_camera, __ATOMIC_RELAXED);
+}
+
 static void draw_i(oa_context *c, UINT n, UINT first) {
     int q;
-    if (pred_skips(c) || !prepare_draw(c)) return;
+    if (skip_intro_cart_particle(c) || pred_skips(c) || !prepare_draw(c)) return;
     q = query_begin(c);
     pass_record_draw(c, 0, n, first, 0);
     pvkCmdDraw(g_cur->cmd, n, 1, first, 0);
@@ -2901,7 +2919,7 @@ static void draw_i(oa_context *c, UINT n, UINT first) {
 }
 static void draw_indexed_i(oa_context *c, UINT n, UINT first, INT base) {
     if (!c->ib || c->ib->ring) { g_n_skip_ib++; return; }
-    if (pred_skips(c) || !prepare_draw(c)) return;
+    if (skip_intro_cart_particle(c) || pred_skips(c) || !prepare_draw(c)) return;
     c->ib->gen_used[c->ib->cur] = g_frame;
     {
         VkBuffer b = c->ib->gens[c->ib->cur].buf;

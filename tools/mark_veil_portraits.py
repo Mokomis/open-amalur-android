@@ -1,4 +1,4 @@
-"""Mark visible original player portraits for the Android waterfall compositor."""
+"""Mark original UI portraits and the opening cart cinematic for Android."""
 import argparse
 from hashlib import sha256
 from pathlib import Path
@@ -167,13 +167,42 @@ def other_portrait(data, child, skip_race=False):
     return output[:offset - 4] + pack("<I", len(output) - offset) + output[offset:]
 
 
+def intro_cart(data, child, pc, active):
+    parsed = parse_bytes(data)
+    fn = parsed["chunk"]["root_function"]["children"][child]
+    if active and (
+        fn["instructions"][pc]["word_hex"] != "aa001803"
+        or fn["instructions"][pc + 7]["word_hex"] != "3200b505"
+        or constant_value(fn["constants"][181]) != "Cinematic_01_00"
+    ):
+        raise ValueError("Unrecognized opening cinematic call")
+    # Preserve the registers in use by the original callback.
+    first = fn["maximum_stack_size"]
+    code = Code(fn)
+    code.glob(first, "GAME")
+    code.field(first, first, "set_personal_ini_entry_str")
+    code.load(first + 1, "VeilIntroCart")
+    code.load(first + 2, str(int(active)))
+    code.op("CALL_I", first, 3, 1)
+    start, end, replacement = insert(data, fn, pc, code, first + 3)
+    data = data[:start] + replacement + data[end:]
+    offset = parsed["wrapper"]["payload_file_offset"]
+    return data[:offset - 4] + pack("<I", len(data) - offset) + data[offset:]
+
+
 def patch_batch(data):
     count, = unpack_from("<I", data)
     offset = 4 + count * 8
     directory = []
     members = []
-    edits = {13520: ledger, 256627: lambda payload: other_portrait(payload, 24),
-             417426: lambda payload: other_portrait(payload, 28, skip_race=True)}
+    edits = {
+        13488: lambda payload: intro_cart(payload, 9, 956, active=True),
+        13520: ledger,
+        256627: lambda payload: other_portrait(payload, 24),
+        417426: lambda payload: other_portrait(payload, 28, skip_race=True),
+        # This vignette's final frame hands control to character creation.
+        1411317: lambda payload: intro_cart(payload, 3, 0, active=False),
+    }
     for name, length in iter_unpack("<II", data[4:offset]):
         payload = data[offset:offset + length]
         offset += length
@@ -183,7 +212,7 @@ def patch_batch(data):
         directory.append(pack("<II", name, len(payload)))
         members.append(payload)
     if edits or offset != len(data):
-        raise ValueError("Missing portrait scripts in the Veil UI batch")
+        raise ValueError("Missing scripts in the Veil UI batch")
     return data[:4] + b"".join(directory) + b"".join(members)
 
 
