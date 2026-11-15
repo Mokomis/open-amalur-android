@@ -1,4 +1,4 @@
-# Open Amalur for Android
+# Open Amalur
 
 Right. Let’s get this out of the way so we don’t waste each other’s time.
 
@@ -8,9 +8,11 @@ Open Amalur is unequivocally an AI-first project. I led the work and used ChatGP
 
 Getting the game running was easier than I expected, thanks to those tools. Making it feel good to play on a tablet turned a small experiment into a much bigger project. The result is a version of Amalur I actually want to play on Android.
 
-Open Amalur is a native Android recompilation of the original *Re-Reckoning* engine. The translator and Android runtime are open source, and you build the engine from your own copy of the game.
+Open Amalur is a recompilation of the original *Re-Reckoning* engine. The translator and runtime are open source, and you build the engine from your own copy of the game.
 
-I substantially reworked the engine’s threading to improve how it schedules simulation, rendering, and background jobs across multiple CPU cores. Android was the first target. Some of the work on threading, graphics, and the interface could carry over to Windows, macOS, Linux, and iOS if someone wants to take it there.
+I substantially reworked the engine’s threading to improve how it schedules simulation, rendering, and background jobs across multiple CPU cores.
+
+Android is the first release. I plan to build a Windows version next. Some of the work on threading, graphics, and the interface could also carry over to macOS, Linux, and iOS if someone wants to take it there.
 
 ## About the UI
 
