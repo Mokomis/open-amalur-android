@@ -44,7 +44,7 @@ We built the **native ARM64 engine** by translating the original executable’s 
 - **Android integration.** The runtime provides file access, input, audio, local profiles, saves, and display handling. The graphics layer translates the engine’s Direct3D 11 calls to Vulkan. The native `D3DReflect` implementation reads metadata from the game’s compiled shaders.
 - **Multicore threading.** We reworked how the engine discovers available CPU cores, synchronizes jobs, and wakes workers as jobs finish. We profiled simulation, graphics recording, and background work across multiple cores on the OPPO Pad Mini.
 
-In a clean OPPO Pad Mini test with networking disabled, v0.1.6 imported the game files, detected Fatesworn, and reached the Veil title screen. The full campaign and expansion still need broader playtesting.
+In a clean OPPO Pad Mini test with networking disabled, the signed v0.1.6 APK imported the game files, detected Fatesworn, and reached the Veil title screen. A tap on **OK** confirmed the character name and advanced the opening scene. The full campaign and expansion still need broader playtesting.
 
 [Engine and threading notes](ENGINE.md) · [Developer build guide](BUILDING.md#build-from-source)
 

@@ -28,6 +28,7 @@ static _Atomic bool mash_active;
 static _Atomic unsigned mash_taps;
 static _Atomic unsigned tutorial_mode;
 static _Atomic bool tutorial_tap;
+static _Atomic bool name_dialog;
 static _Atomic unsigned touch_ability_slot;
 static _Atomic uint64_t finisher_packet;
 static _Atomic uint64_t finisher_update;
@@ -164,6 +165,12 @@ HIDDEN int veil_tablet_command(const char *section, const char *key, const char 
         __android_log_print(ANDROID_LOG_INFO, "VeilTablet", "Tutorial A %s", value);
         return 1;
     }
+    if (!strcasecmp(key, "VeilNameDialog")) {
+        bool open = value[0] == '1';
+        if (atomic_exchange(&name_dialog, open) != open)
+            __android_log_print(ANDROID_LOG_INFO, "VeilTablet", "Name dialog %d", open);
+        return 1;
+    }
     if (!strcasecmp(key, "VeilTabletMash")) {
         __android_log_print(ANDROID_LOG_INFO, "VeilTablet", "Mash prompt %s", value);
         atomic_store(&mash_taps, 0);
@@ -234,6 +241,9 @@ JNI_API(mode)(JNIEnv *env, jclass type)
     (void)env;
     (void)type;
     uint64_t now = now_ms();
+    // The original name window handles its own OK, Cancel, and edit-field taps.
+    if (atomic_load(&name_dialog))
+        return 0;
     if (atomic_exchange(&ui_request, 0))
         return 2;
     if (atomic_load(&controller_active))
