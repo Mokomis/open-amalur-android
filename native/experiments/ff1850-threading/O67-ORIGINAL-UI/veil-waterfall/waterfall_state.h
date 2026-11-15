@@ -3,6 +3,7 @@
 
 typedef struct {
     float left, top, width, height;
+    int framed;
 } VeilWaterfallRect;
 
 __attribute__((visibility("hidden"))) void veil_waterfall_assets(AAssetManager *);

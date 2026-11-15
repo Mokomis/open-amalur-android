@@ -1,5 +1,5 @@
 #include "waterfall_state.h"
-#include "waterfall_composite.h"
+#include <waterfall_composite.h>
 
 enum { FALL_WIDTH = 256, FALL_HEIGHT = 320, FALL_FRAMES = 100 };
 
@@ -33,9 +33,11 @@ static int waterfall_init(VkFormat format)
         .bindingCount = 2, .pBindings = bindings,
     };
     if (pvkCreateDescriptorSetLayout(g_dev, &set, NULL, &dsl) != VK_SUCCESS) return 0;
+    const VkPushConstantRange frame_scale = {VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(float)};
     const VkPipelineLayoutCreateInfo pipeline_layout = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
         .setLayoutCount = 1, .pSetLayouts = &dsl,
+        .pushConstantRangeCount = 1, .pPushConstantRanges = &frame_scale,
     };
     if (pvkCreatePipelineLayout(g_dev, &pipeline_layout, NULL, &waterfall_layout) != VK_SUCCESS)
         return 0;
@@ -173,6 +175,8 @@ static void oa_waterfall_render(oa_chain *chain, oa_frame *frame, oa_context *co
     pvkCmdSetViewport(cmd, 0, 1, &viewport);
     pvkCmdSetScissor(cmd, 0, 1, &rect);
     pvkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, waterfall_layout, 0, 1, &slot->set, 0, NULL);
+    const float frame_scale = portrait.framed ? fmaxf(1, scale) : 0;
+    pvkCmdPushConstants(cmd, waterfall_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(frame_scale), &frame_scale);
     pvkCmdDraw(cmd, 3, 1, 0, 0);
     pvkCmdEndRendering(cmd);
 }

@@ -1,4 +1,4 @@
-"""Fit Veil's quest, save and item detail panels to the game viewport."""
+"""Fit Veil's quest, save, item details and character creation to the viewport."""
 import argparse
 from hashlib import sha256
 from pathlib import Path
@@ -9,6 +9,7 @@ from generate_veil_edits import index_of, read_entry
 
 LEFT, RIGHT, TOP, BOTTOM = 581899, 9073508, 354013, 10777313
 WIDTH, HEIGHT = 897369, 1453632
+RELATIVE_WIDTH, RELATIVE_RIGHT = 9443087, 26550078
 NODE = struct.Struct("<5i")
 WORD = struct.Struct("<I")
 
@@ -106,6 +107,21 @@ def details(layout):
     layout.set(298, {TOP: -22})
 
 
+def character_creation(layout):
+    # Keep the menu backdrop flat behind all four character creation steps.
+    layout.set(11, {LEFT: -4000, TOP: -4000, WIDTH: 1, HEIGHT: 1,
+                    8368203: None, RELATIVE_RIGHT: None, 7030313: None, 29510429: None})
+    layout.set(48, {27695: 0, 15212: 0, 96669: 0})
+    # The portrait at the last two steps keeps a margin at the right edge.
+    layout.set(82, {RELATIVE_WIDTH: 474})
+
+
+def character_face(layout):
+    # Fit the title tabs and controls within the left 47% of the menu.
+    for node in (10, 14):
+        layout.set(node, {RELATIVE_WIDTH: 412, RELATIVE_RIGHT: 530})
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("archive", type=Path)
@@ -116,6 +132,8 @@ def main():
         ("1661673.ui_bxml", "80787b4742d81aef68f691c3de4bfcfb09b031aec79fced4a043d3d312bf8694", quest),
         ("1621469.ui_bxml", "6608a9298c2fc3b5d9243da5c27443c7349750158e7c1a0e53318ba92e89fe14", saves),
         ("1621434.ui_bxml", "7acf825de3e0d26c872cdfb12e81cb1824741305f4a0d5f88f75dfe65ee6ab17", details),
+        ("1621409.ui_bxml", "3f23c291b4fd330b177b1bf24b703418074c4695fd311f88d25647c6c187bf6e", character_creation),
+        ("1621408.ui_bxml", "ce2d4c8a56ecf895fadf0268803635f7a0446c79ad1452dbaa8f02b8f80103e5", character_face),
     )
     with args.archive.open("rb") as pak:
         index = index_of(pak)

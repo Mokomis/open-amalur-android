@@ -1699,11 +1699,17 @@ static uint32_t hash_bytes(const void *p, size_t n);
 static void af_get_texture_pairs(oa_shader *shader, const uint32_t *spv, size_t words);
 
 static int intro_cart_camera;
+static unsigned intro_cart_particle_draws;
 
 __attribute__((visibility("hidden"))) void veil_intro_cart_camera(int active)
 {
-    if (__atomic_exchange_n(&intro_cart_camera, active, __ATOMIC_RELAXED) != active)
-        logf_("Opening cart particle guard %s", active ? "active" : "inactive");
+    if (__atomic_exchange_n(&intro_cart_camera, active, __ATOMIC_RELAXED) == active)
+        return;
+    unsigned skipped = __atomic_exchange_n(&intro_cart_particle_draws, 0, __ATOMIC_RELAXED);
+    if (active)
+        logf_("Opening cart particle guard active");
+    else
+        logf_("Opening cart particle guard inactive, %u particle draws suppressed", skipped);
 }
 
 static HRESULT create_shader(const void *code, SIZE_T size, oa_shader **out, int kind) {
@@ -2904,8 +2910,11 @@ static int skip_intro_cart_particle(const oa_context *c)
 {
     // This additive soft-particle draw flashes in the opening camera shot.
     // Confine the workaround to that cinematic.
-    return c->ps && c->ps->cart_depth_particle &&
-           __atomic_load_n(&intro_cart_camera, __ATOMIC_RELAXED);
+    if (!c->ps || !c->ps->cart_depth_particle ||
+        !__atomic_load_n(&intro_cart_camera, __ATOMIC_RELAXED))
+        return 0;
+    __atomic_fetch_add(&intro_cart_particle_draws, 1, __ATOMIC_RELAXED);
+    return 1;
 }
 
 static void draw_i(oa_context *c, UINT n, UINT first) {

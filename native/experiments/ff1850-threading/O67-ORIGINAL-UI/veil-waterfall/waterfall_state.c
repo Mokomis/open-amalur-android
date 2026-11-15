@@ -92,7 +92,10 @@ int veil_waterfall_command(const char *section, const char *key, const char *val
     }
     VeilWaterfallRect next = {0};
     if (strcmp(value, "1")) {
-        if (sscanf(value, "rect,%f,%f,%f,%f", &next.left, &next.top, &next.width, &next.height) != 4 ||
+        next.framed = !strncmp(value, "frame,", 6);
+        const char *coordinates = next.framed ? value + 6 : !strncmp(value, "rect,", 5) ? value + 5 : NULL;
+        if (!coordinates ||
+            sscanf(coordinates, "%f,%f,%f,%f", &next.left, &next.top, &next.width, &next.height) != 4 ||
             !(fabsf(next.left) <= 4096 && fabsf(next.top) <= 4096 &&
               next.width > 0 && next.width <= 4096 && next.height > 0 && next.height <= 4096))
             return 1;
@@ -102,8 +105,8 @@ int veil_waterfall_command(const char *section, const char *key, const char *val
     if (now - last_seen > 200)
         __android_log_print(ANDROID_LOG_INFO, "VeilWaterfall", "Character portrait active");
     if (memcmp(&portrait, &next, sizeof(next)) != 0)
-        __android_log_print(ANDROID_LOG_INFO, "VeilWaterfall", "Portrait rect %.1f,%.1f %.1fx%.1f",
-                            next.left, next.top, next.width, next.height);
+        __android_log_print(ANDROID_LOG_INFO, "VeilWaterfall", "Portrait rect %.1f,%.1f %.1fx%.1f framed=%d",
+                            next.left, next.top, next.width, next.height, next.framed);
     portrait = next;
     last_seen = now;
     pthread_mutex_unlock(&portrait_lock);

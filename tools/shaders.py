@@ -14,6 +14,9 @@ SHADERS = {
         ("pause.vert", "oa_pause_vertex"),
         ("pause.frag", "oa_pause_fragment"),
     ),
+    "waterfall_composite.h": (
+        ("waterfall_composite.frag", "waterfall_fragment"),
+    ),
 }
 
 

@@ -125,18 +125,10 @@ def ledger(data):
     return data[:start] + branch.finish() + data[start + 4:]
 
 
-def other_portrait(data, child, skip_race=False):
+def other_portrait(data, child, framed=False):
     parsed = parse_bytes(data)
     fn = parsed["chunk"]["root_function"]["children"][child]
     code = Code(fn)
-    if skip_race:
-        code.glob(10, "m_cur_phase")
-        code.load(11, 1)  # Race is the first entry in m_char_gen_phases.
-        code.op("EQ", 0, 10, 11)
-        code.jump("portrait")
-        code.load(12, "0")
-        code.jump("send")
-        code.mark("portrait")
     code.glob(10, "m_portrait_wrapper")
     code.op("TEST", 10)
     code.jump("done")
@@ -146,7 +138,7 @@ def other_portrait(data, child, skip_race=False):
     code.op("TEST", 11)
     code.jump("done")
 
-    code.load(13, "rect,")
+    code.load(13, "frame," if framed else "rect,")
     for i, getter in enumerate(("get_left", "get_top", "get_width", "get_height")):
         dest = 14 + i * 2
         code.native(dest, getter)
@@ -155,7 +147,6 @@ def other_portrait(data, child, skip_race=False):
         if i < 3:
             code.load(dest + 1, ",")
     code.op("CONCAT", 12, 13, 20)
-    code.mark("send")
     code.glob(10, "GAME")
     code.field(10, 10, "set_personal_ini_entry_str")
     code.load(11, "VeilWaterfall")
@@ -199,7 +190,7 @@ def patch_batch(data):
         13488: lambda payload: intro_cart(payload, 9, 956, active=True),
         13520: ledger,
         256627: lambda payload: other_portrait(payload, 24),
-        417426: lambda payload: other_portrait(payload, 28, skip_race=True),
+        417426: lambda payload: other_portrait(payload, 28, framed=True),
         # This vignette's final frame hands control to character creation.
         1411317: lambda payload: intro_cart(payload, 3, 0, active=False),
     }

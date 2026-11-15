@@ -85,7 +85,7 @@ To assemble a release launcher, replace `--library build/liboaoriginal.so` with 
 
 Pass the resulting menu atlas files to `generate_veil_edits.py --replace` when regenerating the Veil recipe. Pass the prior recipe's properties with `--previous-metadata` so installed copies can upgrade. Supply the regenerated pause overlay through `build_apk.py --prototype-ui`. The APK builder includes [the Jost license](android/licenses/Jost-OFL.txt).
 
-`tools/fit_veil_panels.py` and `tools/mark_veil_portraits.py` take a compatible local Veil archive and an output folder. They produce the responsive quest, save and equipment layouts, the portrait visibility hooks, and the opening cutscene markers for `--replace`.
+`tools/fit_veil_panels.py` and `tools/mark_veil_portraits.py` take a compatible local Veil archive and an output folder. They produce the responsive quest, save, equipment and character creation layouts, the portrait rendering hooks, and the opening cutscene markers for `--replace`.
 
 The launcher works from shared game files without Steam or Internet access. It checks the game version and validates the copied files, creates a local profile, and detects Fatesworn from its optional archive in `data_1278260`. The title screen's Game Files action can import the same archive into an existing install. The GitHub update badge is independent of game startup.
 

@@ -25,7 +25,7 @@ Veil takes its visual cues from Edge UI for Skyrim. It uses compact lists, full-
 
 - **Main and pause menus** with a redesigned options sidebar and dedicated settings lists.
 - **Inventory, stash, and equipment** with compact item lists, a separate details pane, equipped-item markers, and appearance controls.
-- **Character and progression screens** for stats, skills, abilities, destinies, and character creation. The character portrait has an animated waterfall backdrop from the game.
+- **Character and progression screens** for stats, skills, abilities, destinies, and character creation. The four character creation screens use Veil-framed portraits with an optional locally generated waterfall.
 - **Quest log and maps** with side-by-side quest lists and objectives, Veil map controls, and touch confirmation for quest tutorials.
 - **Save and load** with full-screen slots and a touch action for creating or overwriting a save. Overwriting keeps the game's confirmation prompt.
 - **Dialogue** with tap selection, a draggable dialogue wheel, and an on-screen Skip control.
