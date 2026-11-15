@@ -17,6 +17,7 @@ from mark_veil_portraits import constant_value
 
 RELEASE_APK_SHA256 = "4db7f4e0cdec6c5edd1fca1c04d1351d22a1275f415a3369f18cdaa3159a5624"
 OPTIONS_SCRIPT = 13523
+TUTORIAL_SCRIPT = 733459
 SCRIPT_BATCH_KEY = crc32(b"134230570_klua.batch")
 ASSETS = (
     "veil-waterfall.bc3",
@@ -46,6 +47,19 @@ def remove_android_scaling(script):
     return result
 
 
+def fix_tutorial_arguments(script):
+    if sha256(script).hexdigest() != "6af1ac0771246a326493b89961f499e5e48c82d72d006d4a289cc6d4659b4789":
+        raise ValueError("Unexpected Veil tutorial script")
+    function = parse_bytes(script)["chunk"]["root_function"]["children"][1]
+    condition = function["instructions"][272]
+    # Veil runs additional code between loading args and testing them.
+    # Read the argument register explicitly before selecting the formatter.
+    result = bytearray(script)
+    pack_into(">I", result, condition["file_offset"], (OPCODE_NAMES.index("TEST") << 25) | condition["A"])
+    parse_bytes(result)
+    return result
+
+
 def patch_menu_batch(batch):
     count, = unpack_from("<I", batch)
     offset = 4 + count * 8
@@ -55,8 +69,11 @@ def patch_menu_batch(batch):
         if key == OPTIONS_SCRIPT:
             result[offset:offset + size] = remove_android_scaling(batch[offset:offset + size])
             matches += 1
+        elif key == TUTORIAL_SCRIPT:
+            result[offset:offset + size] = fix_tutorial_arguments(batch[offset:offset + size])
+            matches += 1
         offset += size
-    if offset != len(batch) or matches != 1:
+    if offset != len(batch) or matches != 2:
         raise ValueError("Malformed Veil menu batch")
     return result
 
