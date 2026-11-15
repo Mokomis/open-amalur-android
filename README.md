@@ -20,7 +20,7 @@ Veil draws visual inspiration from other interfaces, including Edge for Skyrim. 
 
 ## Download and install
 
-Download the Android APK and Veil build assets from [GitHub Releases](https://github.com/Mokomis/open-amalur-android/releases/latest). The [build and install guide](BUILDING.md) explains how to use your copy of Re-Reckoning. The earlier [Open Amalur research archive](https://github.com/Mokomis/open-amalur) remains available.
+Download the Android APK and Veil build assets from [GitHub Releases](https://github.com/Mokomis/open-amalur-android/releases/latest). The [build and install guide](BUILDING.md) explains how to use your copy of Re-Reckoning.
 
 ## How the engine runs
 
