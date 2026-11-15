@@ -101,6 +101,9 @@ void rt_hle_register(const HleDef *defs, size_t n);
 uint32_t rt_hle_thunk(const char *dll, const char *name);  /* thunk address; unknown names get a "missing" thunk */
 static inline uint32_t rt_arg(X86Ctx *ctx, int i) { return ld32(ctx->esp + 4 + 4u * (uint32_t)i); }
 const char *rt_str(uint32_t a);             /* guest char* as host pointer (0 -> NULL) */
+#ifdef __ANDROID__
+int oa_intro_movie_input(int request_skip);
+#endif
 
 /* --- threads --- */
 typedef struct RtThread {

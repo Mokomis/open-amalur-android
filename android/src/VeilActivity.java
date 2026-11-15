@@ -10,6 +10,7 @@ import android.graphics.RectF;
 import android.graphics.Typeface;
 import android.os.Build;
 import android.os.Bundle;
+import android.view.Display;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowInsets;
@@ -43,6 +44,7 @@ public final class VeilActivity extends NativeActivity {
             throw new IllegalStateException(error);
         }
         super.onCreate(state);
+        requestDisplayMode();
         overlay = new TouchControls();
         gameFileActions = new GameFileActions(this);
         updateBadge = new UpdateBadge(this, gameFileActions::show);
@@ -70,6 +72,21 @@ public final class VeilActivity extends NativeActivity {
             getWindowManager().addView(overlay, controls);
             overlay.resume();
         });
+    }
+
+    private void requestDisplayMode() {
+        Display display = getWindowManager().getDefaultDisplay();
+        Display.Mode current = display.getMode();
+        for (Display.Mode mode : display.getSupportedModes()) {
+            if (mode.getPhysicalWidth() == current.getPhysicalWidth() &&
+                    mode.getPhysicalHeight() == current.getPhysicalHeight() &&
+                    Math.abs(mode.getRefreshRate() - 120f) < 0.5f) {
+                WindowManager.LayoutParams attributes = getWindow().getAttributes();
+                attributes.preferredDisplayModeId = mode.getModeId();
+                getWindow().setAttributes(attributes);
+                return;
+            }
+        }
     }
 
     @Override protected void onActivityResult(int request, int result, Intent data) {

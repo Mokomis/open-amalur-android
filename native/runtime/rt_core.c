@@ -9,6 +9,7 @@ extern int oa_diagnostics_enabled;
 #include <ctype.h>
 #ifdef __ANDROID__
 #include <android/log.h>
+#include <stdatomic.h>
 #endif
 
 uintptr_t x86_mem_base;
@@ -678,6 +679,109 @@ void rt_module_init_tree(RtModule *m, X86Ctx *ctx)
     else m->initialized = 1;
 }
 
+#ifdef __ANDROID__
+enum { INTRO_INACTIVE, INTRO_PLAYING, INTRO_SKIP_REQUESTED, INTRO_COMPLETING };
+static atomic_int intro_movie_state;
+static atomic_uint intro_movie_handle;
+static uint32_t intro_decoded_frame;
+static uint32_t bink_open, bink_should_skip, bink_close;
+enum { BINK_FRAME_COUNT = 8, BINK_FRAME_NUMBER = 12 };
+
+int oa_intro_movie_input(int request_skip)
+{
+    int state = INTRO_PLAYING;
+    if (request_skip && atomic_compare_exchange_strong(
+            &intro_movie_state, &state, INTRO_SKIP_REQUESTED)) {
+        rt_log("VEIL_INTRO skip requested");
+        return 1;
+    }
+    return atomic_load(&intro_movie_state) != INTRO_INACTIVE;
+}
+
+static int is_intro_movie_path(uint32_t address)
+{
+    char path[260];
+    size_t i = 0;
+    for (; address && i < sizeof(path); ++i, ++address) {
+        if ((!i || !(address & (RT_PAGE - 1))) && !rt_vm_is_committed(address))
+            return 0;
+        path[i] = (char)ld8(address);
+        if (!path[i]) {
+            const char *name = path;
+            for (const char *p = path; *p; ++p)
+                if (*p == '/' || *p == '\\')
+                    name = p + 1;
+            static const char movie[] = "cinematic_01_00.bik";
+            size_t length = strlen(name);
+            size_t suffix = sizeof(movie) - 1;
+            return length >= suffix &&
+                   (length == suffix || name[length - suffix - 1] == '_') &&
+                   !strcasecmp(name + length - suffix, movie);
+        }
+    }
+    return 0;
+}
+
+static void intro_bink_open(X86Ctx *ctx)
+{
+    uint32_t args[] = {rt_arg(ctx, 0), rt_arg(ctx, 1)};
+    int intro = is_intro_movie_path(args[0]);
+    uint32_t handle = rt_call(ctx, bink_open, 2, args);
+    ctx->eax = handle;
+    if (intro && handle) {
+        atomic_store(&intro_movie_handle, handle);
+        atomic_store(&intro_movie_state, INTRO_PLAYING);
+        rt_log("VEIL_INTRO movie playing");
+    }
+}
+
+static void intro_bink_should_skip(X86Ctx *ctx)
+{
+    uint32_t handle = rt_arg(ctx, 0);
+    int state = INTRO_SKIP_REQUESTED;
+    if (handle && handle == atomic_load(&intro_movie_handle) &&
+        atomic_compare_exchange_strong(&intro_movie_state, &state, INTRO_COMPLETING)) {
+        // The original update has waited for decode and advanced the movie.
+        // A zero result exits its frame-drop loop into its end-of-movie check.
+        intro_decoded_frame = ld32(handle + BINK_FRAME_NUMBER);
+        st32(handle + BINK_FRAME_NUMBER, ld32(handle + BINK_FRAME_COUNT));
+        ctx->eax = 0;
+        rt_log("VEIL_INTRO skipped at frame %u", intro_decoded_frame);
+        return;
+    }
+    ctx->eax = rt_call(ctx, bink_should_skip, 1, &handle);
+}
+
+static void intro_bink_close(X86Ctx *ctx)
+{
+    uint32_t handle = rt_arg(ctx, 0);
+    if (handle && handle == atomic_load(&intro_movie_handle)) {
+        int state = atomic_exchange(&intro_movie_state, INTRO_INACTIVE);
+        if (state == INTRO_COMPLETING)
+            st32(handle + BINK_FRAME_NUMBER, intro_decoded_frame);
+        atomic_store(&intro_movie_handle, 0);
+        rt_log("VEIL_INTRO movie closed");
+    }
+    ctx->eax = rt_call(ctx, bink_close, 1, &handle);
+}
+
+static void init_intro_bink(RtModule *bink)
+{
+    static const HleDef imports[] = {
+        {"binkw32.dll", "_BinkOpen@8", intro_bink_open, 2},
+        {"binkw32.dll", "_BinkShouldSkip@4", intro_bink_should_skip, 1},
+        {"binkw32.dll", "_BinkClose@4", intro_bink_close, 1},
+    };
+    if (bink_open || !bink)
+        return;
+    bink_open = rt_export(bink, "_BinkOpen@8");
+    bink_should_skip = rt_export(bink, "_BinkShouldSkip@4");
+    bink_close = rt_export(bink, "_BinkClose@4");
+    if (bink_open && bink_should_skip && bink_close)
+        rt_hle_register(imports, sizeof(imports) / sizeof(imports[0]));
+}
+#endif
+
 void rt_resolve_imports(RtModule *m)
 {
     uint32_t pe = ld32(m->base + 0x3C);
@@ -688,6 +792,11 @@ void rt_resolve_imports(RtModule *m)
         const char *dll = rt_str(m->base + ld32(d + 12));
         uint32_t lookup = ld32(d) ? ld32(d) : ld32(d + 16), iat = ld32(d + 16);
         RtModule *target = rt_find_module(dll);
+#ifdef __ANDROID__
+        const int hook_intro = !m->is_dll && !strcasecmp(dll, "binkw32.dll");
+        if (hook_intro)
+            init_intro_bink(target);
+#endif
         if (target && target != m && m->ndeps < 16) {
             int known = 0;
             for (int k = 0; k < m->ndeps; k++) known |= m->deps[k] == target;
@@ -700,6 +809,11 @@ void rt_resolve_imports(RtModule *m)
             if (ent & 0x80000000u) snprintf(name, sizeof name, "#%u", ent & 0xFFFF);
             else snprintf(name, sizeof name, "%s", rt_str(m->base + ent + 2));
             uint32_t addr = target ? rt_export(target, name) : 0;
+#ifdef __ANDROID__
+            if (hook_intro && bink_open && bink_should_skip && bink_close &&
+                (addr == bink_open || addr == bink_should_skip || addr == bink_close))
+                addr = rt_hle_thunk(dll, name);
+#endif
             /* The game hands Bink a DirectSound sound system; there is no DirectSound here, so Bink
                gets its waveOut one instead (guest waveOut is mixed by rt_openal.c). */
             if (0) { /* Mirror-specific audio substitution disabled. */

@@ -2,6 +2,7 @@
 #include "veil_native_scaling.h"
 #include "waterfall_state.h"
 #include "veil_dialogue_touch.h"
+#include "../../../../runtime/rt.h"
 __attribute__((visibility("hidden"))) void veil_shadow_init(void);
 __attribute__((visibility("hidden"))) void veil_tablet_viewport(unsigned, unsigned);
 __attribute__((visibility("hidden"))) void veil_tablet_touch_mode(void);
@@ -164,7 +165,31 @@ static void touch_event(int action, int x, int y)
     }
 }
 
-static int32_t input(struct android_app*app,AInputEvent*e){(void)app;if(oa_gamepad_input(e))return 1;int type=AInputEvent_getType(e);
+static int intro_movie_input(AInputEvent *event)
+{
+    int source = AInputEvent_getSource(event);
+    switch (AInputEvent_getType(event)) {
+    case AINPUT_EVENT_TYPE_MOTION:
+        if ((source & AINPUT_SOURCE_TOUCHSCREEN) == AINPUT_SOURCE_TOUCHSCREEN) {
+            int action = AMotionEvent_getAction(event) & AMOTION_EVENT_ACTION_MASK;
+            return oa_intro_movie_input(action == AMOTION_EVENT_ACTION_UP);
+        }
+        return 0;
+    case AINPUT_EVENT_TYPE_KEY: {
+        int key = AKeyEvent_getKeyCode(event);
+        int gamepad = (source & AINPUT_SOURCE_GAMEPAD) == AINPUT_SOURCE_GAMEPAD;
+        int button = gamepad && ((key >= AKEYCODE_BUTTON_A && key <= AKEYCODE_BUTTON_MODE) ||
+                                 (key >= AKEYCODE_DPAD_UP && key <= AKEYCODE_DPAD_CENTER));
+        if (button || key == AKEYCODE_ENTER || key == AKEYCODE_SPACE || key == AKEYCODE_ESCAPE)
+            return oa_intro_movie_input(AKeyEvent_getAction(event) == AKEY_EVENT_ACTION_UP);
+        return 0;
+    }
+    default:
+        return 0;
+    }
+}
+
+static int32_t input(struct android_app*app,AInputEvent*e){(void)app;if(intro_movie_input(e)||oa_gamepad_input(e))return 1;int type=AInputEvent_getType(e);
     if(type==AINPUT_EVENT_TYPE_KEY && oa_pause_input(e,0,0,render_width,render_height))return 1;if(type==AINPUT_EVENT_TYPE_KEY){int key=AKeyEvent_getKeyCode(e),action=AKeyEvent_getAction(e);unsigned vk=0;if(key>=AKEYCODE_A&&key<=AKEYCODE_Z)vk='A'+key-AKEYCODE_A;else if(key>=AKEYCODE_0&&key<=AKEYCODE_9)vk='0'+key-AKEYCODE_0;else if(key==AKEYCODE_ENTER||key==AKEYCODE_BUTTON_A)vk=13;else if(key==AKEYCODE_BACK||key==AKEYCODE_ESCAPE||key==AKEYCODE_BUTTON_B)vk=27;else if(key==AKEYCODE_SPACE)vk=32;if(vk&&(action==AKEY_EVENT_ACTION_DOWN||action==AKEY_EVENT_ACTION_UP)){rt_android_key(vk,scan_code(vk),0,action==AKEY_EVENT_ACTION_DOWN);return 1;}}else if(type==AINPUT_EVENT_TYPE_MOTION){int action=AMotionEvent_getAction(e)&AMOTION_EVENT_ACTION_MASK;int x=AMotionEvent_getX(e,0),y=AMotionEvent_getY(e,0);if(display_width>0&&display_height>0){
         int cover = veil_title_cover_is_presented();
         if (cover) {
