@@ -41,8 +41,6 @@ final class GameFiles {
     private static final String TITLE_VIDEO = "well.bik";
     private static final long TITLE_VIDEO_BYTES = 2884472L;
     private static final String TITLE_VIDEO_HASH = "b3fe11aa874d966ebb54584694a27aca3f9074d14cf41a696355a6e70c2197f1";
-    private static final String WATERFALL = "veil-waterfall.bc3";
-    private static final long WATERFALL_BYTES = 256L * 320 * 100;
     private static final String[] BASE_ARCHIVES = {
             "DATA_0.pak", "initial_0.pak", "patch_0.pak", "en_us_0.pak", "de_de_0.pak", "fr_fr_0.pak"
     };
@@ -284,44 +282,12 @@ final class GameFiles {
                 makeDirectory(archive.getParentFile());
                 copy(fatesworn, archive, FATESWORN_HASH, FATESWORN_BYTES);
             }
-            Entry waterfall = root.get(WATERFALL);
-            if (waterfall != null && !waterfall.directory) {
-                copy(waterfall, new File(stage, WATERFALL), null, WATERFALL_BYTES);
-            }
             Files.createFile(new File(stage, ".ready").toPath());
             android.system.Os.rename(stage.getPath(), destination.getPath());
         } catch (ErrnoException error) {
             throw new IOException("Android could not finish the import.", error);
         } finally {
             removePartial(stage);
-        }
-    }
-
-    static void importWaterfall(Context context, Uri uri) throws IOException {
-        File storage = context.getExternalFilesDir(null);
-        if (!ready(storage)) throw new IOException("Set up the game files first.");
-        File temporary = File.createTempFile("waterfall-", ".partial", storage);
-        try {
-            try (InputStream input = context.getContentResolver().openInputStream(uri);
-                 FileOutputStream output = new FileOutputStream(temporary)) {
-                if (input == null) throw new IOException("Android could not open the waterfall file.");
-                byte[] buffer = new byte[65536];
-                long remaining = WATERFALL_BYTES;
-                while (remaining > 0) {
-                    int count = input.read(buffer, 0, (int)Math.min(buffer.length, remaining));
-                    if (count < 0) break;
-                    output.write(buffer, 0, count);
-                    remaining -= count;
-                }
-                if (remaining != 0 || input.read() != -1) {
-                    throw new IOException("Choose the veil-waterfall.bc3 file created by the waterfall tool.");
-                }
-                output.getFD().sync();
-            }
-            Files.move(temporary.toPath(), new File(storage, WATERFALL).toPath(),
-                    StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-        } finally {
-            Files.deleteIfExists(temporary.toPath());
         }
     }
 

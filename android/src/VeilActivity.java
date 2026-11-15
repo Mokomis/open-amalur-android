@@ -93,8 +93,6 @@ public final class VeilActivity extends NativeActivity {
         super.onActivityResult(request, result, data);
         if (request == GameFileActions.SELECT_FATESWORN && result == RESULT_OK && data != null) {
             gameFileActions.importFrom(data.getData());
-        } else if (request == GameFileActions.SELECT_WATERFALL && result == RESULT_OK && data != null) {
-            gameFileActions.importWaterfall(data.getData());
         }
     }
 

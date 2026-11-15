@@ -11,7 +11,6 @@ import java.util.Locale;
 
 final class GameFileActions {
     static final int SELECT_FATESWORN = 14;
-    static final int SELECT_WATERFALL = 15;
     private final Activity activity;
     private boolean importing;
 
@@ -25,45 +24,12 @@ final class GameFileActions {
         new AlertDialog.Builder(activity).setTitle("Game Files")
                 .setMessage(installed ? "Fatesworn is installed."
                         : "Choose your updated Re-Reckoning folder to add Fatesworn.")
-                .setNeutralButton("Import Waterfall", (dialog, button) -> {
-                    Intent picker = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-                    picker.addCategory(Intent.CATEGORY_OPENABLE);
-                    picker.setType("*/*");
-                    picker.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                    activity.startActivityForResult(picker, SELECT_WATERFALL);
-                })
                 .setNegativeButton("Back", null)
                 .setPositiveButton(installed ? "Replace Fatesworn" : "Add Fatesworn", (dialog, button) -> {
                     Intent picker = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
                     picker.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
                     activity.startActivityForResult(picker, SELECT_FATESWORN);
                 }).show();
-    }
-
-    void importWaterfall(Uri file) {
-        if (importing || file == null) return;
-        importing = true;
-        AlertDialog progress = new AlertDialog.Builder(activity).setTitle("Importing Waterfall")
-                .setMessage("Copying the portrait background…").setCancelable(false).show();
-        new Thread(() -> {
-            String error = null;
-            try {
-                GameFiles.importWaterfall(activity.getApplicationContext(), file);
-            } catch (IOException | SecurityException failure) {
-                error = failure.getMessage();
-                if (error == null) error = "Android could not read the selected waterfall file.";
-            }
-            final String message = error;
-            activity.runOnUiThread(() -> {
-                importing = false;
-                if (activity.isFinishing() || activity.isDestroyed()) return;
-                progress.dismiss();
-                if (message != null) {
-                    new AlertDialog.Builder(activity).setTitle("Could not import waterfall").setMessage(message)
-                            .setPositiveButton("OK", null).show();
-                }
-            });
-        }, "waterfall-import").start();
     }
 
     void importFrom(Uri folder) {

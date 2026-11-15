@@ -36,18 +36,7 @@ Build the engine from the matching release tag on Windows, then copy `build/libo
 
 An update reuses the installed engine when its SHA-256 is unchanged. If a release changes the engine, rebuild from that release tag and select the new library at the prompt. Keep the app installed when upgrading to preserve its saves, settings and touch layout.
 
-### Generate the portrait waterfall
-
-Record a fixed view of the waterfall in Allestar Glade just outside the tutorial. Hold the camera still for at least eight seconds with the waterfall in the central portrait area and the character and controls outside the crop. The recording can come from the PC game or Open Amalur on Android.
-
-With FFmpeg on PATH, install Pillow in the build environment and create the five-second loop.
-
-```powershell
-.\.venv\Scripts\python.exe -m pip install Pillow==13.0.0
-.\.venv\Scripts\python.exe tools/make_waterfall_clip.py glade.mp4 veil-waterfall.bc3
-```
-
-Adjust the portrait framing with `--crop width:height:left:top` in pixels and the start time with `--start` in seconds. Put `veil-waterfall.bc3` in the game folder before first import, or add it later with **Game Files → Import Waterfall**. The next portrait you open uses the new clip. The loop plays at 20 frames per second. Game setup and play are available before a clip is added.
+The release APK includes the animated Allestar Glade waterfall used in Veil portraits. Setup needs only the game files and locally built engine.
 
 ## Modding the generated engine
 
@@ -59,7 +48,7 @@ Add `--prepare-only` to stop after translation and source transformations. The g
 
 Project-written translation and instruction lowering live in `translator/`. The Android ABI, process, input and file adapters live in `native/`. [The native build plan](native/build-plan.json) records the exact sources and flags. It includes the synchronization, thread placement, frame presentation, visibility and Vulkan renderer components from the tested Android build. The authored shaders are under `native/shaders`. Android launcher and Veil importer sources are under `android/`.
 
-The project-authored code is [MIT licensed](LICENSE). [Third-party notices](THIRD_PARTY_NOTICES.md) apply to the included dependencies. Translation outputs, captures and local game inputs stay on the player's machines.
+The project-authored code is [MIT licensed](LICENSE). [Third-party notices](THIRD_PARTY_NOTICES.md) apply to the included dependencies. Translation outputs and local game inputs stay on the player's machines.
 
 ## Assemble an APK
 
@@ -78,6 +67,8 @@ $env:JAVA_HOME = "$java"
 Use a distinct `--application-id` when installing a build signed with your own key alongside an existing build.
 
 To assemble a release launcher, replace `--library build/liboaoriginal.so` with `--local-engine build/liboaoriginal.so --ndk "$ndk"` and supply the Veil recipe and pause overlay. The APK records the engine SHA-256 and packages the launcher. Pass the release application ID and use its existing signing key for a normal Android upgrade.
+
+Supply the prepared Allestar Glade loop with `--waterfall veil-waterfall.bc3`. The builder adds it as `assets/veil-waterfall.bc3`. The portrait renderer plays the five-second loop at 20 frames per second. `tools/make_waterfall_clip.py` can re-encode an existing capture during release preparation.
 
 `tools/generate_veil_edits.py` takes your original game directory, a locally modded `patch_0.pak`, and output paths for the recipe, properties and a local reference archive. Use the original and modded archives from the same supported game version.
 

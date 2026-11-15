@@ -11,6 +11,7 @@ from zipfile import ZIP_DEFLATED, ZIP_STORED, ZipFile
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = "org.openamalur.originalengine"
+WATERFALL_BYTES = 256 * 320 * 100
 
 
 def run(*argv):
@@ -103,15 +104,19 @@ def main():
     parser.add_argument("--key-alias", required=True)
     parser.add_argument("--password-env", help="name of an environment variable with the keystore password")
     parser.add_argument("--application-id", default=PACKAGE)
-    parser.add_argument("--waterfall", type=Path)
+    parser.add_argument("--waterfall", type=Path, help="package the prepared Veil portrait loop")
     parser.add_argument("--prototype-ui", type=Path)
     args = parser.parse_args()
     if not re.fullmatch(r"[A-Za-z][\w]*(?:\.[A-Za-z][\w]*)+", args.application_id, re.ASCII):
         parser.error("invalid Android application ID")
     if (args.veil_edits is None) != (args.veil_properties is None):
         parser.error("provide both Veil files or omit both for original menus")
-    if args.local_engine is not None and (args.ndk is None or args.waterfall is not None):
-        parser.error("--local-engine requires --ndk and excludes --waterfall")
+    if args.local_engine is not None and args.ndk is None:
+        parser.error("--local-engine requires --ndk")
+    if args.waterfall is not None and (
+        not args.waterfall.is_file() or args.waterfall.stat().st_size != WATERFALL_BYTES
+    ):
+        parser.error("--waterfall requires the complete 100-frame, 256 × 320 BC3 loop")
     build(args)
 
 
