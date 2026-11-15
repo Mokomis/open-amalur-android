@@ -146,6 +146,35 @@ def add_hud_shortcut(data):
     return insert_callback(data, 14, 134, edit)
 
 
+def fix_alchemy_tutorials(data):
+    lessons = (
+        (21980198, "Choose Create to brew a potion from a recipe you know. "
+                   "Choose Experiment to mix reagents and discover new recipes."),
+        (82674331, "Select reagents to add them to your mixture. Add at least two, then choose "
+                   "Experiment to brew. You can remove the last reagent before mixing."),
+    )
+
+    def edit(fn):
+        register = fn["maximum_stack_size"]
+        code = Code(fn)
+        code.glob(register, "m_curr_tutorial")
+        for lesson, _ in lessons:
+            code.op("EQ", 1, register, code.index(lesson) + 256)
+            code.jump(lesson)
+        code.jump("formatted")
+        # These lessons fail in the formatted string box and cannot complete.
+        for lesson, help_text in lessons:
+            code.mark(lesson)
+            code.load(7, help_text)
+            code.jump("plain")
+        # Preserve the original formatted path for the other lessons.
+        code.mark("formatted")
+        code.labels["plain"] = len(code.words) + (238 - 226)
+        return code, register + 1
+
+    return insert_callback(data, 1, 226, edit)
+
+
 def patch_batch(batch):
     count, = unpack_from("<I", batch)
     offset = 4 + count * 8
@@ -153,6 +182,7 @@ def patch_batch(batch):
         13517: ("97640493b79252e5021fe7926d350cf8b07e2ef77ec9e99e6625c8256fd9e22b", fit_inventory_actions),
         13519: ("11d6e7136727c5f5f4de9893a3213fa7c67db1eb5d6cf1ebe6840ae6d2c29a20", mark_map),
         249501: ("c3e3ded912e0b540f37355d5c40b016c1ccec8de08e477b395b510f986ca8e00", mark_radial),
+        733459: ("2f6d2b0cce3818b49458bb7227c6a9e9809dd80f6946cfa15dec594ea8bf0682", fix_alchemy_tutorials),
         1402689: ("4742faad4b62de5c170c4a260751a62d9b4babde6a8e8a857accf409159f2b8e", add_hud_shortcut),
     }
     directory, members = [], []

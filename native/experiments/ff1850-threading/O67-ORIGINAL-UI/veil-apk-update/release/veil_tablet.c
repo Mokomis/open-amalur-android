@@ -21,7 +21,6 @@ static _Atomic int title_cover_presented;
 static _Atomic int options_visible;
 static _Atomic bool controller_active;
 static _Atomic bool enabled;
-static _Atomic bool initialized;
 static _Atomic bool sprint_on_stick;
 static _Atomic unsigned menu_request;
 static _Atomic bool mash_active;
@@ -349,7 +348,6 @@ JNI_API(input)(JNIEnv *env, jclass type, jint on, jint buttons, jint lt, jint rt
         ++packet;
     }
     atomic_store(&enabled, on != 0);
-    atomic_store(&initialized, true);
     pthread_mutex_unlock(&pad_mutex);
     bool casting = on && cast;
     if (atomic_exchange(&touch_cast, casting) != casting) veil_tablet_wake_input();
@@ -418,7 +416,7 @@ HIDDEN uint32_t veil_stock_pad_get(uint32_t index, uint8_t state[16]);
 HIDDEN uint32_t veil_trace_pad_get(uint32_t index, uint8_t state[16])
 {
     uint32_t status = veil_stock_pad_get(index, state);
-    if (index != 0 || !atomic_load(&initialized))
+    if (index != 0)
         return status;
     uint16_t buttons = 0;
     int16_t sticks[4] = {0};
@@ -434,7 +432,7 @@ HIDDEN uint32_t veil_trace_pad_get(uint32_t index, uint8_t state[16])
         if (!atomic_load(&enabled) || atomic_load(&controller_active))
             return status;
     }
-    // Keep the virtual controller connected through native menus and editor toggles.
+    // Present a neutral virtual pad even before the touch overlay starts.
     pthread_mutex_lock(&pad_mutex);
     memcpy(state, &packet, sizeof(packet));
     memcpy(state + 4, &pad, sizeof(pad));
