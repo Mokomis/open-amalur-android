@@ -61,8 +61,6 @@ final class GameFileActions {
                 if (message != null) {
                     new AlertDialog.Builder(activity).setTitle("Could not import waterfall").setMessage(message)
                             .setPositiveButton("OK", null).show();
-                } else {
-                    restartDialog("Waterfall imported", "Close and reopen Open Amalur to show it in Veil.");
                 }
             });
         }, "waterfall-import").start();

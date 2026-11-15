@@ -47,7 +47,7 @@ With FFmpeg on PATH, install Pillow in the build environment and create the five
 .\.venv\Scripts\python.exe tools/make_waterfall_clip.py glade.mp4 veil-waterfall.bc3
 ```
 
-Adjust the portrait framing with `--crop width:height:left:top` in pixels and the start time with `--start` in seconds. Put `veil-waterfall.bc3` in the game folder before first import, or add it later with **Game Files → Import Waterfall**, then reopen the game. The loop plays at 20 frames per second in the same Veil portrait panels. Game setup and play are available before a clip is added.
+Adjust the portrait framing with `--crop width:height:left:top` in pixels and the start time with `--start` in seconds. Put `veil-waterfall.bc3` in the game folder before first import, or add it later with **Game Files → Import Waterfall**. The next portrait you open uses the new clip. The loop plays at 20 frames per second. Game setup and play are available before a clip is added.
 
 ## Modding the generated engine
 

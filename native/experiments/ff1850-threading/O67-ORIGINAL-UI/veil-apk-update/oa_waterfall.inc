@@ -18,8 +18,6 @@ static unsigned waterfall_uploaded;
 
 static int waterfall_init(VkFormat format)
 {
-    waterfall_frames_data = veil_waterfall_load(FALL_WIDTH * FALL_HEIGHT * FALL_FRAMES);
-    if (!waterfall_frames_data) return 0;
     const uint32_t desc[11] = {FALL_WIDTH, FALL_HEIGHT, 1, 1, 77, 1, 0, 0, 8};
     if (create_texture(desc, NULL, &waterfall_texture, 0) != S_OK_ ||
         !hdr_texture_view(waterfall_texture))
@@ -111,7 +109,19 @@ static void oa_waterfall_render(oa_chain *chain, oa_frame *frame, oa_context *co
 {
     VeilWaterfallRect portrait;
     const unsigned index = veil_waterfall_frame(&portrait);
-    if (!index || !chain->back || hdr_active || !chain->w || !chain->h) return;
+    static int portrait_open;
+    if (!index) {
+        portrait_open = 0;
+        return;
+    }
+    if (!chain->back || hdr_active || !chain->w || !chain->h) return;
+    if (!portrait_open) {
+        // Refresh the clip when a portrait opens, including after a title-menu import.
+        waterfall_frames_data = veil_waterfall_load(FALL_WIDTH * FALL_HEIGHT * FALL_FRAMES);
+        waterfall_uploaded = 0;
+        portrait_open = 1;
+    }
+    if (!waterfall_frames_data) return;
 
     static int initialized;
     oa_tex *back = chain->back;

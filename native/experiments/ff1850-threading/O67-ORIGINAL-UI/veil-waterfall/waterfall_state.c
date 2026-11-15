@@ -19,6 +19,9 @@ static _Atomic(AAssetManager *) assets;
 static pthread_mutex_t portrait_lock = PTHREAD_MUTEX_INITIALIZER;
 static uint64_t last_seen;
 static VeilWaterfallRect portrait;
+static AAsset *clip_asset;
+static const uint8_t *clip_bytes;
+static size_t clip_length;
 
 static uint64_t monotonic_ms(void)
 {
@@ -51,21 +54,30 @@ static const uint8_t *load_local_waterfall(const char *root, const char *name, s
 
 const uint8_t *veil_waterfall_load(size_t length)
 {
+    // Only the render thread opens and reads the clip.
+    if (clip_asset) {
+        AAsset_close(clip_asset);
+        clip_asset = NULL;
+    } else if (clip_bytes) {
+        munmap((void *)clip_bytes, clip_length);
+    }
+    clip_bytes = NULL;
+    clip_length = length;
     const char *root = getenv("OA_OFFLINE_ROOT");
     if (root) {
-        const uint8_t *local = load_local_waterfall(root, "veil-waterfall.bc3", length);
-        if (!local) local = load_local_waterfall(root, "imported-install/veil-waterfall.bc3", length);
-        if (local) return local;
+        clip_bytes = load_local_waterfall(root, "veil-waterfall.bc3", length);
+        if (!clip_bytes) clip_bytes = load_local_waterfall(root, "imported-install/veil-waterfall.bc3", length);
+        if (clip_bytes) return clip_bytes;
     }
 
     // A locally assembled development APK may still put its private clip in assets.
     AAssetManager *manager = atomic_load(&assets);
     AAsset *asset = manager ? AAssetManager_open(manager, "veil-waterfall.bc3", AASSET_MODE_BUFFER) : NULL;
     if (!asset) return NULL;
-    const uint8_t *bytes = AAsset_getLength64(asset) == (off64_t)length ? AAsset_getBuffer(asset) : NULL;
-    if (!bytes) AAsset_close(asset);
-    // A successful mapping belongs to the renderer for the lifetime of the process.
-    return bytes;
+    if (AAsset_getLength64(asset) == (off64_t)length) clip_bytes = AAsset_getBuffer(asset);
+    if (clip_bytes) clip_asset = asset;
+    else AAsset_close(asset);
+    return clip_bytes;
 }
 
 int veil_waterfall_command(const char *section, const char *key, const char *value)
