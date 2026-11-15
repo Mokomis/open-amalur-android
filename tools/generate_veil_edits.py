@@ -3,11 +3,12 @@
 The output recipe contains each retail record hash, followed by copies from
 that record and XOR edits against it. The reference archive stays private.
 """
+import argparse
 from hashlib import sha256
 from pathlib import Path
 import shutil
 import struct
-import sys
+from zlib import crc32
 
 HEADER = b"KARl\x01\0\0\0\x10\0\0\0\0\x10\0\0"
 BLOCK = 16
@@ -172,7 +173,18 @@ def digest_archive(file, offset):
     return digest.hexdigest()
 
 
-def build(game, current, recipe, metadata, reference):
+def previous_archives(path, next_hash):
+    if path is None:
+        return []
+    properties = dict(line.split("=", 1) for line in path.read_text(encoding="ascii").splitlines() if line)
+    result = {key: value for key, value in properties.items() if key.startswith("previous.")}
+    old_hash = properties["archive.sha256"]
+    if old_hash != next_hash:
+        result[f"previous.{old_hash}"] = properties["archive.bytes"]
+    return [f"{key}={size}" for key, size in sorted(result.items())]
+
+
+def build(game, current, recipe, metadata, reference, replacements=(), previous=None):
     stock_patch = game / "data/patch_0.pak"
     stock_initial = game / "data/initial_0.pak"
     with stock_patch.open("rb") as patch, stock_initial.open("rb") as initial, current.open("rb") as old:
@@ -180,6 +192,9 @@ def build(game, current, recipe, metadata, reference):
         patch_index, initial_index, target_index = map(index_of, (patch, initial, old))
         changes = [(key, entry) for key, entry in target_index.items() if patch_index.get(key) != entry]
         assert 0 < len(changes) <= 128 and set(patch_index) <= set(target_index)
+        replacement_keys = {crc32(asset.name.encode("ascii")): asset for asset in replacements}
+        if len(replacement_keys) != len(replacements) or not replacement_keys.keys() <= dict(changes).keys():
+            raise ValueError("Replacement files must name unique resources already patched in the input")
         patch.seek(0)
         copied_total = 0
         output_total = 0
@@ -191,7 +206,8 @@ def build(game, current, recipe, metadata, reference):
                 slot = int(key not in patch_index)
                 original = (patch_index, initial_index)[slot][key]
                 source = read_entry((patch, initial)[slot], original)
-                target = read_entry(old, entry)
+                replacement = replacement_keys.get(key)
+                target = replacement.read_bytes() if replacement is not None else read_entry(old, entry)
                 edits, copied = difference(source, target)
                 instructions.write(struct.pack(">IBII", key, slot, len(source), len(target)))
                 instructions.write(sha256(source).digest())
@@ -211,15 +227,25 @@ def build(game, current, recipe, metadata, reference):
             pak.seek(16)
             pak.write(struct.pack("<Q", directory))
             pak.flush()
+            archive_hash = digest_archive(pak, 0)
             metadata.write_text("\n".join([
                 f"archive.bytes={extent}",
                 f"archive.directory={directory}",
-                f"archive.sha256={digest_archive(pak, 0)}",
+                f"archive.sha256={archive_hash}",
                 f"tail.sha256={digest_archive(pak, retail_bytes)}",
+                *previous_archives(previous, archive_hash),
             ]) + "\n", encoding="ascii")
         print(f"{len(changes)} resources, {copied_total}/{output_total} output bytes copied directly from retail, "
               f"{recipe.stat().st_size} recipe bytes before compression")
 
 
 if __name__ == "__main__":
-    build(*(Path(arg) for arg in sys.argv[1:]))
+    parser = argparse.ArgumentParser(description=__doc__)
+    for name in ("game", "current", "recipe", "metadata", "reference"):
+        parser.add_argument(name, type=Path)
+    parser.add_argument("--replace", nargs="+", default=(), type=Path,
+                        help="replacement files named as their patched resources")
+    parser.add_argument("--previous-metadata", type=Path, help="installed recipe metadata for an APK upgrade")
+    args = parser.parse_args()
+    build(args.game, args.current, args.recipe, args.metadata, args.reference,
+          replacements=args.replace, previous=args.previous_metadata)

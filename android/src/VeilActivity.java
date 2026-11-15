@@ -2,6 +2,7 @@ package org.openamalur.originalengine;
 
 import android.app.NativeActivity;
 import android.content.SharedPreferences;
+import android.content.Intent;
 import android.graphics.Canvas;
 import android.graphics.PixelFormat;
 import android.graphics.Paint;
@@ -33,11 +34,13 @@ public final class VeilActivity extends NativeActivity {
 
     private TouchControls overlay;
     private UpdateBadge updateBadge;
+    private GameFileActions gameFileActions;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         overlay = new TouchControls();
-        updateBadge = new UpdateBadge(this);
+        gameFileActions = new GameFileActions(this);
+        updateBadge = new UpdateBadge(this, gameFileActions::show);
         getWindow().getDecorView().post(() -> {
             if (isFinishing() || isDestroyed()) return;
             WindowManager.LayoutParams controls = new WindowManager.LayoutParams(
@@ -62,6 +65,13 @@ public final class VeilActivity extends NativeActivity {
             getWindowManager().addView(overlay, controls);
             overlay.resume();
         });
+    }
+
+    @Override protected void onActivityResult(int request, int result, Intent data) {
+        super.onActivityResult(request, result, data);
+        if (request == GameFileActions.SELECT_FATESWORN && result == RESULT_OK && data != null) {
+            gameFileActions.importFrom(data.getData());
+        }
     }
 
     @Override protected void onResume() {

@@ -16,6 +16,7 @@ import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
@@ -87,6 +88,17 @@ final class GameFiles {
     private static boolean hasTitleVideo(File installed) {
         File video = new File(installed, "game/data/videos/" + TITLE_VIDEO);
         return video.isFile() && video.length() == TITLE_VIDEO_BYTES;
+    }
+
+    static boolean hasFatesworn(File storage) {
+        File installed = installedGame(storage);
+        if (installed == null) return false;
+        File archive = fateswornArchive(new File(installed, "game"));
+        return archive.isFile() && archive.length() == FATESWORN_BYTES;
+    }
+
+    private static File fateswornArchive(File game) {
+        return new File(new File(game, FATESWORN_DIR), FATESWORN_ARCHIVE);
     }
 
     private static File installedGame(File directory) {
@@ -173,6 +185,32 @@ final class GameFiles {
         }
     }
 
+    void addFatesworn() throws IOException {
+        synchronized (GameFiles.class) {
+            File installed = installedGame(context.getExternalFilesDir(null));
+            if (installed == null) throw new IOException("Open Amalur could not find the installed game.");
+            Map<String, Entry> files = list(DocumentsContract.getTreeDocumentId(tree));
+            Entry depot = files.get(FATESWORN_DIR);
+            if (depot != null && depot.directory) files = list(depot.id);
+            Entry source = files.get(FATESWORN_ARCHIVE);
+            if (source == null || source.directory) {
+                throw new IOException("Fatesworn was not found. Choose the Re-Reckoning folder containing "
+                        + FATESWORN_DIR + ", or select that folder directly.");
+            }
+            File target = fateswornArchive(new File(installed, "game"));
+            makeDirectory(target.getParentFile());
+            File temp = new File(target.getParentFile(), "." + FATESWORN_ARCHIVE + ".partial");
+            try {
+                Files.deleteIfExists(temp.toPath());
+                copy(source, temp, FATESWORN_HASH, FATESWORN_BYTES);
+                Files.move(temp.toPath(), target.toPath(), StandardCopyOption.ATOMIC_MOVE,
+                        StandardCopyOption.REPLACE_EXISTING);
+            } finally {
+                Files.deleteIfExists(temp.toPath());
+            }
+        }
+    }
+
     private void importGame(Uri shaderCompiler) throws IOException {
         File storage = context.getExternalFilesDir(null);
         if (storage == null) throw new IOException("Android game storage is unavailable.");
@@ -240,9 +278,9 @@ final class GameFiles {
                 }
             }
             if (fatesworn != null) {
-                File dlc = new File(game, FATESWORN_DIR);
-                makeDirectory(dlc);
-                copy(fatesworn, new File(dlc, FATESWORN_ARCHIVE), FATESWORN_HASH, FATESWORN_BYTES);
+                File archive = fateswornArchive(game);
+                makeDirectory(archive.getParentFile());
+                copy(fatesworn, archive, FATESWORN_HASH, FATESWORN_BYTES);
             }
             Files.createFile(new File(stage, ".ready").toPath());
             android.system.Os.rename(stage.getPath(), destination.getPath());

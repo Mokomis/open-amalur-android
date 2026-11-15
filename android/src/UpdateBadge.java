@@ -10,6 +10,7 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
+import android.widget.LinearLayout;
 import android.widget.Toast;
 
 import org.json.JSONObject;
@@ -30,26 +31,39 @@ final class UpdateBadge {
     private static final Pattern STABLE_TAG = Pattern.compile("v?([0-9]{1,8})\\.([0-9]{1,8})\\.([0-9]{1,8})");
     private final Activity activity;
     private final Button button;
+    private final LinearLayout actions;
     private boolean started;
     private boolean visible;
     private Uri download;
 
-    UpdateBadge(Activity activity) {
+    UpdateBadge(Activity activity, Runnable openGameFiles) {
         this.activity = activity;
-        button = new Button(activity);
-        button.setTextSize(13);
-        button.setAllCaps(false);
-        button.setTextColor(0xffece5d3);
-        button.setText("Checking for updates…");
+        actions = new LinearLayout(activity);
+        actions.setOrientation(LinearLayout.VERTICAL);
+        actions.setGravity(Gravity.RIGHT);
+        button = addButton("Checking for updates…", 0);
+        button.setOnClickListener(v -> open());
         button.setClickable(false);
+        addButton("Game Files", 6).setOnClickListener(v -> openGameFiles.run());
+    }
+
+    private Button addButton(String text, int gap) {
+        Button action = new Button(activity);
+        action.setTextSize(13);
+        action.setAllCaps(false);
+        action.setTextColor(0xffece5d3);
+        action.setText(text);
         GradientDrawable border = new GradientDrawable();
         border.setColor(0xe5121919);
         border.setStroke(dp(1), 0xffab9364);
         border.setCornerRadius(dp(3));
-        button.setBackground(border);
-        button.setPadding(dp(13), 0, dp(13), 0);
-        button.setOnClickListener(v -> open());
-        button.setClickable(false);
+        action.setBackground(border);
+        action.setPadding(dp(13), 0, dp(13), 0);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, dp(40));
+        params.topMargin = dp(gap);
+        actions.addView(action, params);
+        return action;
     }
 
     private int dp(int value) {
@@ -59,12 +73,12 @@ final class UpdateBadge {
     void show(boolean show) {
         if (show == visible) return;
         if (!show) {
-            activity.getWindowManager().removeViewImmediate(button);
+            activity.getWindowManager().removeViewImmediate(actions);
             visible = false;
             return;
         }
         WindowManager.LayoutParams params = new WindowManager.LayoutParams(
-                WindowManager.LayoutParams.WRAP_CONTENT, dp(40),
+                WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
                 WindowManager.LayoutParams.TYPE_APPLICATION_PANEL,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
                         WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL, PixelFormat.TRANSLUCENT);
@@ -73,7 +87,7 @@ final class UpdateBadge {
         params.gravity = Gravity.TOP | Gravity.RIGHT;
         params.x = dp(16);
         params.y = dp(12);
-        activity.getWindowManager().addView(button, params);
+        activity.getWindowManager().addView(actions, params);
         visible = true;
         if (!started) {
             started = true;
@@ -83,7 +97,7 @@ final class UpdateBadge {
 
     private void check() {
         HttpURLConnection connection = null;
-        String message = "Updates unavailable";
+        String message = "No Updates";
         Uri release = null;
         try {
             String version = activity.getPackageManager().getPackageInfo(activity.getPackageName(), 0).versionName;
@@ -94,9 +108,7 @@ final class UpdateBadge {
             connection.setRequestProperty("Accept", "application/vnd.github+json");
             connection.setRequestProperty("User-Agent", "OpenAmalur-Android/" + version);
             int status = connection.getResponseCode();
-            if (status == 404) {
-                message = UP_TO_DATE;
-            } else if (status == 200) {
+            if (status == 200) {
                 JSONObject latest = new JSONObject(readResponse(connection));
                 String tag = latest.getString("tag_name");
                 Uri page = Uri.parse(latest.getString("html_url"));
@@ -104,7 +116,7 @@ final class UpdateBadge {
                         && STABLE_TAG.matcher(tag).matches() && STABLE_TAG.matcher(version).matches()
                         && allowed(page)) {
                     if (newer(tag, version)) {
-                        message = "Update available · " + tag;
+                        message = "Update Available!";
                         release = page;
                     } else {
                         message = UP_TO_DATE;

@@ -58,9 +58,15 @@ $env:JAVA_HOME = "$java"
 
 Use a distinct `--application-id` when installing a build signed with your own key alongside an existing build.
 
-`tools/generate_veil_edits.py` takes your original game directory, a locally modded `patch_0.pak`, and output paths for the recipe, properties and a local reference archive. Use the original and modded archives from the same supported game version. The captured portrait waterfall and current Veil font assets are not part of this source checkout. You can build with a recipe for your own menus, and the portrait capture can be supplied separately for local testing.
+`tools/generate_veil_edits.py` takes your original game directory, a locally modded `patch_0.pak`, and output paths for the recipe, properties and a local reference archive. Use the original and modded archives from the same supported game version. The captured portrait waterfall and built Veil assets are supplied separately.
 
-The launcher works from shared game files without Steam or Internet access. It checks the game version and validates the copied files, creates a local profile, and detects Fatesworn from its optional archive in `data_1278260`. The GitHub update badge is independent of game startup.
+`tools/retarget_veil_fonts.py` renders [Jost](https://github.com/google/fonts/tree/main/ofl/jost) into the existing Veil glyph bounds while retaining the layout metrics. Install Pillow, fonttools, NumPy and SciPy for this step. Extract the `savapro_medium` and `byngve_bold` `.font` files and matching `_p00_00.ntx` atlases from the local Veil and retail archives. Name the extracted files with `current-` and `retail-` prefixes, respectively. Pass the Jost font file, the directory of extracted files and a new output directory to the script. Supply `--prototype` with the pause overlay file to rebuild its atlas too.
+
+Pass the resulting menu atlas files to `generate_veil_edits.py --replace` when regenerating the Veil recipe. Pass the prior recipe's properties with `--previous-metadata` so installed copies can upgrade. Supply the regenerated pause overlay through `build_apk.py --prototype-ui`. The APK builder includes [the Jost license](android/licenses/Jost-OFL.txt).
+
+`tools/fit_veil_panels.py` and `tools/mark_veil_portraits.py` take a compatible local Veil archive and an output folder. They produce the responsive quest, save and equipment layout resources and the portrait visibility hooks for `--replace`.
+
+The launcher works from shared game files without Steam or Internet access. It checks the game version and validates the copied files, creates a local profile, and detects Fatesworn from its optional archive in `data_1278260`. The title screen's Game Files action can import the same archive into an existing install. The GitHub update badge is independent of game startup.
 
 ## Verification
 

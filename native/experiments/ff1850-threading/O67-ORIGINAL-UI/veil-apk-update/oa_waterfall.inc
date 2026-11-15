@@ -114,7 +114,8 @@ static int waterfall_capture(WaterfallFrame *frame, oa_tex *back, VkRect2D rect,
 
 static void oa_waterfall_render(oa_chain *chain, oa_frame *frame, oa_context *context)
 {
-    const unsigned index = veil_waterfall_frame();
+    VeilWaterfallRect portrait;
+    const unsigned index = veil_waterfall_frame(&portrait);
     if (!index || !chain->back || hdr_active || !chain->w || !chain->h) return;
 
     static int initialized;
@@ -125,15 +126,20 @@ static void oa_waterfall_render(oa_chain *chain, oa_frame *frame, oa_context *co
     }
     if (initialized < 0 || !hdr_texture_view(back)) return;
 
-    // The ledger uses a 720-unit height at every resolution. Its portrait
-    // begins after the stats column and ends at a fixed right margin.
-    const uint32_t left = (721 * chain->h + 719) / 720;
-    const uint32_t right_margin = (53 * chain->h + 719) / 720;
-    const uint32_t top = (106 * chain->h + 719) / 720;
-    const uint32_t bottom = 585 * chain->h / 720;
-    if (chain->w <= left + right_margin || bottom <= top) return;
+    // The ledger has a fixed portrait margin. Other portrait windows report
+    // their live rectangle in the game's 720-unit layout coordinates.
+    const float scale = chain->h / 720.0f;
+    const float x0 = portrait.width ? portrait.left : 721;
+    const float y0 = portrait.width ? portrait.top : 106;
+    const float x1 = portrait.width ? portrait.left + portrait.width : chain->w / scale - 53;
+    const float y1 = portrait.width ? portrait.top + portrait.height : 585;
+    const uint32_t left = (uint32_t)fmaxf(0, ceilf(x0 * scale));
+    const uint32_t top = (uint32_t)fmaxf(0, ceilf(y0 * scale));
+    const float right = fminf(chain->w, floorf(x1 * scale));
+    const float bottom = fminf(chain->h, floorf(y1 * scale));
+    if (right <= left || bottom <= top) return;
     const VkRect2D rect = {
-        {left, top}, {chain->w - left - right_margin, bottom - top},
+        {left, top}, {(uint32_t)right - left, (uint32_t)bottom - top},
     };
     VkCommandBuffer cmd = frame->cmd;
     WaterfallFrame *slot = &waterfall_frames[frame - g_f];

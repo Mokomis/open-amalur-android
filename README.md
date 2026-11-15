@@ -21,7 +21,7 @@ The live tests so far are concentrated on the OPPO Pad Mini. Performance varies 
 
 ### Veil interface
 
-Veil takes its visual cues from Edge UI for Skyrim. It uses compact lists, full-screen layouts, and a consistent set of buttons, tabs, prompts, and type. [Edge UI](https://www.nexusmods.com/skyrimspecialedition/mods/130983)
+Veil takes its visual cues from Edge UI for Skyrim. It uses compact lists, full-screen layouts, and a consistent set of buttons, tabs, and prompts. The menu font is Jost. [Edge UI](https://www.nexusmods.com/skyrimspecialedition/mods/130983) · [Jost license](android/licenses/Jost-OFL.txt)
 
 - **Main and pause menus** with a redesigned options sidebar and dedicated settings lists.
 - **Inventory, stash, and equipment** with compact item lists, a separate details pane, equipped-item markers, and appearance controls.
@@ -42,7 +42,7 @@ Veil takes its visual cues from Edge UI for Skyrim. It uses compact lists, full-
 
 ### Graphics and Android integration
 
-- **Android Hardware Scaling** offers Off, 25%, 50%, 75%, and 100%. The setting defaults to 100% and takes effect after a restart.
+- **Android Hardware Scaling** offers Off, 25%, 50%, 75%, and 100%. The setting defaults to 100% and takes effect after a restart. Choose **Native** resolution to match the display’s aspect ratio for gameplay and in-engine cinematics.
 - **Shadow Map Resolution** offers 512, 1024, 1536, and 2048 px.
 - **Shadow Distance** and **Vegetation Draw Distance** each offer 75, 100, 125, and 150 percent.
 - **Ambient Occlusion** offers Off, On, and High. **Depth of Field** offers 0, 50, 100, and 150 percent. The menu identifies settings that take effect after a restart.
@@ -50,19 +50,19 @@ Veil takes its visual cues from Edge UI for Skyrim. It uses compact lists, full-
 - **First-launch import** uses Android's folder picker to copy a supported PC installation into Open Amalur, with local profiles and saves.
 - **GitHub release status** appears on the main menu and links to the release page when a newer version is available.
 
-Fatesworn support is under test.
+The OPPO Pad Mini test confirmed that the engine detects and mounts the supported Fatesworn archive from local files. Expansion gameplay coverage is still limited.
 
 ### Screenshots
 
 Captured on the OPPO Pad Mini. Select an image to open it at full size.
 
-| Touch controls | Inventory and weapon appearance |
+| Touch controls | Inventory and equipment details |
 | --- | --- |
-| [![Gameplay with movable touch controls](screenshots/touch-controls.jpg)](screenshots/touch-controls.jpg) | [![Weapon list, stats and equipped appearance](screenshots/inventory.jpg)](screenshots/inventory.jpg) |
+| [![Gameplay with movable touch controls](screenshots/touch-controls.jpg)](screenshots/touch-controls.jpg) | [![Equipped armor, item stats and the animated portrait background](screenshots/inventory.jpg)](screenshots/inventory.jpg) |
 | **Character screen** | **Quest log** |
 | [![Character screen with the waterfall backdrop](screenshots/character.jpg)](screenshots/character.jpg) | [![Quest list alongside objectives](screenshots/quest-log.jpg)](screenshots/quest-log.jpg) |
-| **Dialogue wheel** | **Save confirmation** |
-| [![Dialogue wheel in a conversation with Agarth](screenshots/dialogue.jpg)](screenshots/dialogue.jpg) | [![Confirmation before overwriting a save](screenshots/save.jpg)](screenshots/save.jpg) |
+| **Dialogue wheel** | **Save screen** |
+| [![Dialogue wheel in a conversation with Agarth](screenshots/dialogue.jpg)](screenshots/dialogue.jpg) | [![Save slots with the selected save’s preview and details](screenshots/save.jpg)](screenshots/save.jpg) |
 | **Title screen and update status** | **First-launch folder setup** |
 | [![Main menu showing GitHub release status](screenshots/title-updates.jpg)](screenshots/title-updates.jpg) | [![First-launch prompt to choose the Re-Reckoning folder](screenshots/setup.jpg)](screenshots/setup.jpg) |
 | **Veil Graphics** | |
@@ -74,7 +74,9 @@ You will need your own supported PC installation of Re-Reckoning. This repositor
 
 The tested candidate recognizes Steam build 10619381 of Re-Reckoning. First-launch setup asks for the game folder. Keep the English, French, and German game archives together because the engine opens all three at startup. Keep `data/videos/well.bik` in the source folder for the animated main menu. Setup can restore that file to an existing install.
 
-The importer reads the selected folder directly. Steam, a Steam sign-in, and an internet connection are unnecessary for play. The update badge uses GitHub when a connection is available. Put the matching 32-bit Microsoft `d3dcompiler_43.dll` in that folder to import everything in one step. Setup can also ask for the DLL separately. A supported `data_1278260/dlc_mit_0.pak` in the selected folder is imported as Fatesworn.
+The importer reads the selected folder directly. Steam, a Steam sign-in, and an internet connection are unnecessary for play. The update badge uses GitHub when a connection is available. Put the matching 32-bit Microsoft `d3dcompiler_43.dll` in that folder to import everything in one step. Setup can also ask for the DLL separately.
+
+If the folder contains a supported `data_1278260/dlc_mit_0.pak`, setup imports Fatesworn with the base game. To add Fatesworn later, open **Game Files** at the title screen, select **Add Fatesworn**, and choose the updated Re-Reckoning folder or its `data_1278260` folder. Open Amalur verifies and copies the expansion. Close and reopen the app to load it.
 
 The Android folder picker can see game folders on shared storage. If your DroidDeck library is installed inside DroidDeck's private storage, copy the game folder into a shared Steam library or a folder such as `Documents/Amalur` before importing. [Android file picker access](https://developer.android.com/training/data-storage/shared/documents-files) · [DroidDeck](https://github.com/Droid-Deck/DroidDeck)
 
