@@ -1,0 +1,615 @@
+{
+  "bink_shard_001.o": [
+    [
+      1,
+      1,
+      "eaa48f34471c4b1a2ac6b07283526e7b86cdafa3de22d32e2f8b7aac4bcb2696",
+      [
+        "#include \"bink_audio_idct.h\"\n",
+        "#include \"oa_probe_fast.h\"\n"
+      ]
+    ],
+    [
+      11320,
+      4,
+      "ce95a98aa1a7a63258d2f762c4532b19e7270b6c7e804e4f046447bb75022cec",
+      [
+        "    if (oa_bink_idct_supported(edi)) {\n",
+        "        oa_bink_audio_idct((float *)(x86_mem_base + esi),\n",
+        "                           (const float *)(x86_mem_base + ebp - 0x2020u), edi);\n",
+        "    } else {\n",
+        "        ",
+        [
+          4,
+          51
+        ],
+        "        ",
+        [
+          55,
+          78
+        ],
+        "        ",
+        [
+          82,
+          115
+        ],
+        "        ",
+        [
+          119,
+          194
+        ],
+        "    }\n"
+      ]
+    ]
+  ],
+  "shard_109.o": [
+    [
+      1,
+      1,
+      "eaa48f34471c4b1a2ac6b07283526e7b86cdafa3de22d32e2f8b7aac4bcb2696",
+      [
+        "void oa_engine_core_tick(unsigned);\n",
+        "void oa_hint_begin(unsigned);\n",
+        "void oa_hint_end(unsigned);\n",
+        "#include \"oa_probe_fast.h\"\n"
+      ]
+    ],
+    [
+      18534,
+      0,
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      [
+        "    oa_engine_core_tick(2);\n",
+        "    oa_hint_begin(2);\n"
+      ]
+    ],
+    [
+      18625,
+      0,
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      [
+        "    oa_hint_end(2);\n"
+      ]
+    ]
+  ],
+  "shard_117.o": [
+    [
+      0,
+      0,
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      [
+        "#include \"present_overlap.h\"\n"
+      ]
+    ],
+    [
+      1,
+      1,
+      "eaa48f34471c4b1a2ac6b07283526e7b86cdafa3de22d32e2f8b7aac4bcb2696",
+      [
+        "#include \"oa_probe_fast.h\"\n"
+      ]
+    ],
+    [
+      24175,
+      0,
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      [
+        "    oa_present_cancel();\n"
+      ]
+    ],
+    [
+      24213,
+      0,
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      [
+        "    oa_present_ack();\n"
+      ]
+    ],
+    [
+      24224,
+      0,
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      [
+        "    oa_present_presenter_wait(lds32(esp));\n"
+      ]
+    ],
+    [
+      24235,
+      2,
+      "ebe222e34cb861e873669c470cf4965c045a7821eccd377802388c14a5aca08a",
+      [
+        "    if (!oa_present_draw_join()) {\n",
+        "        ",
+        [
+          4,
+          46
+        ],
+        "        ",
+        [
+          50,
+          123
+        ],
+        "    }\n"
+      ]
+    ]
+  ],
+  "shard_141.o": [
+    [
+      1,
+      1,
+      "eaa48f34471c4b1a2ac6b07283526e7b86cdafa3de22d32e2f8b7aac4bcb2696",
+      [
+        "#include \"oa_probe_fast.h\"\n"
+      ]
+    ],
+    [
+      17143,
+      0,
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      [
+        "extern int oa_fast_handwritten_draw;\n",
+        "int oa_try_handwritten_draw(X86Ctx *ctx);\n"
+      ]
+    ],
+    [
+      17145,
+      0,
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      [
+        "    if (__atomic_load_n(&oa_fast_handwritten_draw, __ATOMIC_RELAXED) &&\n",
+        "        !__atomic_load_n(&oa_diagnostics_enabled, __ATOMIC_RELAXED) &&\n",
+        "        lds32(ctx->esp) == 0x00c97e72 && oa_try_handwritten_draw(ctx))\n",
+        "        return;\n"
+      ]
+    ]
+  ],
+  "shard_142.o": [
+    [
+      1,
+      1,
+      "eaa48f34471c4b1a2ac6b07283526e7b86cdafa3de22d32e2f8b7aac4bcb2696",
+      [
+        "void oa_draw_c99640_matrices(X86Ctx*);\n",
+        "void oa_draw_c99640_multiply(X86Ctx*);\n",
+        "#include \"oa_probe_fast.h\"\n"
+      ]
+    ],
+    [
+      17012,
+      1,
+      "a9e51a5b1b69c26050990d9e192b67431ad0033ba0cddd743161bedc68c24d00",
+      [
+        [
+          0,
+          48
+        ],
+        "oa_draw_c99640_matrices",
+        [
+          58,
+          77
+        ]
+      ]
+    ],
+    [
+      17038,
+      1,
+      "f043a82dc0f406bb183f64ae08797e487f4bb0d9c4965852059f7064f2d2f8b0",
+      [
+        [
+          0,
+          48
+        ],
+        "oa_draw_c99640_multiply",
+        [
+          58,
+          77
+        ]
+      ]
+    ]
+  ],
+  "shard_143.o": [
+    [
+      1,
+      1,
+      "eaa48f34471c4b1a2ac6b07283526e7b86cdafa3de22d32e2f8b7aac4bcb2696",
+      [
+        "void oa_math_loop_compose(X86Ctx*);\n",
+        "void oa_math_loop_convert(X86Ctx*);\n",
+        "#include \"oa_probe_fast.h\"\n"
+      ]
+    ],
+    [
+      21509,
+      1,
+      "ee74f4f348e3f459eea233d3fc1a76d3b2a46efed56d83c550e515b87ad03fe5",
+      [
+        [
+          0,
+          48
+        ],
+        "oa_math_loop_compose",
+        [
+          58,
+          77
+        ]
+      ]
+    ],
+    [
+      21513,
+      1,
+      "79215fd176609c93ed79cdc5db1f16515919908884d08d15a672920261bc9e5d",
+      [
+        [
+          0,
+          48
+        ],
+        "oa_math_loop_convert",
+        [
+          58,
+          77
+        ]
+      ]
+    ]
+  ],
+  "shard_146.o": [
+    [
+      0,
+      0,
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      [
+        "#include \"oa_vis_prepass.h\"\n"
+      ]
+    ],
+    [
+      1,
+      1,
+      "eaa48f34471c4b1a2ac6b07283526e7b86cdafa3de22d32e2f8b7aac4bcb2696",
+      [
+        "#include \"oa_probe_fast.h\"\n"
+      ]
+    ],
+    [
+      6726,
+      0,
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      [
+        "    /* OA_VP_HOOK_BEGIN */\n",
+        "    const uint8_t *vp_flags=oa_visibility_prepass_prepare(ctx);\n",
+        "    /* OA_VP_HOOK_END */\n"
+      ]
+    ],
+    [
+      6751,
+      0,
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      [
+        "    /* OA_VP_HOOK_BEGIN */\n",
+        "    if(vp_flags){eax=vp_flags[lds32(esp+0x1Cu)];esp-=20;goto L_00CD54EF;}\n",
+        "    /* OA_VP_HOOK_END */\n"
+      ]
+    ],
+    [
+      6833,
+      0,
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      [
+        "    /* OA_VP_HOOK_BEGIN */\n",
+        "    if(vp_flags)oa_visibility_prepass_finish();\n",
+        "    /* OA_VP_HOOK_END */\n"
+      ]
+    ]
+  ],
+  "shard_148.o": [
+    [
+      0,
+      0,
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      [
+        "#include \"present_overlap.h\"\n"
+      ]
+    ],
+    [
+      1,
+      1,
+      "eaa48f34471c4b1a2ac6b07283526e7b86cdafa3de22d32e2f8b7aac4bcb2696",
+      [
+        "#include \"oa_probe_fast.h\"\n"
+      ]
+    ],
+    [
+      4703,
+      0,
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      [
+        "    oa_present_producer_begin();\n"
+      ]
+    ]
+  ],
+  "shard_151.o": [
+    [
+      1,
+      1,
+      "eaa48f34471c4b1a2ac6b07283526e7b86cdafa3de22d32e2f8b7aac4bcb2696",
+      [
+        "#include \"oa_probe_fast.h\"\n",
+        "uint32_t oa_pass_push(uint32_t,X86Ctx*);\n",
+        "void oa_pass_pop(uint32_t);\n"
+      ]
+    ],
+    [
+      7233,
+      1,
+      "42e8afdd845750af30936a31d1eb8198ecdf16b29b2d6dcac0f79dcd19eb1f3a",
+      [
+        [
+          0,
+          48
+        ],
+        "{ uint32_t audit=oa_pass_push(0xD1F4E3u,ctx); ",
+        [
+          48,
+          65
+        ],
+        "oa_pass_pop(audit); } ",
+        [
+          65,
+          77
+        ]
+      ]
+    ],
+    [
+      7244,
+      1,
+      "95cc05a0519e01ee2492a1ec7ac7bf980b6e363c7c2f7e468a8f6a4bfb34e095",
+      [
+        [
+          0,
+          48
+        ],
+        "{ uint32_t audit=oa_pass_push(0xD1F4FBu,ctx); ",
+        [
+          48,
+          65
+        ],
+        "oa_pass_pop(audit); } ",
+        [
+          65,
+          77
+        ]
+      ]
+    ],
+    [
+      7294,
+      1,
+      "e59af4d000715c93607761c8bf90ed0f5f58c397cd5e5c426889a3df1fba93b6",
+      [
+        [
+          0,
+          48
+        ],
+        "{ uint32_t audit=oa_pass_push(0xD1F55Fu,ctx); ",
+        [
+          48,
+          65
+        ],
+        "oa_pass_pop(audit); } ",
+        [
+          65,
+          77
+        ]
+      ]
+    ],
+    [
+      7305,
+      1,
+      "295c5c4ba163e4364e27df5f06dd41f0176f0e014de5d29ee4592676d0563de8",
+      [
+        [
+          0,
+          48
+        ],
+        "{ uint32_t audit=oa_pass_push(0xD1F577u,ctx); ",
+        [
+          48,
+          65
+        ],
+        "oa_pass_pop(audit); } ",
+        [
+          65,
+          77
+        ]
+      ]
+    ]
+  ],
+  "shard_152.o": [
+    [
+      1,
+      1,
+      "eaa48f34471c4b1a2ac6b07283526e7b86cdafa3de22d32e2f8b7aac4bcb2696",
+      [
+        "void oa_engine_core_tick(unsigned);\n",
+        "void oa_hint_begin(unsigned);\n",
+        "void oa_hint_end(unsigned);\n",
+        "#include \"oa_probe_fast.h\"\n",
+        "uint32_t oa_pass_push(uint32_t,X86Ctx*);\n",
+        "void oa_pass_pop(uint32_t);\n"
+      ]
+    ],
+    [
+      16951,
+      0,
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      [
+        "    oa_engine_core_tick(1);\n",
+        "    oa_hint_begin(1);\n"
+      ]
+    ],
+    [
+      17421,
+      1,
+      "57e0ba8157761be704a58174e1550336ea147e84052d898f517d8cd231bf3fa3",
+      [
+        [
+          0,
+          48
+        ],
+        "{ uint32_t audit=oa_pass_push(0xD32FF9u,ctx); ",
+        [
+          48,
+          65
+        ],
+        "oa_pass_pop(audit); } ",
+        [
+          65,
+          77
+        ]
+      ]
+    ],
+    [
+      17472,
+      0,
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      [
+        "    oa_hint_end(1);\n"
+      ]
+    ]
+  ],
+  "shard_154.o": [
+    [
+      0,
+      0,
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      [
+        "#include \"present_overlap.h\"\n"
+      ]
+    ],
+    [
+      1,
+      1,
+      "eaa48f34471c4b1a2ac6b07283526e7b86cdafa3de22d32e2f8b7aac4bcb2696",
+      [
+        "#include \"oa_probe_fast.h\"\n"
+      ]
+    ],
+    [
+      3657,
+      0,
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      [
+        "    bool completed_frame = false;\n"
+      ]
+    ],
+    [
+      3724,
+      0,
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      [
+        "    oa_present_draw_ready(false);\n"
+      ]
+    ],
+    [
+      3734,
+      0,
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      [
+        "    oa_present_draw_ready(completed_frame);\n"
+      ]
+    ],
+    [
+      3889,
+      0,
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      [
+        "    completed_frame = lds8(esp+0x12u) != 0 && lds8(esp+0x13u) == 0 && !ld8(ebx+0xB08u);\n"
+      ]
+    ]
+  ],
+  "shard_207.o": [
+    [
+      1,
+      1,
+      "eaa48f34471c4b1a2ac6b07283526e7b86cdafa3de22d32e2f8b7aac4bcb2696",
+      [
+        "#include \"oa_pak_android.h\"\n",
+        "#include \"oa_probe_fast.h\"\n"
+      ]
+    ],
+    [
+      5602,
+      0,
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      [
+        "    const uint32_t pak_bytes = eax;\n"
+      ]
+    ],
+    [
+      5605,
+      1,
+      "76bdb2248700dff4fdd4ff93efffb4fbc5052ad604884a7a90d7496dbb43e4e9",
+      [
+        "    if (!oa_pak_try_decode(esi, pak_bytes, &eax)) {\n",
+        "        ",
+        [
+          4,
+          78
+        ],
+        "#ifdef OA_PAK_COMPARE\n",
+        "        oa_pak_record(esi, pak_bytes, eax);\n",
+        "#endif\n",
+        "    }\n"
+      ]
+    ]
+  ],
+  "shard_210.o": [
+    [
+      0,
+      0,
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      [
+        "#include \"present_overlap.h\"\n"
+      ]
+    ],
+    [
+      1,
+      1,
+      "eaa48f34471c4b1a2ac6b07283526e7b86cdafa3de22d32e2f8b7aac4bcb2696",
+      [
+        "#include \"oa_probe_fast.h\"\n"
+      ]
+    ],
+    [
+      11656,
+      0,
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      [
+        "    oa_present_host_return();\n"
+      ]
+    ]
+  ],
+  "shard_232.o": [
+    [
+      1,
+      1,
+      "eaa48f34471c4b1a2ac6b07283526e7b86cdafa3de22d32e2f8b7aac4bcb2696",
+      [
+        "#include \"oa_probe_fast.h\"\n"
+      ]
+    ],
+    [
+      16999,
+      1,
+      "69990b4cd9becf6ab8c8e76f9f02ce7db3c3485979bf655b7db6fd4a08212bae",
+      [
+        [
+          0,
+          5
+        ],
+        "oa_rcpc_copy_original",
+        [
+          15,
+          42
+        ]
+      ]
+    ]
+  ]
+}

@@ -1,0 +1,24 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="org.openamalur.originalengine"
+    android:versionCode="4"
+    android:versionName="0.1.2">
+    <uses-sdk android:minSdkVersion="29" android:targetSdkVersion="35" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <application android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen"
+        android:label="Open Amalur Original Engine" android:hasCode="true"
+        android:debuggable="false" android:allowBackup="false" android:extractNativeLibs="true">
+        <activity android:name=".VeilActivity" android:label="Open Amalur Original Engine"
+            android:exported="false" android:screenOrientation="landscape"
+            android:configChanges="keyboardHidden|orientation|screenSize">
+            <meta-data android:name="android.app.lib_name" android:value="oaoriginal" />
+        </activity>
+        <activity android:name=".SetupActivity" android:exported="true"
+            android:screenOrientation="landscape" android:configChanges="keyboardHidden|orientation|screenSize">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

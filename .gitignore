@@ -1,0 +1,26 @@
+# Local game inputs, translated sources and native build products.
+/build/
+/out/
+*.exe
+*.dll
+*.pak
+*.bik
+*.apk
+*.idsig
+*.so
+*.a
+*.o
+*.obj
+*.spv
+*.bc3
+*.keystore
+*.jks
+*.p12
+*.pem
+*.token
+*.bin
+*.ghidra
+*.gpr
+*.rep/
+__pycache__/
+.venv/
