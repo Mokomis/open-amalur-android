@@ -145,6 +145,60 @@ def select_radial_slot(fn):
     return code, id_arg + 1
 
 
+def select_ledger_row(fn):
+    tree, rows, index, row, call, _, arg2, arg3 = range(
+        fn["maximum_stack_size"], fn["maximum_stack_size"] + 8
+    )
+    code = Code(fn)
+    code.op("EQ", 0, 0, code.index("CLICKED") + 256)
+    code.jump("stock")
+    code.op("TEST", 2)
+    code.jump("left_click")
+    code.op("EQ", 0, 2, code.index(0) + 256)
+    code.jump("stock")
+
+    # The click can arrive before the hover callback updates the highlight.
+    code.mark("left_click")
+    code.op("TEST", 1)
+    code.jump("done")
+    code.glob(tree, "m_button_tree")
+    code.op("SELF", call, tree, code.index("is_root") + 256)
+    code.op("CALL_I", call, 2, 2)
+    code.op("TEST", call)
+    code.jump("stock")
+    code.field(rows, tree, "m_ui")
+    code.field(rows, rows, "repeater_wins")
+    code.load(index, 1)
+    code.mark("row")
+    code.op("GETTABLE_S", row, rows, index)
+    code.op("DATA")
+    code.op("DATA")
+    code.op("TEST", row)
+    code.jump("done")
+    code.field(call, row, "button")
+    code.op("EQ", 1, call, 1)
+    code.jump("click")
+    code.op("ADD", index, index, code.index(1) + 256)
+    code.jump("row")
+
+    code.mark("click")
+    code.op("SELF", call, tree, code.index("set_highlight") + 256)
+    code.op("MOVE", arg2, index)
+    code.op("CALL_I", call, 3, 1)
+    code.op("SELF", call, tree, code.index("handle_clicked") + 256)
+    code.op("MOVE", arg2, 1)
+    code.op("MOVE", arg3, 2)
+    code.op("CALL_I", call, 4, 1)
+    code.mark("done")
+    code.op("RETURN", 0, 1)
+    code.mark("stock")
+    return code, arg3 + 1
+
+
+def fix_character_touch(data):
+    return insert_callback(data, 49, 5, select_ledger_row)
+
+
 def add_hud_shortcut(data):
     def edit(fn):
         register = fn["maximum_stack_size"]
@@ -316,6 +370,7 @@ def patch_batch(batch):
         13503: ("306d628f5a36c327df4fe9de83b7c53945a51831e32007255a7b7d722555beba", death_menu_touch),
         13517: ("97640493b79252e5021fe7926d350cf8b07e2ef77ec9e99e6625c8256fd9e22b", fit_inventory_actions),
         13519: ("11d6e7136727c5f5f4de9893a3213fa7c67db1eb5d6cf1ebe6840ae6d2c29a20", mark_map),
+        13520: ("4101f7f763fddb3237fbfe521cbfb7e5079c35b1b6502d0c918c7b15e10a1a4c", fix_character_touch),
         249501: ("c3e3ded912e0b540f37355d5c40b016c1ccec8de08e477b395b510f986ca8e00", mark_radial),
         733459: ("2f6d2b0cce3818b49458bb7227c6a9e9809dd80f6946cfa15dec594ea8bf0682", fix_tutorial_text),
         1402689: ("4742faad4b62de5c170c4a260751a62d9b4babde6a8e8a857accf409159f2b8e", add_hud_shortcut),
