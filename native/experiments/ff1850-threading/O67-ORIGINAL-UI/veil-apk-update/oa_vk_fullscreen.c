@@ -312,7 +312,7 @@ typedef struct {
     VkShaderModule module;
     oa_shader_info info;
     uint32_t hash;
-    int cart_depth_particle;
+    unsigned cart_particle;
     uint32_t af_textures[16];
 } oa_shader;
 
@@ -1699,17 +1699,19 @@ static uint32_t hash_bytes(const void *p, size_t n);
 static void af_get_texture_pairs(oa_shader *shader, const uint32_t *spv, size_t words);
 
 static int intro_cart_camera;
-static unsigned intro_cart_particle_draws;
+static unsigned intro_cart_particle_draws[2];
 
 __attribute__((visibility("hidden"))) void veil_intro_cart_camera(int active)
 {
     if (__atomic_exchange_n(&intro_cart_camera, active, __ATOMIC_RELAXED) == active)
         return;
-    unsigned skipped = __atomic_exchange_n(&intro_cart_particle_draws, 0, __ATOMIC_RELAXED);
+    unsigned depth = __atomic_exchange_n(&intro_cart_particle_draws[0], 0, __ATOMIC_RELAXED);
+    unsigned sprite = __atomic_exchange_n(&intro_cart_particle_draws[1], 0, __ATOMIC_RELAXED);
     if (active)
         logf_("Opening cart particle guard active");
     else
-        logf_("Opening cart particle guard inactive, %u particle draws suppressed", skipped);
+        logf_("Opening cart particle guard inactive, %u depth and %u sprite particle draws suppressed",
+              depth, sprite);
 }
 
 static HRESULT create_shader(const void *code, SIZE_T size, oa_shader **out, int kind) {
@@ -1727,7 +1729,11 @@ static HRESULT create_shader(const void *code, SIZE_T size, oa_shader **out, int
         af_get_texture_pairs(s, spv, words);
     if (kind == K_PS && s->info.texture_mask == 15 && s->info.cb_mask == 1)
         s->hash = hash_bytes(code, size);
-    s->cart_depth_particle = kind == K_PS && size == 2728 && hash_bytes(code, size) == 0x32e7f79fu;
+    if (kind == K_PS && (size == 2728 || size == 1684)) {
+        uint32_t shader = hash_bytes(code, size);
+        if (size == 2728 && shader == 0x32e7f79fu) s->cart_particle = 1;
+        if (size == 1684 && shader == 0xf587466eu) s->cart_particle = 2;
+    }
     ci.codeSize = words * 4;
     ci.pCode = spv;
     if (pvkCreateShaderModule(g_dev, &ci, NULL, &s->module)) { logf_("shader module failed"); free(spv); free(s); return E_FAIL_; }
@@ -2908,12 +2914,11 @@ static void query_end(void) { pvkCmdEndQuery(g_cur->cmd, g_cur->qpool, g_cur->qu
 
 static int skip_intro_cart_particle(const oa_context *c)
 {
-    // This additive soft-particle draw flashes in the opening camera shot.
-    // Confine the workaround to that cinematic.
-    if (!c->ps || !c->ps->cart_depth_particle ||
+    // Confine the two opening cart particle materials to this workaround.
+    if (!c->ps || !c->ps->cart_particle ||
         !__atomic_load_n(&intro_cart_camera, __ATOMIC_RELAXED))
         return 0;
-    __atomic_fetch_add(&intro_cart_particle_draws, 1, __ATOMIC_RELAXED);
+    __atomic_fetch_add(&intro_cart_particle_draws[c->ps->cart_particle - 1], 1, __ATOMIC_RELAXED);
     return 1;
 }
 
