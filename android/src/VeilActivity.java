@@ -16,12 +16,12 @@ import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.view.WindowManager;
 
+import java.io.IOException;
 
 public final class VeilActivity extends NativeActivity {
     private static final Typeface CONTROL_LABEL_FONT = Typeface.create("sans-serif-medium", Typeface.NORMAL);
     private static final String[] FINISHER_LABEL = {"Finish", "A"};
 
-    static { System.loadLibrary("oaoriginal"); }
     private static native int mode();
     private static native int aspect();
     private static native int input(int enabled, int buttons, int lt, int rt,
@@ -37,6 +37,11 @@ public final class VeilActivity extends NativeActivity {
     private GameFileActions gameFileActions;
 
     @Override public void onCreate(Bundle state) {
+        try {
+            LocalEngine.load(this);
+        } catch (IOException error) {
+            throw new IllegalStateException(error);
+        }
         super.onCreate(state);
         overlay = new TouchControls();
         gameFileActions = new GameFileActions(this);
@@ -71,6 +76,8 @@ public final class VeilActivity extends NativeActivity {
         super.onActivityResult(request, result, data);
         if (request == GameFileActions.SELECT_FATESWORN && result == RESULT_OK && data != null) {
             gameFileActions.importFrom(data.getData());
+        } else if (request == GameFileActions.SELECT_WATERFALL && result == RESULT_OK && data != null) {
+            gameFileActions.importWaterfall(data.getData());
         }
     }
 

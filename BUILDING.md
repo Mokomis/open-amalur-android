@@ -30,6 +30,25 @@ $ndk = 'C:\tools\android-ndk-r30'
 
 The library is `build/liboaoriginal.so`. The build prints its SHA-256 and leaves per-module translation logs and compiler diagnostics in the output directory. Use a new output directory for another build. `--jobs` sets the compiler worker count.
 
+## Install with the release APK
+
+Build the engine from the matching release tag on Windows, then copy `build/liboaoriginal.so` to shared storage on Android. Install the signed release APK and choose your Re-Reckoning folder. When prompted, choose the engine file you built. The app verifies the library against the SHA-256 in the signed APK before loading it. Building and installing work offline once the listed tools and game files are available.
+
+An update reuses the installed engine when its SHA-256 is unchanged. If a release changes the engine, rebuild from that release tag and select the new library at the prompt. Keep the app installed when upgrading to preserve its saves, settings and touch layout.
+
+### Generate the portrait waterfall
+
+Record a fixed view of the waterfall in Allestar Glade just outside the tutorial. Hold the camera still for at least eight seconds with the waterfall in the central portrait area and the character and controls outside the crop. The recording can come from the PC game or Open Amalur on Android.
+
+With FFmpeg on PATH, install Pillow in the build environment and create the five-second loop.
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install Pillow==13.0.0
+.\.venv\Scripts\python.exe tools/make_waterfall_clip.py glade.mp4 veil-waterfall.bc3
+```
+
+Adjust the portrait framing with `--crop width:height:left:top` in pixels and the start time with `--start` in seconds. Put `veil-waterfall.bc3` in the game folder before first import, or add it later with **Game Files → Import Waterfall**, then reopen the game. The loop plays at 20 frames per second in the same Veil portrait panels. Game setup and play are available before a clip is added.
+
 ## Modding the generated engine
 
 Add `--prepare-only` to stop after translation and source transformations. The generated C in `build/guest` and `build/guest-helpers` can be inspected or edited. Keep guest addresses and calling conventions consistent when changing hooks. To compile your changes, run:
@@ -40,9 +59,9 @@ Add `--prepare-only` to stop after translation and source transformations. The g
 
 Project-written translation and instruction lowering live in `translator/`. The Android ABI, process, input and file adapters live in `native/`. [The native build plan](native/build-plan.json) records the exact sources and flags. It includes the synchronization, thread placement, frame presentation, visibility and Vulkan renderer components from the tested Android build. The authored shaders are under `native/shaders`. Android launcher and Veil importer sources are under `android/`.
 
-The project-authored code is [MIT licensed](LICENSE). [Third-party notices](THIRD_PARTY_NOTICES.md) apply to the included dependencies. Translation outputs and local game inputs stay in the local build directory.
+The project-authored code is [MIT licensed](LICENSE). [Third-party notices](THIRD_PARTY_NOTICES.md) apply to the included dependencies. Translation outputs, captures and local game inputs stay on the player's machines.
 
-## Assemble a local APK
+## Assemble an APK
 
 `tools/build_apk.py` compiles the Android app with SDK Platform 35, Android Build Tools 36.0.0 and JDK 21. It accepts the library produced above and your own APK signing key. The resulting APK can use the original game menus, and supplying both `--veil-edits` and `--veil-properties` applies your Veil edits.
 
@@ -58,7 +77,9 @@ $env:JAVA_HOME = "$java"
 
 Use a distinct `--application-id` when installing a build signed with your own key alongside an existing build.
 
-`tools/generate_veil_edits.py` takes your original game directory, a locally modded `patch_0.pak`, and output paths for the recipe, properties and a local reference archive. Use the original and modded archives from the same supported game version. The captured portrait waterfall and built Veil assets are supplied separately.
+To assemble a release launcher, replace `--library build/liboaoriginal.so` with `--local-engine build/liboaoriginal.so --ndk "$ndk"` and supply the Veil recipe and pause overlay. The APK records the engine SHA-256 and packages the launcher. Pass the release application ID and use its existing signing key for a normal Android upgrade.
+
+`tools/generate_veil_edits.py` takes your original game directory, a locally modded `patch_0.pak`, and output paths for the recipe, properties and a local reference archive. Use the original and modded archives from the same supported game version.
 
 `tools/retarget_veil_fonts.py` renders [Jost](https://github.com/google/fonts/tree/main/ofl/jost) into the existing Veil glyph bounds while retaining the layout metrics. Install Pillow, fonttools, NumPy and SciPy for this step. Extract the `savapro_medium` and `byngve_bold` `.font` files and matching `_p00_00.ntx` atlases from the local Veil and retail archives. Name the extracted files with `current-` and `retail-` prefixes, respectively. Pass the Jost font file, the directory of extracted files and a new output directory to the script. Supply `--prototype` with the pause overlay file to rebuild its atlas too.
 
@@ -71,3 +92,5 @@ The launcher works from shared game files without Steam or Internet access. It c
 ## Verification
 
 A fresh Windows checkout regenerated the game, Bink and DirectX compiler translations from local files, compiled the 362 native objects, and linked the Android library. The stock-menu development APK built with that library imported a copied game folder on an OPPO Pad Mini (OPD2515) with Android Internet permission omitted. The engine mounted Fatesworn `cs:13757` when the matching archive was present and reached the base-game menu after the archive was removed from the test installation.
+
+Two independent Windows builds of the Veil 0.1.3 engine produced identical libraries. On the OPPO Pad Mini, the release launcher imported the full game offline, rejected a mismatched engine file, and launched Veil with the locally built engine and Fatesworn. The generated waterfall played in the Patron portrait. An in-place offline upgrade over the prior Veil build reused its game files and preserved the saves, graphics settings and touch layout.

@@ -15,7 +15,7 @@ import java.io.IOException;
 import java.util.Locale;
 
 public final class SetupActivity extends Activity {
-    private static final int GAME_FOLDER = 1, COMPILER_FILE = 2;
+    private static final int GAME_FOLDER = 1, COMPILER_FILE = 2, ENGINE_FILE = 3;
     private Uri gameFolder;
     private TextView status;
     private Button browse;
@@ -78,15 +78,21 @@ public final class SetupActivity extends Activity {
             importFiles(gameFolder, null);
         } else if (request == COMPILER_FILE && gameFolder != null) {
             importFiles(gameFolder, data.getData());
+        } else if (request == ENGINE_FILE) {
+            importEngine(data.getData());
         }
     }
 
     private void selectCompiler() {
+        selectFile(COMPILER_FILE);
+    }
+
+    private void selectFile(int request) {
         Intent picker = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         picker.addCategory(Intent.CATEGORY_OPENABLE);
         picker.setType("*/*");
         picker.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        startActivityForResult(picker, COMPILER_FILE);
+        startActivityForResult(picker, request);
     }
 
     private void importFiles(Uri folder, Uri compiler) {
@@ -101,6 +107,8 @@ public final class SetupActivity extends Activity {
                                 : "Importing " + name + "…"))).install(compiler);
                 prepareGame();
                 runOnUiThread(this::startEngine);
+            } catch (LocalEngine.EngineRequired missing) {
+                runOnUiThread(() -> showEngineRequest(missing.getMessage()));
             } catch (GameFiles.CompilerRequired missing) {
                 runOnUiThread(() -> {
                     status.setText(missing.getMessage());
@@ -121,17 +129,47 @@ public final class SetupActivity extends Activity {
         }, "game-file-import").start();
     }
 
+    private void showEngineRequest(String message) {
+        importing = false;
+        status.setText(message);
+        browse.setText("Choose locally built engine");
+        browse.setOnClickListener(view -> selectFile(ENGINE_FILE));
+        browse.setEnabled(true);
+        browse.setVisibility(View.VISIBLE);
+    }
+
+    private void importEngine(Uri uri) {
+        importing = true;
+        browse.setEnabled(false);
+        status.setText("Verifying the local engine…");
+        new Thread(() -> {
+            try {
+                LocalEngine.importFrom(getApplicationContext(), uri);
+                runOnUiThread(this::launchExistingGame);
+            } catch (IOException | SecurityException error) {
+                runOnUiThread(() -> showEngineRequest(error.getMessage()));
+            }
+        }, "engine-import").start();
+    }
+
     private void launchExistingGame() {
+        importing = true;
         browse.setVisibility(View.GONE);
         status.setText("Opening Open Amalur…");
         new Thread(() -> {
             try {
                 prepareGame();
                 runOnUiThread(this::startEngine);
+            } catch (LocalEngine.EngineRequired missing) {
+                runOnUiThread(() -> showEngineRequest(missing.getMessage()));
             } catch (IOException | SecurityException error) {
                 android.util.Log.e("VeilSetup", "Could not prepare the installed game", error);
                 runOnUiThread(() -> {
+                    importing = false;
                     status.setText(error.getMessage());
+                    browse.setText("Retry");
+                    browse.setOnClickListener(view -> launchExistingGame());
+                    browse.setEnabled(true);
                     browse.setVisibility(View.VISIBLE);
                 });
             }
@@ -139,6 +177,7 @@ public final class SetupActivity extends Activity {
     }
 
     private void prepareGame() throws IOException {
+        LocalEngine.load(getApplicationContext());
         GameFiles.updateInstalledVeil(getApplicationContext(), getExternalFilesDir(null),
                 (message, copied, total) -> runOnUiThread(() -> status.setText(total > 0
                         ? String.format(Locale.ROOT, "%s (%d%%)", message, copied * 100 / total) : message + "…")));

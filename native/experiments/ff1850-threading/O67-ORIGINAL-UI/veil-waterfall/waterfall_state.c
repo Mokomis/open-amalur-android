@@ -1,14 +1,19 @@
 #include "waterfall_state.h"
 
 #include <android/log.h>
+#include <fcntl.h>
 #include <math.h>
 #include <pthread.h>
 #include <stdatomic.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
 #include <time.h>
+#include <unistd.h>
 
 static _Atomic(AAssetManager *) assets;
 static pthread_mutex_t portrait_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -27,10 +32,40 @@ void veil_waterfall_assets(AAssetManager *manager)
     atomic_store(&assets, manager);
 }
 
-AAsset *veil_waterfall_open(void)
+static const uint8_t *load_local_waterfall(const char *root, const char *name, size_t length)
 {
+    char path[2048];
+    int size = snprintf(path, sizeof(path), "%s/%s", root, name);
+    if (size < 0 || (size_t)size >= sizeof(path)) return NULL;
+    int fd = open(path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW);
+    if (fd < 0) return NULL;
+    struct stat info;
+    void *mapping = MAP_FAILED;
+    if (fstat(fd, &info) == 0 && S_ISREG(info.st_mode) && info.st_size == (off_t)length)
+        mapping = mmap(NULL, length, PROT_READ, MAP_PRIVATE, fd, 0);
+    close(fd);
+    if (mapping == MAP_FAILED) return NULL;
+    __android_log_print(ANDROID_LOG_INFO, "VeilWaterfall", "Loaded local waterfall clip");
+    return mapping;
+}
+
+const uint8_t *veil_waterfall_load(size_t length)
+{
+    const char *root = getenv("OA_OFFLINE_ROOT");
+    if (root) {
+        const uint8_t *local = load_local_waterfall(root, "veil-waterfall.bc3", length);
+        if (!local) local = load_local_waterfall(root, "imported-install/veil-waterfall.bc3", length);
+        if (local) return local;
+    }
+
+    // A locally assembled development APK may still put its private clip in assets.
     AAssetManager *manager = atomic_load(&assets);
-    return manager ? AAssetManager_open(manager, "veil-waterfall.bc3", AASSET_MODE_BUFFER) : NULL;
+    AAsset *asset = manager ? AAssetManager_open(manager, "veil-waterfall.bc3", AASSET_MODE_BUFFER) : NULL;
+    if (!asset) return NULL;
+    const uint8_t *bytes = AAsset_getLength64(asset) == (off64_t)length ? AAsset_getBuffer(asset) : NULL;
+    if (!bytes) AAsset_close(asset);
+    // A successful mapping belongs to the renderer for the lifetime of the process.
+    return bytes;
 }
 
 int veil_waterfall_command(const char *section, const char *key, const char *value)

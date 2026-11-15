@@ -1,6 +1,7 @@
-"""Package a locally built library into an Android APK with optional Veil menus."""
+"""Build the Android launcher or create a personal APK with a local engine."""
 
 import argparse
+from hashlib import file_digest
 import os
 from pathlib import Path
 import re
@@ -30,6 +31,17 @@ def build(args):
         manifest = manifest.replace(f'package="{PACKAGE}"', f'package="{args.application_id}"')
         for activity in ("VeilActivity", "SetupActivity"):
             manifest = manifest.replace(f'android:name=".{activity}"', f'android:name="{PACKAGE}.{activity}"')
+        engine_pin = None
+        library = args.library
+        if args.local_engine is not None:
+            with args.local_engine.open("rb") as source:
+                engine_pin = file_digest(source, "sha256").hexdigest() + "\n"
+            manifest = manifest.replace('android:value="oaoriginal"', 'android:value="oabootstrap"')
+            library = work / "liboabootstrap.so"
+            clang = args.ndk / "toolchains/llvm/prebuilt/windows-x86_64/bin/clang.exe"
+            run(clang, "--target=aarch64-linux-android29", "-shared", "-O2", "-Wall", "-Wextra",
+                "-Wl,-z,max-page-size=16384", "-o", library, ROOT / "native/android_bootstrap.c",
+                "-landroid", "-ldl", "-llog")
         template = work / "AndroidManifest.xml"
         template.write_text(manifest, encoding="utf-8")
         base = work / "manifest.apk"
@@ -50,7 +62,10 @@ def build(args):
         with ZipFile(base) as compiled, ZipFile(unsigned, "w", ZIP_DEFLATED) as apk:
             apk.writestr("AndroidManifest.xml", compiled.read("AndroidManifest.xml"))
             apk.write(work / "classes.dex", "classes.dex")
-            apk.write(args.library, "lib/arm64-v8a/liboaoriginal.so", compress_type=ZIP_STORED)
+            library_name = "liboabootstrap.so" if engine_pin is not None else "liboaoriginal.so"
+            apk.write(library, "lib/arm64-v8a/" + library_name, compress_type=ZIP_STORED)
+            if engine_pin is not None:
+                apk.writestr("assets/local-build/engine.sha256", engine_pin)
             if args.veil_edits is not None:
                 apk.write(args.veil_edits, "assets/local-build/veil-edits.bin")
                 apk.write(args.veil_properties, "assets/local-build/veil-edits.properties")
@@ -77,8 +92,12 @@ def build(args):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    for name in ("sdk", "jdk", "library", "keystore", "output"):
+    for name in ("sdk", "jdk", "keystore", "output"):
         parser.add_argument("--" + name, required=True, type=Path)
+    engine = parser.add_mutually_exclusive_group(required=True)
+    engine.add_argument("--library", type=Path, help="embed an engine in a personal APK")
+    engine.add_argument("--local-engine", type=Path, help="record the expected engine hash without embedding it")
+    parser.add_argument("--ndk", type=Path, help="Android NDK used to build the launcher")
     parser.add_argument("--veil-edits", type=Path)
     parser.add_argument("--veil-properties", type=Path)
     parser.add_argument("--key-alias", required=True)
@@ -91,6 +110,8 @@ def main():
         parser.error("invalid Android application ID")
     if (args.veil_edits is None) != (args.veil_properties is None):
         parser.error("provide both Veil files or omit both for original menus")
+    if args.local_engine is not None and (args.ndk is None or args.waterfall is not None):
+        parser.error("--local-engine requires --ndk and excludes --waterfall")
     build(args)
 
 

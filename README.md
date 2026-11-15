@@ -72,6 +72,8 @@ Captured on the OPPO Pad Mini. Select an image to open it at full size.
 
 You will need your own supported PC installation of Re-Reckoning. This repository contains the project source, native build instructions, and documentation. Commercial game files, extracted game assets, generated engine translations, saves, and signing keys stay private.
 
+Build the engine once on Windows from your game files and copy the resulting `liboaoriginal.so` to Android. The release APK asks for that file after importing the game. Use the same build guide to generate the optional waterfall loop from your own gameplay recording. [Build and install guide](BUILDING.md)
+
 The tested candidate recognizes Steam build 10619381 of Re-Reckoning. First-launch setup asks for the game folder. Keep the English, French, and German game archives together because the engine opens all three at startup. Keep `data/videos/well.bik` in the source folder for the animated main menu. Setup can restore that file to an existing install.
 
 The importer reads the selected folder directly. Steam, a Steam sign-in, and an internet connection are unnecessary for play. The update badge uses GitHub when a connection is available. Put the matching 32-bit Microsoft `d3dcompiler_43.dll` in that folder to import everything in one step. Setup can also ask for the DLL separately.

@@ -13,17 +13,12 @@ static oa_tex *waterfall_texture;
 static VkPipeline waterfall_pipeline;
 static VkPipelineLayout waterfall_layout;
 static VkSampler waterfall_sampler;
-static AAsset *waterfall_source;
 static const uint8_t *waterfall_frames_data;
 static unsigned waterfall_uploaded;
 
 static int waterfall_init(VkFormat format)
 {
-    waterfall_source = veil_waterfall_open();
-    if (!waterfall_source ||
-        AAsset_getLength64(waterfall_source) != FALL_WIDTH * FALL_HEIGHT * FALL_FRAMES)
-        return 0;
-    waterfall_frames_data = AAsset_getBuffer(waterfall_source);
+    waterfall_frames_data = veil_waterfall_load(FALL_WIDTH * FALL_HEIGHT * FALL_FRAMES);
     if (!waterfall_frames_data) return 0;
     const uint32_t desc[11] = {FALL_WIDTH, FALL_HEIGHT, 1, 1, 77, 1, 0, 0, 8};
     if (create_texture(desc, NULL, &waterfall_texture, 0) != S_OK_ ||
