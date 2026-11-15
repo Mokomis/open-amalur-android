@@ -89,3 +89,20 @@ The launcher reads shared game files directly. It checks the game version and va
 A fresh Windows checkout regenerated the game, Bink and DirectX compiler translations from local files, compiled the 362 native objects, and linked the Android library. The stock-menu development APK built with that library imported a copied game folder on an OPPO Pad Mini (OPD2515) with Android Internet permission omitted. The engine mounted Fatesworn `cs:13757` when the matching archive was present and reached the base-game menu after the archive was removed from the test installation.
 
 Two independent Windows builds of the Veil 0.1.3 engine produced identical libraries. On the OPPO Pad Mini, the release launcher imported the full game offline, rejected a mismatched engine file, and launched Veil with the locally built engine and Fatesworn. The generated waterfall played in the Patron portrait. An in-place offline upgrade over the prior Veil build reused its game files and preserved the saves, graphics settings and touch layout.
+
+## Windows x64 development build
+
+Use the same supported Re-Reckoning files, LLVM-mingw and Python environment as the Android build. Windows compiles the original engine and Bink translation as an x64 executable and uses the shared Vulkan renderer and DXBC reflection code. The shared shader build uses the NDK's Windows `glslc`.
+
+```powershell
+$python = '.\.venv\Scripts\python.exe'
+& $python tools/build_native.py --prepare-only --game-dir $game --llvm-bin $llvm --output build\translation
+& $python tools/build_windows.py --translation build\translation --llvm-bin $llvm --ndk $ndk --output build\windows
+
+$apk = 'C:\path\to\open-amalur-veil-0.1.8-release.apk'
+$profile = Join-Path $PWD 'build\windows-profile'
+& $python tools/install_windows_veil.py --game-dir $game --apk $apk --profile $profile
+& .\build\windows\OpenAmalur.exe $game $profile "$profile\assets"
+```
+
+The Windows installer applies the signed release's Veil recipe into a local profile using your game files. It keeps the original archives read-only and omits Android Hardware Scaling from the Resolution tab. The profile also holds Windows settings, saves and runtime logs.

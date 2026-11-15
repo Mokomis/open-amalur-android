@@ -1,3 +1,4 @@
+#include "rt.h"
 #include "x86rt.h"
 
 #include <android/log.h>
@@ -449,8 +450,26 @@ HIDDEN int veil_transmog_read(const char *section, const char *key, char value[2
     return 1;
 }
 
+#ifdef _WIN32
+/* On Windows the compiler links these entries directly. The stock guest
+   bodies are renamed while staging the locally translated C. */
+void f_00F7CFA0(X86Ctx *ctx) { veil_trace_skin(ctx); }
+void f_00F24EF0(X86Ctx *ctx) { veil_trace_component(ctx); }
+void f_01025FA0(X86Ctx *ctx) { veil_trace_portrait_lookup(ctx); }
+void f_00F046F0(X86Ctx *ctx) { veil_trace_portrait_model(ctx); }
+#endif
+
 HIDDEN int veil_stock_read_save(void *, const char *, void *, int);
 HIDDEN bool veil_stock_write_save(void *, const char *, const void *, int);
+
+static int host_flush(int fd)
+{
+#ifdef _WIN32
+    return _commit(fd) == 0;
+#else
+    return fsync(fd) == 0;
+#endif
+}
 
 static bool is_game_save(const char *name)
 {
@@ -494,9 +513,14 @@ HIDDEN bool veil_trace_write_save(void *storage, const char *name, const void *b
     if (!root || snprintf(folder, sizeof(folder), "%s/veil-appearances", root) >= (int)sizeof(folder) ||
         !appearance_file(path, sizeof(path), key))
         return written;
-    mkdir(folder, 0700);
+    host_mkdir(folder);
     snprintf(temp, sizeof(temp), "%s.XXXXXX", path);
+    #ifdef _WIN32
+    if (_mktemp_s(temp, sizeof temp)) return written;
+    int fd = _open(temp, _O_CREAT | _O_EXCL | _O_WRONLY | _O_BINARY, 0600);
+#else
     int fd = mkstemp(temp);
+#endif
     if (fd < 0)
         return written;
     FILE *file = fdopen(fd, "wb");
@@ -504,13 +528,13 @@ HIDDEN bool veil_trace_write_save(void *storage, const char *name, const void *b
     if (file) {
         saved = fwrite("VEILARM1", 8, 1, file) == 1 &&
                 fwrite(appearances, sizeof(appearances), 1, file) == 1 &&
-                fflush(file) == 0 && fsync(fd) == 0;
+                fflush(file) == 0 && host_flush(fd);
         if (fclose(file))
             saved = false;
     } else {
         close(fd);
     }
-    if (!saved || rename(temp, path)) {
+    if (!saved || !host_rename(temp, path)) {
         unlink(temp);
         __android_log_print(ANDROID_LOG_WARN, "VeilTransmog", "Failed to save appearances for %s", name);
     } else {

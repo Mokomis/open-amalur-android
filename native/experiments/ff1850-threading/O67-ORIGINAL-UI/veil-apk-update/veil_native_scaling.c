@@ -1,4 +1,5 @@
 #include "veil_native_scaling.h"
+#include "rt.h"
 
 #include <limits.h>
 #include <pthread.h>
@@ -7,10 +8,7 @@
 #include <strings.h>
 #include <unistd.h>
 
-static const char setting_key[] = "VeilNativeHardwareScaling";
-static const char active_key[] = "VeilNativeHardwareScalingActive";
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
-static char settings_path[PATH_MAX];
 static char resolution_path[PATH_MAX];
 static int display_width = 1920;
 static int display_height = 1080;
@@ -18,6 +16,10 @@ enum { FULL_HD, NATIVE_DISPLAY, HALF_HD };
 static const char *const resolution_modes[] = {"100", "native", "50"};
 static int requested_resolution = FULL_HD;
 static int active_resolution = FULL_HD;
+#ifndef _WIN32
+static const char setting_key[] = "VeilNativeHardwareScaling";
+static const char active_key[] = "VeilNativeHardwareScalingActive";
+static char settings_path[PATH_MAX];
 static int initialized;
 static const int percentages[] = {0, 25, 50, 75, 100};
 enum { DEFAULT_PRESET = 4, PRESET_COUNT = sizeof percentages / sizeof percentages[0] };
@@ -56,6 +58,7 @@ int veil_native_scaling_percent(const char *root)
     pthread_mutex_unlock(&lock);
     return percent;
 }
+#endif
 
 int veil_render_resolution(const char *root, int window_width, int window_height,
                            int *width, int *height)
@@ -97,11 +100,14 @@ int veil_native_scaling_read(const char *section, const char *key, char *value)
         return 0;
     pthread_mutex_lock(&lock);
     int handled = 1;
+#ifndef _WIN32
     if (!strcasecmp(key, setting_key))
         snprintf(value, 8, "%d", requested);
     else if (!strcasecmp(key, active_key))
         snprintf(value, 8, "%d", active);
-    else if (!strcasecmp(key, "VeilRenderResolution"))
+    else
+#endif
+    if (!strcasecmp(key, "VeilRenderResolution"))
         snprintf(value, 8, "%d", requested_resolution);
     else if (!strcasecmp(key, "VeilRenderResolutionActive"))
         snprintf(value, 8, "%d", active_resolution);
@@ -140,7 +146,7 @@ static int save_setting(const char *path, const char *value)
 
     int ok = fprintf(file, "%s\n", value) > 0;
     ok = fclose(file) == 0 && ok;
-    ok = ok && rename(temporary, path) == 0;
+    ok = ok && host_rename(temporary, path);
     if (!ok)
         unlink(temporary);
     return ok;
@@ -151,9 +157,15 @@ int veil_native_scaling_write(const char *section, const char *key, const char *
     if (!section || !key || strcasecmp(section, "DEFAULT"))
         return -1;
     int resolution = !strcasecmp(key, "VeilRenderResolution");
+#ifdef _WIN32
+    if (!resolution)
+        return -1;
+    int last_preset = HALF_HD;
+#else
     if (!resolution && strcasecmp(key, setting_key))
         return -1;
     int last_preset = resolution ? HALF_HD : PRESET_COUNT - 1;
+#endif
     if (!value || value[0] < '0' || value[0] > '0' + last_preset || value[1])
         return 0;
     int preset = value[0] - '0';
@@ -164,12 +176,14 @@ int veil_native_scaling_write(const char *section, const char *key, const char *
         ok = save_setting(resolution_path, resolution_modes[preset]);
         if (ok)
             requested_resolution = preset;
+#ifndef _WIN32
     } else {
         char percent[4];
         snprintf(percent, sizeof percent, "%d", percentages[preset]);
         ok = save_setting(settings_path, percent);
         if (ok)
             requested = preset;
+#endif
     }
     pthread_mutex_unlock(&lock);
     return ok;

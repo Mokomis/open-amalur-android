@@ -5,7 +5,6 @@
 #define WIN32_LEAN_AND_MEAN
 #include "oa_android_win.h"
 #include "rt.h"
-#include <android/native_window.h>
 #include <malloc.h>
 #include <pthread.h>
 #include <stdarg.h>
@@ -14,8 +13,22 @@
 #include <stdlib.h>
 #include <string.h>
 #define VK_NO_PROTOTYPES
+#ifndef _WIN32
+#include <android/native_window.h>
 #define VK_USE_PLATFORM_ANDROID_KHR
+#endif
 #include <vulkan/vulkan.h>
+#ifdef _WIN32
+#include "windows/vulkan_surface.h"
+typedef struct HWND__ ANativeWindow;
+#define OA_VK_SURFACE_ENTRY(X) X(vkCreateWin32SurfaceKHR)
+#define OA_SURFACE_EXTENSION "VK_KHR_win32_surface"
+static void ANativeWindow_acquire(ANativeWindow *window) { (void)window; }
+static void ANativeWindow_release(ANativeWindow *window) { (void)window; }
+#else
+#define OA_VK_SURFACE_ENTRY(X) X(vkCreateAndroidSurfaceKHR)
+#define OA_SURFACE_EXTENSION "VK_KHR_android_surface"
+#endif
 #include "oa_present_lifecycle.h"
 #include "oa_dxbc.h"
 
@@ -49,7 +62,7 @@ static void logf_(const char *fmt, ...) {
 /* ---- Vulkan entry points ---- */
 #define VK_FUNCS(X) \
     X(vkDestroyInstance) X(vkDestroySurfaceKHR) X(vkEnumeratePhysicalDevices) X(vkGetPhysicalDeviceProperties) X(vkGetPhysicalDeviceFeatures2) X(vkGetPhysicalDeviceQueueFamilyProperties) \
-    X(vkGetPhysicalDeviceMemoryProperties) X(vkEnumerateDeviceExtensionProperties) X(vkGetPhysicalDeviceFormatProperties) X(vkCreateDevice) X(vkGetDeviceProcAddr) X(vkCreateAndroidSurfaceKHR) \
+    X(vkGetPhysicalDeviceMemoryProperties) X(vkEnumerateDeviceExtensionProperties) X(vkGetPhysicalDeviceFormatProperties) X(vkCreateDevice) X(vkGetDeviceProcAddr) OA_VK_SURFACE_ENTRY(X) \
     X(vkGetPhysicalDeviceSurfaceCapabilitiesKHR) X(vkGetPhysicalDeviceSurfaceFormatsKHR) X(vkGetPhysicalDeviceSurfacePresentModesKHR) X(vkGetPhysicalDeviceSurfaceSupportKHR) X(vkGetPhysicalDeviceProperties2)
 #define VKD_FUNCS(X) \
     X(vkGetDeviceQueue) X(vkAllocateMemory) X(vkFreeMemory) X(vkMapMemory) X(vkCreateBuffer) X(vkDestroyBuffer) X(vkGetBufferMemoryRequirements) X(vkBindBufferMemory) \
@@ -3202,9 +3215,18 @@ static VkResult present_ensure_window(oa_chain *s,ANativeWindow *window,uint64_t
             if(o->native_window==window)return VK_NOT_READY;
     }
     ANativeWindow_acquire(window);
+#ifdef _WIN32
+    OaWin32SurfaceCreateInfo info = {
+        .sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
+        .hinstance = GetModuleHandleW(NULL),
+        .hwnd = (HWND)window,
+    };
+    VkResult result = pvkCreateWin32SurfaceKHR(g_instance, &info, NULL, &s->surface);
+#else
     VkAndroidSurfaceCreateInfoKHR info={VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR};
     info.window=window;
     VkResult result=pvkCreateAndroidSurfaceKHR(g_instance,&info,NULL,&s->surface);
+#endif
     if(result!=VK_SUCCESS){ANativeWindow_release(window);return result;}
     s->native_window=window;s->window_generation=generation;s->surface_lost=0;
     s->present.recreate=1;s->next_surface_check=0;s->suboptimal_reported=0;
@@ -3578,7 +3600,7 @@ static int init_vulkan(void) {
     PFN_vkCreateInstance create;
     VkApplicationInfo app = {VK_STRUCTURE_TYPE_APPLICATION_INFO};
     VkInstanceCreateInfo ici = {VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
-    const char *IEXT[5] = {"VK_KHR_surface", "VK_KHR_android_surface"};
+    const char *IEXT[5] = {"VK_KHR_surface", OA_SURFACE_EXTENSION};
     const char *device_extensions[5] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
     VkPhysicalDeviceMapMemoryPlacedFeaturesEXT placed = {
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAP_MEMORY_PLACED_FEATURES_EXT

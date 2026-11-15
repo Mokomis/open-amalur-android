@@ -1,5 +1,7 @@
 #include <android/log.h>
+#ifndef _WIN32
 #include <jni.h>
+#endif
 #include <limits.h>
 #include <pthread.h>
 #include <stdatomic.h>
@@ -246,6 +248,7 @@ HIDDEN int veil_tablet_read(const char *section, const char *key, char *value)
     return 1;
 }
 
+#ifndef _WIN32
 JNI_API(mash)(JNIEnv *env, jclass type)
 {
     (void)env;
@@ -306,6 +309,7 @@ JNI_API(aspect)(JNIEnv *env, jclass type)
     unsigned height = atomic_load(&viewport_height);
     return height ? atomic_load(&viewport_width) * 10000 / height : 17778;
 }
+#endif
 
 HIDDEN int veil_title_is_visible(void)
 {
@@ -328,6 +332,7 @@ HIDDEN int veil_title_cover_is_presented(void)
     return atomic_load(&title_cover_presented);
 }
 
+#ifndef _WIN32
 JNI_API(titleVisible)(JNIEnv *env, jclass type)
 {
     (void)env;
@@ -404,6 +409,7 @@ HIDDEN void veil_tablet_poll_actions(void)
         casting = cast;
     }
 }
+#endif
 
 HIDDEN int veil_tablet_map_open(void)
 {
@@ -433,6 +439,7 @@ HIDDEN void veil_tablet_touch_mode(void)
     atomic_store(&controller_active, false);
 }
 
+#ifndef _WIN32
 HIDDEN uint32_t veil_stock_pad_get(uint32_t index, uint8_t state[16]);
 HIDDEN uint32_t veil_trace_pad_get(uint32_t index, uint8_t state[16])
 {
@@ -461,3 +468,4 @@ HIDDEN uint32_t veil_trace_pad_get(uint32_t index, uint8_t state[16])
     pthread_mutex_unlock(&pad_mutex);
     return 0;
 }
+#endif

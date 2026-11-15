@@ -94,7 +94,12 @@ static bool commit_local_stats(void)
         ok = file && fwrite(stats_magic, 1, sizeof stats_magic, file) == sizeof stats_magic &&
             fwrite(&local_stat_count, sizeof local_stat_count, 1, file) == 1 &&
             fwrite(local_stats, sizeof local_stats[0], local_stat_count, file) == local_stat_count &&
-            fflush(file) == 0 && fsync(fd) == 0;
+            fflush(file) == 0 &&
+#ifdef _WIN32
+            _commit(fd) == 0;
+#else
+            fsync(fd) == 0;
+#endif
         if (file) {
             if (fclose(file)) ok = false;
         } else if (fd >= 0) close(fd);
