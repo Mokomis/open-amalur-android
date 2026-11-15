@@ -69,6 +69,8 @@ def build(args):
             apk.write(work / "classes.dex", "classes.dex")
             library_name = "liboabootstrap.so" if engine_pin is not None else "liboaoriginal.so"
             apk.write(library, "lib/arm64-v8a/" + library_name, compress_type=ZIP_STORED)
+            if args.offline:
+                apk.writestr("assets/local-build/native-reflection", "1\n")
             if engine_pin is not None:
                 apk.writestr("assets/local-build/engine.sha256", engine_pin)
                 if args.download_engine:
@@ -104,11 +106,13 @@ def main():
     for name in ("sdk", "jdk", "keystore", "output"):
         parser.add_argument("--" + name, required=True, type=Path)
     engine = parser.add_mutually_exclusive_group(required=True)
-    engine.add_argument("--library", type=Path, help="embed an engine in a personal APK")
+    engine.add_argument("--library", type=Path, help="embed an engine in the APK")
     engine.add_argument("--local-engine", type=Path, help="record the expected engine hash without embedding it")
     parser.add_argument("--ndk", type=Path, help="Android NDK used to build the launcher")
     parser.add_argument("--download-engine", action="store_true",
                         help="download the matching liboaoriginal.so from GitHub during setup")
+    parser.add_argument("--offline", action="store_true",
+                        help="package an engine built with native shader reflection for offline setup")
     parser.add_argument("--veil-edits", type=Path)
     parser.add_argument("--veil-properties", type=Path)
     parser.add_argument("--key-alias", required=True)
@@ -125,6 +129,8 @@ def main():
         parser.error("--local-engine requires --ndk")
     if args.download_engine and args.local_engine is None:
         parser.error("--download-engine requires --local-engine")
+    if args.offline and args.library is None:
+        parser.error("--offline requires --library")
     if args.waterfall is not None and (
         not args.waterfall.is_file() or args.waterfall.stat().st_size != WATERFALL_BYTES
     ):

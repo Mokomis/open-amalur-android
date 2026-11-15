@@ -17,8 +17,6 @@ REPO = Path(__file__).resolve().parents[1]
 LOCAL_SHA = {
     "amalur": "16a400f6e8fc10dbe446a9e57717de9fbe975ef17c004f4ca405e2e4e09cb314",
     "bink": "36810b3318acd07a5b4e78fe72db163ed63880ab2eb2d9b5bda0331ded32a9c3",
-    "d3d": "2f23182ec6f4889397ac4bf03d62536136c5bdba825c7d2c4ef08c827f3a8a1c",
-    "compiler43": "e46ac5ccb6ab66198eb5b175ee334b928cccb6bd56c9394c59d3ef34bc15ca46",
 }
 TOOLCHAIN = "toolchains/llvm/prebuilt/windows-x86_64/bin"
 
@@ -40,15 +38,9 @@ def translate(args, plan):
     }
     for name, source in games.items():
         require_input(source, name)
-    require_input(args.compiler_dll, "d3d")
     args.output.mkdir(parents=True)
     output = args.output / "generated"
     output.mkdir()
-    local_compiler = output / "d3dcompiler_43.dll"
-    subprocess.run([sys.executable, REPO / "translator/rebase_pe.py",
-                    args.compiler_dll, local_compiler, "20000000"], check=True)
-    require_input(local_compiler, "compiler43")
-    games["compiler43"] = local_compiler
 
     def generate(pair):
         module, source = pair
@@ -62,7 +54,7 @@ def translate(args, plan):
             raise RuntimeError(f"Translation failed. See {receipt}")
         print(f"Translated {module}", flush=True)
 
-    with ThreadPoolExecutor(max_workers=3) as pool:
+    with ThreadPoolExecutor(max_workers=len(games)) as pool:
         list(pool.map(generate, games.items()))
     prepare(output, args.output / "guest", plan["objects"])
     prepare_helpers(output, args.output / "guest-helpers")
@@ -134,7 +126,6 @@ def compile_and_link(args, plan):
 def main():
     cli = argparse.ArgumentParser(description=__doc__)
     cli.add_argument("--game-dir", type=Path, help="folder containing koa.exe and binkw32.dll")
-    cli.add_argument("--compiler-dll", type=Path, help="matching 32-bit Microsoft d3dcompiler_43.dll")
     cli.add_argument("--llvm-bin", type=Path, help="directory containing the LLVM-mingw libLLVM-23.dll")
     cli.add_argument("--ndk", type=Path)
     cli.add_argument("--output", type=Path, required=True, help="new local build directory")
@@ -145,8 +136,8 @@ def main():
     args = cli.parse_args()
     if os.name != "nt":
         cli.error("this build uses the Windows x86-64 LLVM and Android toolchains")
-    if not args.compile_only and None in (args.game_dir, args.compiler_dll, args.llvm_bin):
-        cli.error("--game-dir, --compiler-dll and --llvm-bin are needed for translation")
+    if not args.compile_only and None in (args.game_dir, args.llvm_bin):
+        cli.error("--game-dir and --llvm-bin are needed for translation")
     if not args.prepare_only and args.ndk is None:
         cli.error("--ndk is needed for compilation")
     if args.jobs < 1:

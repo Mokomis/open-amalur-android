@@ -23,8 +23,8 @@ public final class SetupActivity extends Activity {
 
     @Override protected void onCreate(Bundle saved) {
         super.onCreate(saved);
-        boolean installed = GameFiles.ready(getExternalFilesDir(null));
-        boolean repairTitle = !installed && GameFiles.needsTitleRepair(getExternalFilesDir(null));
+        boolean installed = GameFiles.ready(this, getExternalFilesDir(null));
+        boolean repairTitle = !installed && GameFiles.needsTitleRepair(this, getExternalFilesDir(null));
         if (saved != null) gameFolder = saved.getParcelable("gameFolder");
         LinearLayout panel = new LinearLayout(this);
         panel.setOrientation(LinearLayout.VERTICAL);

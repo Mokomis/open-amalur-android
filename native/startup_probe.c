@@ -25,9 +25,6 @@ extern int oa_diagnostics_enabled;
 static int bounded_startup;
 static _Atomic unsigned long long calls;
 static _Atomic uint32_t seen[131072];
-uint32_t oa_reflect_export;
-extern const X86FnEntry x86_fns_compiler43[];
-extern const uint32_t x86_fns_compiler43_count;
 void oa_crt_register(void);
 static FILE *trace;
 static uint64_t start_ns;
@@ -101,12 +98,10 @@ int main(int argc,char **argv)
     oa_tls_module=m;
     const char*bink_path=getenv("OA_BINK_PATH");RtModule*bink=NULL;
     if(bink_path){bink=rt_load_module(bink_path,"binkw32.dll",x86_fns_bink,x86_fns_bink_count);rt_resolve_imports(bink);}
-    RtModule*compiler=NULL;const char*compiler_path=getenv("OA_COMPILER43_PATH");
-    if(compiler_path){compiler=rt_load_module(compiler_path,"d3dcompiler_43.dll",x86_fns_compiler43,x86_fns_compiler43_count);rt_resolve_imports(compiler);oa_reflect_export=rt_export(compiler,"D3DReflect");}
     rt_resolve_imports(m);
     RtThread *t=rt_thread_create_main(4u<<20);
     st32(rt_peb()+8,m->base);setup_static_tls(m,t);
-    if(argc==5 && !strcmp(argv[4],"--reflection-check")){if(!compiler)rt_fatal("original compiler module missing");rt_module_init_tree(compiler,&t->ctx);const char*input=getenv("OA_REFLECTION_INPUT");if(!input)return 9;return oa_reflection_check(&t->ctx,input);}
+    if(argc==5 && !strcmp(argv[4],"--reflection-check")){const char*input=getenv("OA_REFLECTION_INPUT");if(!input)return 9;return oa_reflection_check(&t->ctx,input);}
     if(argc==5 && !strcmp(argv[4],"--initializer-check")) {
         const uint32_t cases[]={0,0x3f800000,0xbf800000,0x3dcccccd,0x4640e6ae,0x00800000,0x00000001,0x7f7fffff,0xff7fffff,0x7f800000,0xff800000,0x7fc12345};
         FILE *f=fopen("initializer-proof.bin","wb");if(!f)return 4;

@@ -75,13 +75,13 @@ final class GameFiles {
         }
     }
 
-    static boolean ready(File directory) {
-        File installed = installedGame(directory);
+    static boolean ready(Context context, File directory) {
+        File installed = installedGame(context, directory);
         return installed != null && hasTitleVideo(installed);
     }
 
-    static boolean needsTitleRepair(File directory) {
-        File installed = installedGame(directory);
+    static boolean needsTitleRepair(Context context, File directory) {
+        File installed = installedGame(context, directory);
         return installed != null && !hasTitleVideo(installed);
     }
 
@@ -90,8 +90,8 @@ final class GameFiles {
         return video.isFile() && video.length() == TITLE_VIDEO_BYTES;
     }
 
-    static boolean hasFatesworn(File storage) {
-        File installed = installedGame(storage);
+    static boolean hasFatesworn(Context context, File storage) {
+        File installed = installedGame(context, storage);
         if (installed == null) return false;
         File archive = fateswornArchive(new File(installed, "game"));
         return archive.isFile() && archive.length() == FATESWORN_BYTES;
@@ -101,15 +101,24 @@ final class GameFiles {
         return new File(new File(game, FATESWORN_DIR), FATESWORN_ARCHIVE);
     }
 
-    private static File installedGame(File directory) {
+    private static File installedGame(Context context, File directory) {
         if (directory == null) return null;
         File imported = new File(directory, IMPORTED);
         File installed = new File(imported, ".ready").isFile() ? imported : directory;
-        return valid(installed) ? installed : null;
+        return valid(installed, !hasNativeReflection(context)) ? installed : null;
     }
 
-    private static boolean valid(File directory) {
-        for (String name : new String[]{"koa.exe", "binkw32.dll", "d3dcompiler_43.dll"}) {
+    private static boolean hasNativeReflection(Context context) {
+        try (InputStream marker = context.getAssets().open("local-build/native-reflection")) {
+            return marker.read() == '1';
+        } catch (IOException absent) {
+            return false;
+        }
+    }
+
+    private static boolean valid(File directory, boolean requiresCompiler) {
+        if (requiresCompiler && !new File(directory, "d3dcompiler_43.dll").isFile()) return false;
+        for (String name : new String[]{"koa.exe", "binkw32.dll"}) {
             if (!new File(directory, name).isFile()) return false;
         }
         for (String name : BASE_ARCHIVES) {
@@ -187,7 +196,7 @@ final class GameFiles {
 
     void addFatesworn() throws IOException {
         synchronized (GameFiles.class) {
-            File installed = installedGame(context.getExternalFilesDir(null));
+            File installed = installedGame(context, context.getExternalFilesDir(null));
             if (installed == null) throw new IOException("Open Amalur could not find the installed game.");
             Map<String, Entry> files = list(DocumentsContract.getTreeDocumentId(tree));
             Entry depot = files.get(FATESWORN_DIR);
@@ -218,7 +227,7 @@ final class GameFiles {
         Map<String, Entry> data = list(require(root, "data", true).id);
         Map<String, Entry> videos = list(require(data, "videos", true).id);
         Entry title = require(videos, TITLE_VIDEO, false);
-        File installed = installedGame(storage);
+        File installed = installedGame(context, storage);
         if (installed != null && !hasTitleVideo(installed)) {
             File videoDirectory = new File(installed, "game/data/videos");
             makeDirectory(videoDirectory);
@@ -236,11 +245,12 @@ final class GameFiles {
         Entry executable = require(root, "koa.exe", false);
         Entry bink = require(root, "binkw32.dll", false);
         for (String name : BASE_ARCHIVES) require(data, name, false);
-        Entry compilerInFolder = root.get("d3dcompiler_43.dll");
-        if (shaderCompiler == null && compilerInFolder != null && !compilerInFolder.directory) {
-            shaderCompiler = compilerInFolder.uri;
+        boolean requiresCompiler = !hasNativeReflection(context);
+        if (requiresCompiler && shaderCompiler == null) {
+            Entry compilerInFolder = root.get("d3dcompiler_43.dll");
+            if (compilerInFolder != null && !compilerInFolder.directory) shaderCompiler = compilerInFolder.uri;
+            if (shaderCompiler == null && !LocalEngine.downloadEnabled(context)) throw new CompilerRequired();
         }
-        if (shaderCompiler == null && !LocalEngine.downloadEnabled(context)) throw new CompilerRequired();
         Entry depot = root.get(FATESWORN_DIR);
         Entry fatesworn = depot == null ? null
                 : require(list(require(root, FATESWORN_DIR, true).id), FATESWORN_ARCHIVE, false);
@@ -252,12 +262,14 @@ final class GameFiles {
         try {
             copy(executable, new File(stage, "koa.exe"), EXE_HASH, 23741952L);
             copy(bink, new File(stage, "binkw32.dll"), BINK_HASH, 198144L);
-            File compiler = new File(stage, "d3dcompiler_43.dll");
-            if (shaderCompiler == null) {
-                progress.report("Microsoft’s shader compiler", 0, 0);
-                prepareCompiler(CompilerDownload.fetch(), compiler);
-            } else {
-                prepareCompiler(shaderCompiler, compiler);
+            if (requiresCompiler) {
+                File compiler = new File(stage, "d3dcompiler_43.dll");
+                if (shaderCompiler == null) {
+                    progress.report("Microsoft’s shader compiler", 0, 0);
+                    prepareCompiler(CompilerDownload.fetch(), compiler);
+                } else {
+                    prepareCompiler(shaderCompiler, compiler);
+                }
             }
             File game = new File(stage, "game");
             File gameData = new File(game, "data");
@@ -299,7 +311,7 @@ final class GameFiles {
 
     static synchronized void updateInstalledVeil(Context context, File storage, Progress progress)
             throws IOException {
-        File installed = installedGame(storage);
+        File installed = installedGame(context, storage);
         if (installed == null) throw new IOException("Open Amalur could not find the installed game.");
         if (!hasVeilRecipe(context)) return;
         File data = new File(installed, "game/data");

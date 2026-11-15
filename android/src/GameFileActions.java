@@ -20,7 +20,7 @@ final class GameFileActions {
 
     void show() {
         if (importing) return;
-        boolean installed = GameFiles.hasFatesworn(activity.getExternalFilesDir(null));
+        boolean installed = GameFiles.hasFatesworn(activity, activity.getExternalFilesDir(null));
         new AlertDialog.Builder(activity).setTitle("Game Files")
                 .setMessage(installed ? "Fatesworn is installed."
                         : "Choose your updated Re-Reckoning folder to add Fatesworn.")

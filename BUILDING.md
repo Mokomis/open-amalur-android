@@ -2,9 +2,9 @@
 
 ## Install on Android
 
-Install the signed APK from [GitHub Releases](https://github.com/Mokomis/open-amalur-android/releases/latest) and select your Re-Reckoning folder. Starting with v0.1.5, the app downloads the ARM64 engine, checks the SHA-256 pinned in the APK, and installs it automatically. If the game folder lacks the matching shader compiler, setup fetches it from Microsoft. Once setup finishes, the game runs offline.
+Install the signed APK from [GitHub Releases](https://github.com/Mokomis/open-amalur-android/releases/latest) and select your Re-Reckoning folder. Starting with v0.1.6, the APK includes the ARM64 engine and its shader reflection support, so setup can finish offline.
 
-Install updates over the existing app to preserve saves, settings, and touch layouts. An update reuses the installed engine when its SHA-256 matches. The release APK includes the Allestar Glade waterfall used in Veil portraits.
+Install updates over the existing app to preserve saves, settings, and touch layouts. The release APK includes the Allestar Glade waterfall used in Veil portraits.
 
 ## Build from source
 
@@ -12,8 +12,7 @@ Use these steps if you want to develop or mod the engine. The build translates t
 
 ### Inputs
 
-- A supported Steam installation of Kingdoms of Amalur: Re-Reckoning, version `cs:15032` (Steam build 10619381). Set the game directory to the folder with `koa.exe` and `binkw32.dll`.
-- The matching 32-bit Microsoft `d3dcompiler_43.dll`, typically in `C:\Windows\SysWOW64` after installing the legacy DirectX runtime. The builder checks all three files and rebases a copy of the compiler DLL in its output directory.
+- A supported copy of Kingdoms of Amalur: Re-Reckoning, version `cs:15032` (Steam build 10619381). Set the game directory to the folder with `koa.exe` and `binkw32.dll`.
 - Python 3.12 x64 and the dependency in [requirements.txt](requirements.txt).
 - [LLVM-mingw 20261006](https://github.com/mstorsjo/llvm-mingw/releases/tag/20261006), Windows x86-64 UCRT. Use its `bin` directory.
 - [Android NDK r30](https://developer.android.com/ndk/downloads) for Windows, version `30.0.16248370`. The Veil hooks verify generated ARM instructions and require this compiler.
@@ -32,7 +31,6 @@ $ndk = 'C:\tools\android-ndk-r30'
 
 .\.venv\Scripts\python.exe tools/build_native.py `
     --game-dir "$game" `
-    --compiler-dll "$env:WINDIR\SysWOW64\d3dcompiler_43.dll" `
     --llvm-bin "$llvm" --ndk "$ndk" --output build
 ```
 
@@ -48,7 +46,7 @@ Add `--prepare-only` to stop after translation and source transformations. The g
 
 Project-written translation and instruction lowering live in `translator/`. The Android ABI, process, input and file adapters live in `native/`. [The native build plan](native/build-plan.json) records the exact sources and flags. It includes the synchronization, thread placement, frame presentation, visibility and Vulkan renderer components from the tested Android build. The authored shaders are under `native/shaders`. Android launcher and Veil importer sources are under `android/`.
 
-The project-authored code is [MIT licensed](LICENSE). [Third-party notices](THIRD_PARTY_NOTICES.md) apply to the included dependencies. Generated C and game inputs stay on the build machine. The public Android APK downloads the compiled ARM64 library from its matching GitHub release.
+The project-authored code is [MIT licensed](LICENSE). [Third-party notices](THIRD_PARTY_NOTICES.md) apply to the included dependencies. Generated C and game inputs stay on the build machine. The engine reads DXBC shader metadata through its native implementation of `D3DReflect`.
 
 ## Assemble an APK
 
@@ -60,13 +58,13 @@ $sdk = "$env:LOCALAPPDATA\Android\Sdk"
 $env:JAVA_HOME = "$java"
 & "$java\bin\keytool.exe" -genkeypair -keystore build\local.jks -alias openamalur -keyalg RSA -keysize 2048 -validity 10000
 .\.venv\Scripts\python.exe tools/build_apk.py --sdk "$sdk" --jdk "$java" `
-    --library build/liboaoriginal.so --keystore build/local.jks --key-alias openamalur `
+    --library build/liboaoriginal.so --offline --keystore build/local.jks --key-alias openamalur `
     --application-id org.openamalur.local --output build/OpenAmalur-local.apk
 ```
 
 Use a distinct `--application-id` when installing a build signed with your own key alongside an existing build.
 
-To assemble a release launcher, replace `--library build/liboaoriginal.so` with `--local-engine build/liboaoriginal.so --ndk "$ndk" --download-engine` and supply the Veil recipe and pause overlay. The APK records the engine SHA-256 and the version-specific download address. Upload that exact `liboaoriginal.so` to the matching GitHub release. Pass the release application ID and use its existing signing key for a normal Android upgrade.
+To assemble the offline release APK, keep `--library` and `--offline`, supply the Veil recipe and pause overlay, and use the release application ID and signing key. The APK includes the ARM64 engine. Setup imports the selected game files directly from Android storage.
 
 Extract the build-assets ZIP from the matching [GitHub release](https://github.com/Mokomis/open-amalur-android/releases) and pass `veil-edits.bin` to `--veil-edits`, `veil-edits.properties` to `--veil-properties`, `oa_prototype_ui.bin` to `--prototype-ui`, and `veil-waterfall.bc3` to `--waterfall`. The included `engine.sha256` gives the expected hash of the locally built library.
 

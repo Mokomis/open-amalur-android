@@ -6,7 +6,7 @@ This started as a personal experiment. I wanted to see if I could use AI to get 
 
 Open Amalur is unequivocally an AI-first project. I led the work and used ChatGPT, Claude, and Qwen throughout. If that’s a deal-breaker for you, this is your cue to walk away.
 
-Open Amalur is a recompilation of the original *Re-Reckoning* engine. The translator and runtime are open source. The Android app downloads the prebuilt ARM64 engine and runs it with the files from your copy of the game. The entire installation runs on Android.
+Open Amalur is a recompilation of the original *Re-Reckoning* engine. The translator and runtime are open source. Starting with v0.1.6, the APK includes the prebuilt ARM64 engine and sets up the game offline using files from your copy.
 
 I substantially reworked the engine’s threading to improve how it schedules simulation, rendering, and background jobs across multiple CPU cores.
 
@@ -22,9 +22,9 @@ Veil draws visual inspiration from other interfaces, including Edge for Skyrim. 
 
 1. Download the APK directly to your Android device and install it. [GitHub Releases](https://github.com/Mokomis/open-amalur-android/releases/latest)
 2. Open Open Amalur and choose the Re-Reckoning folder containing `koa.exe` and `data`.
-3. Setup imports your game files, downloads and verifies the matching ARM64 engine, and starts the game. If the game folder has no shader compiler, setup downloads the matching one from Microsoft.
+3. Setup imports your game files, applies Veil, and starts the game with the engine bundled in the APK.
 
-First setup needs an internet connection. You can play offline afterward. Install updates over your existing copy of Open Amalur to keep your saves, settings, and touch layout.
+With the v0.1.6 APK and game files on your device, setup and play work offline. Install updates over your existing copy of Open Amalur to keep your saves, settings, and touch layout.
 
 ### Game files
 
@@ -41,10 +41,10 @@ Setup detects and imports Fatesworn if the game folder contains the supported `d
 We built the **native ARM64 engine** by translating the original executable’s x86 machine code into C and compiling it for Android. It uses the game’s original data formats and scripts.
 
 - **Engine behavior.** We used matched inputs to compare the Android build with the original PC game, checking instruction handling, floating-point behavior, animation blending, skinning, and GPU submission.
-- **Android integration.** The runtime provides file access, input, audio, local profiles, saves, and display handling. The graphics layer translates the engine’s Direct3D 11 calls to Vulkan.
+- **Android integration.** The runtime provides file access, input, audio, local profiles, saves, and display handling. The graphics layer translates the engine’s Direct3D 11 calls to Vulkan. The native `D3DReflect` implementation reads metadata from the game’s compiled shaders.
 - **Multicore threading.** We reworked how the engine discovers available CPU cores, synchronizes jobs, and wakes workers as jobs finish. We profiled simulation, graphics recording, and background work across multiple cores on the OPPO Pad Mini.
 
-On a clean OPPO Pad Mini install, v0.1.5 downloaded the published engine, detected and loaded Fatesworn from the imported files, and reached the Veil title screen. It reached the title screen again offline. The full campaign and expansion still need broader playtesting.
+In a clean OPPO Pad Mini test with networking disabled, v0.1.6 imported the game files, detected Fatesworn, and reached the Veil title screen. The full campaign and expansion still need broader playtesting.
 
 [Engine and threading notes](ENGINE.md) · [Developer build guide](BUILDING.md#build-from-source)
 

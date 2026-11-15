@@ -398,18 +398,22 @@ static uint32_t vec4_of(ctx *c, uint32_t s) {
     return r;
 }
 
-static const char *sig_chunk(const uint8_t *d, size_t size, const char *tag, uint32_t *len) {
-    uint32_t n, i;
-    if (size < 32) return NULL;
+const void *oa_dxbc_find_chunk(const void *dxbc, size_t size, const char tag[4], uint32_t *len) {
+    const uint8_t *d = dxbc;
+    uint32_t n, declared_size;
+    if (size < 32 || memcmp(d, "DXBC", 4)) return NULL;
+    memcpy(&declared_size, d + 24, 4);
+    if (declared_size < 32 || declared_size > size) return NULL;
+    size = declared_size;
     memcpy(&n, d + 28, 4);
-    for (i = 0; i < n; i++) {
+    if (n > (size - 32) / 4) return NULL;
+    for (uint32_t i = 0; i < n; i++) {
         uint32_t off;
-        if (32 + 4 * (size_t)i + 4 > size) return NULL;
-        memcpy(&off, d + 32 + 4 * i, 4);
-        if ((size_t)off + 8 > size) return NULL;
+        memcpy(&off, d + 32 + 4 * (size_t)i, 4);
+        if (off < 32 + 4 * (size_t)n || off > size - 8) return NULL;
         if (!memcmp(d + off, tag, 4)) {
             memcpy(len, d + off + 4, 4);
-            return (const char *)d + off + 8;
+            return *len <= size - off - 8 ? d + off + 8 : NULL;
         }
     }
     return NULL;
@@ -934,9 +938,9 @@ int oa_dxbc_translate(const void *dxbc, size_t size, oa_shader_info *info, uint3
     c->err_size = err_size;
     if (err_size) err[0] = 0;
     if (size < 32 || memcmp(d, "DXBC", 4)) { fail(c, "not DXBC"); goto done; }
-    p = sig_chunk(d, size, "SHDR", &shex_len);
-    if (!p) p = sig_chunk(d, size, "SHEX", &shex_len);
-    if (!p) { fail(c, "no shader chunk"); goto done; }
+    p = oa_dxbc_find_chunk(d, size, "SHDR", &shex_len);
+    if (!p) p = oa_dxbc_find_chunk(d, size, "SHEX", &shex_len);
+    if (!p || shex_len < 8) { fail(c, "no shader chunk"); goto done; }
     c->t = (const uint32_t *)p;
     c->tn = shex_len / 4;
     version = c->t[0];
@@ -944,9 +948,9 @@ int oa_dxbc_translate(const void *dxbc, size_t size, oa_shader_info *info, uint3
     info->is_pixel = (version >> 16) == 0;
     info->binding_base = info->is_pixel ? 0 : OA_BIND_VS_BASE;
     {
-        const char *q = sig_chunk(d, size, "ISGN", &len);
+        const char *q = oa_dxbc_find_chunk(d, size, "ISGN", &len);
         info->input_count = read_sig(q, q ? len : 0, info->inputs);
-        q = sig_chunk(d, size, "OSGN", &len);
+        q = oa_dxbc_find_chunk(d, size, "OSGN", &len);
         info->output_count = read_sig(q, q ? len : 0, info->outputs);
     }
     c->next_id = 1;

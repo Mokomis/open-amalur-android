@@ -75,11 +75,12 @@ static int iid_kind(const GUID *id,int fallback){
 }
 static uint32_t wrap(void*,int);
 static uint32_t wrap_dependent(void*,int,Object*);
+static const GUID oa_reflect43;
 static void query(X86Ctx *ctx){
     Object *p=self(ctx);const GUID *id=(const GUID*)rt_ptr(A(0));void *out=NULL;
     HRESULT hr=IUnknown_QueryInterface((IUnknown*)p->host,id,&out);
     if(SUCCEEDED(hr)){
-        int kind=iid_kind(id,p->kind);
+        int kind=p->kind==SREF && IsEqualGUID(id,&oa_reflect43) ? SREF : iid_kind(id,p->kind);
         if(kind<0){IUnknown_Release((IUnknown*)out);rt_fatal("unqualified graphics IID %08lx-%04x-%04x",id->Data1,id->Data2,id->Data3);}
         st32(A(1),wrap(out,kind));rt_log("real graphics QI -> %s",kind_names[kind]);
     }else if(A(1))st32(A(1),0);
@@ -291,5 +292,8 @@ static void create_device(X86Ctx *ctx){
     if(rt_arg(ctx,9))st32(rt_arg(ctx,9),SUCCEEDED(hr)?wrap(immediate,GFX_CONTEXT):0);
     rt_log("MILESTONE real D3D11CreateDevice HRESULT=%#lx feature=%#x",(unsigned long)hr,feature);RET(hr);
 }
-static const HleDef defs[]={{"d3d11.dll","D3D11CreateDevice",create_device,10}};
+static const HleDef defs[]={
+    {"d3d11.dll","D3D11CreateDevice",create_device,10},
+    {"d3dcompiler_43.dll","D3DReflect",compiler_reflect,4},
+};
 void oa_graphics_register(void){rt_hle_register(defs,sizeof(defs)/sizeof(*defs));}
