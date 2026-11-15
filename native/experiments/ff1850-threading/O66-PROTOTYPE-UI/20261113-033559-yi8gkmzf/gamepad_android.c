@@ -22,7 +22,7 @@ enum {
 
 typedef struct { int axis; float min, max; } Axis;
 typedef struct {
-    int id;
+    int id, input_id, vendor, product;
     uint16_t buttons, hat;
     uint8_t trigger[2], trigger_key[2];
     int16_t sticks[4];
@@ -33,7 +33,8 @@ typedef struct {
 
 static Pad pads[MAX_PADS];
 static jclass input_device;
-static jmethodID get_ids, get_device, get_name, get_sources, get_range, range_min, range_max;
+static jmethodID get_ids, get_device, get_name, get_vendor, get_product;
+static jmethodID get_sources, get_range, range_min, range_max;
 static JNIEnv *env;
 static jobject rumble_activity;
 static jmethodID rumble_method;
@@ -95,16 +96,14 @@ static int is_rumble_endpoint(jobject device)
     return endpoint;
 }
 
-static int pad_slot(int id, jobject device)
+static void configure_axes(Pad *pad, jobject device)
 {
-    int free_slot = NO_DEVICE;
-    for (unsigned i = 0; i < MAX_PADS; ++i) {
-        if (pads[i].id == id) return i;
-        if (free_slot == NO_DEVICE && pads[i].id == NO_DEVICE) free_slot = i;
-    }
-    if (free_slot == NO_DEVICE || is_rumble_endpoint(device)) return NO_DEVICE;
-    Pad *pad = &pads[free_slot];
-    *pad = (Pad){ .id = id, .right_x = AMOTION_EVENT_AXIS_Z, .right_y = AMOTION_EVENT_AXIS_RZ };
+    pad->buttons = pad->hat = 0;
+    memset(pad->sticks, 0, sizeof pad->sticks);
+    memset(pad->trigger, 0, sizeof pad->trigger);
+    memset(pad->trigger_key, 0, sizeof pad->trigger_key);
+    pad->right_x = AMOTION_EVENT_AXIS_Z;
+    pad->right_y = AMOTION_EVENT_AXIS_RZ;
     pad->triggers[0] = (Axis){ AMOTION_EVENT_AXIS_LTRIGGER, 0, 1 };
     pad->triggers[1] = (Axis){ AMOTION_EVENT_AXIS_RTRIGGER, 0, 1 };
     if (device) {
@@ -121,6 +120,38 @@ static int pad_slot(int id, jobject device)
             if (range.axis != NO_DEVICE && range.max > range.min) pad->triggers[i] = range;
         }
     }
+}
+
+static int pad_slot(int id, jobject device)
+{
+    int free_slot = NO_DEVICE;
+    for (unsigned i = 0; i < MAX_PADS; ++i) {
+        if (pads[i].id == id || (pads[i].id != NO_DEVICE && pads[i].input_id == id)) return i;
+        if (free_slot == NO_DEVICE && pads[i].id == NO_DEVICE) free_slot = i;
+    }
+    int vendor = device ? (*env)->CallIntMethod(env, device, get_vendor) : 0;
+    int product = device ? (*env)->CallIntMethod(env, device, get_product) : 0;
+    if (is_rumble_endpoint(device)) {
+        int match = NO_DEVICE;
+        for (unsigned i = 0; i < MAX_PADS; ++i) {
+            if (pads[i].id == NO_DEVICE || !vendor || !product ||
+                pads[i].vendor != vendor || pads[i].product != product) continue;
+            if (match != NO_DEVICE) return NO_DEVICE;
+            match = i;
+        }
+        if (match == NO_DEVICE) return NO_DEVICE;
+        Pad *pad = &pads[match];
+        if (pad->input_id != pad->id) return NO_DEVICE;
+        pad->input_id = id;
+        configure_axes(pad, device);
+        publish(match);
+        __android_log_print(ANDROID_LOG_INFO, "OpenAmalur", "GAMEPAD companion device=%d slot=%d", id, match);
+        return match;
+    }
+    if (free_slot == NO_DEVICE) return NO_DEVICE;
+    Pad *pad = &pads[free_slot];
+    *pad = (Pad){ .id = id, .input_id = id, .vendor = vendor, .product = product };
+    configure_axes(pad, device);
     __android_log_print(ANDROID_LOG_INFO, "OpenAmalur", "GAMEPAD connected device=%d slot=%d", id, free_slot);
     publish(free_slot);
     return free_slot;
@@ -139,6 +170,8 @@ void oa_gamepad_init(JNIEnv *thread_env, jobject activity)
     get_ids = (*env)->GetStaticMethodID(env, input_device, "getDeviceIds", "()[I");
     get_device = (*env)->GetStaticMethodID(env, input_device, "getDevice", "(I)Landroid/view/InputDevice;");
     get_name = (*env)->GetMethodID(env, input_device, "getName", "()Ljava/lang/String;");
+    get_vendor = (*env)->GetMethodID(env, input_device, "getVendorId", "()I");
+    get_product = (*env)->GetMethodID(env, input_device, "getProductId", "()I");
     get_sources = (*env)->GetMethodID(env, input_device, "getSources", "()I");
     get_range = (*env)->GetMethodID(env, input_device, "getMotionRange", "(II)Landroid/view/InputDevice$MotionRange;");
     jclass range = (*env)->FindClass(env, "android/view/InputDevice$MotionRange");
@@ -183,6 +216,16 @@ void oa_gamepad_poll(void)
         if (pads[i].id == NO_DEVICE) continue;
         jobject dev = (*env)->CallStaticObjectMethod(env, input_device, get_device, pads[i].id);
         if (dev) {
+            if (pads[i].input_id != pads[i].id) {
+                jobject companion = (*env)->CallStaticObjectMethod(env, input_device, get_device, pads[i].input_id);
+                if (companion) (*env)->DeleteLocalRef(env, companion);
+                else {
+                    update_rumble(i, 0, 0);
+                    pads[i].input_id = pads[i].id;
+                    configure_axes(&pads[i], dev);
+                    publish(i);
+                }
+            }
             (*env)->DeleteLocalRef(env, dev);
             seen |= 1u << i;
         } else {
@@ -266,7 +309,8 @@ int oa_gamepad_input(AInputEvent *event)
     int type = AInputEvent_getType(event);
     int slot = NO_DEVICE;
     for (unsigned i = 0; i < MAX_PADS; ++i) {
-        if (pads[i].id == id) { slot = i; break; }
+        if (pads[i].id == NO_DEVICE) continue;
+        if (pads[i].id == id || pads[i].input_id == id) { slot = i; break; }
     }
     if (slot == NO_DEVICE && controller_source(source)) {
         jobject dev = (*env)->CallStaticObjectMethod(env, input_device, get_device, id);
@@ -275,6 +319,7 @@ int oa_gamepad_input(AInputEvent *event)
     }
     if (slot == NO_DEVICE) return controller_source(source);
     Pad *pad = &pads[slot];
+    if (id != pad->input_id) return controller_source(source);
     if (type == AINPUT_EVENT_TYPE_KEY) {
         int key = AKeyEvent_getKeyCode(event);
         int action = AKeyEvent_getAction(event);

@@ -414,12 +414,16 @@ uint32_t host_pad_rumble(uint32_t index, uint16_t left, uint16_t right)
     pthread_mutex_lock(&pad_lock);
     int connected = index < 4 && pad_connected[index];
     int changed = 0;
+    int started = 0;
     if (connected) {
         changed = pad_rumble[index][0] != left || pad_rumble[index][1] != right;
+        started = (left || right) && !pad_rumble[index][0] && !pad_rumble[index][1];
         pad_rumble[index][0] = left;
         pad_rumble[index][1] = right;
     }
     pthread_mutex_unlock(&pad_lock);
+    if (started) __android_log_print(ANDROID_LOG_INFO, "VeilRumble", "Game requested rumble on pad %u, left=%u right=%u",
+                                     index, left, right);
     if (changed) veil_tablet_wake_input();
     return connected ? 0 : 1167u;
 }
