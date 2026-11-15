@@ -251,7 +251,12 @@ typedef struct {
     int kind;
 } obj;
 
-#define MAX_GENS 8
+typedef struct {
+    vk_buffer buffer;
+    uint64_t last_used;
+} oa_buffer_generation;
+
+#define INLINE_BUFFER_GENERATIONS 8
 typedef struct oa_buffer {
     obj o;
     uint32_t size, usage, bind, cpu, misc, stride;
@@ -267,9 +272,9 @@ typedef struct oa_buffer {
     uint32_t upload_written;
     int upload_mapped, shadow_mapped;
     uint64_t audit_version;
-    vk_buffer gens[MAX_GENS];
-    uint64_t gen_used[MAX_GENS];
-    int ngens, cur;
+    oa_buffer_generation inline_gens[INLINE_BUFFER_GENERATIONS];
+    oa_buffer_generation *gens;
+    size_t ngens, gen_capacity, cur;
     UINT mapped_type;
 } oa_buffer;
 
@@ -1023,13 +1028,12 @@ static ULONG COM o_release(obj *o) {
 }
 
 static void destroy_obj(obj *o) {
-    int i;
     switch (o->kind) {
     case K_BUFFER: {
         oa_buffer *b = (oa_buffer *)o;
         forget_upload(b);
-        for (i = 0; i < b->ngens; i++) {
-            vk_buffer *gen = &b->gens[i];
+        for (size_t generation = 0; generation < b->ngens; generation++) {
+            vk_buffer *gen = &b->gens[generation].buffer;
             if (gen->pool_slot) {
                 dynamic_buffer_return(gen);
             } else {
@@ -1037,6 +1041,7 @@ static void destroy_obj(obj *o) {
                 pvkFreeMemory(g_dev, gen->mem, NULL);
             }
         }
+        if (b->gens != b->inline_gens) free(b->gens);
         if(b->shadow_allocation)rt_heap_free(b->shadow_allocation);else _aligned_free(b->shadow);
         break;
     }
@@ -1350,13 +1355,28 @@ static void upload_submit(void) {
 /* ---- device: resources ---- */
 static int buffer_add_gen(oa_buffer *b) {
     VkBufferUsageFlags u = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-    if (b->ngens >= MAX_GENS) return 0;
+    if (b->ngens == b->gen_capacity) {
+        if (b->gen_capacity > SIZE_MAX / sizeof(*b->gens) / 2) return 0;
+        size_t capacity = b->gen_capacity * 2;
+        oa_buffer_generation *gens;
+        if (b->gens == b->inline_gens) {
+            gens = malloc(capacity * sizeof(*gens));
+            if (gens) memcpy(gens, b->inline_gens, sizeof(b->inline_gens));
+        } else {
+            gens = realloc(b->gens, capacity * sizeof(*gens));
+        }
+        if (!gens) return 0;
+        b->gens = gens;
+        b->gen_capacity = capacity;
+    }
     const int place = g_dynamic_map_mode && b->size && b->size <= DYNAMIC_MAP_MAX_BUFFER &&
         b->usage == 2 && (b->bind & 3) && (b->cpu & 0x10000u);
-    vk_buffer *gen = &b->gens[b->ngens];
-    if (!(place ? dynamic_buffer_acquire(gen, b->size, u) : make_buffer(gen, b->size, u))) return 0;
-    b->gen_used[b->ngens] = 0;
-    b->ngens++;
+    oa_buffer_generation gen = {0};
+    if (!(place ? dynamic_buffer_acquire(&gen.buffer, b->size, u) :
+                  make_buffer(&gen.buffer, b->size, u))) return 0;
+    b->gens[b->ngens++] = gen;
+    if (b->ngens == INLINE_BUFFER_GENERATIONS + 1)
+        logf_("Vulkan expanded buffer generations: %u-byte buffer", b->size);
     return 1;
 }
 
@@ -1367,6 +1387,8 @@ static HRESULT COM d_create_buffer(obj *d, const uint32_t *desc, const oa_init *
     (void)d;
     if (!out) return S_OK_;
     b = (oa_buffer *)new_obj(sizeof(oa_buffer), K_BUFFER);
+    b->gens = b->inline_gens;
+    b->gen_capacity = INLINE_BUFFER_GENERATIONS;
     b->size = desc[0]; b->usage = desc[1]; b->bind = desc[2]; b->cpu = desc[3]; b->misc = desc[4]; b->stride = desc[5];
     if (b->bind & 4) {
         b->ring = 1;
@@ -1380,7 +1402,7 @@ static HRESULT COM d_create_buffer(obj *d, const uint32_t *desc, const oa_init *
         if (init) memcpy(b->shadow, init->mem, b->size);
     } else {
         if (!buffer_add_gen(b)) { logf_("buffer %u failed", b->size); free(b); return E_OOM_; }
-        if (init) memcpy(b->gens[0].ptr, init->mem, b->size);
+        if (init) memcpy(b->gens[0].buffer.ptr, init->mem, b->size);
     }
     *out = b;
     return S_OK_;
@@ -2324,7 +2346,7 @@ int oa_vk_guest_constant_map(void*resource,const void*data,size_t bytes,uint32_t
  }
  /* D3D11_MAP_WRITE_NO_OVERWRITE keeps the current GPU generation. */
  if(!g_dynamic_map_mode||__atomic_load_n(&b->mapped_type,__ATOMIC_RELAXED)!=5||bytes!=b->size)return 0;
- vk_buffer *gen=&b->gens[b->cur];
+ vk_buffer *gen=&b->gens[b->cur].buffer;
  if(!gen->pool_slot||data!=gen->ptr)return 0;
  *guest=gen->guest;
  static unsigned reported;
@@ -2342,18 +2364,18 @@ static HRESULT map_i(oa_context *c, obj *res, UINT sub, UINT type, UINT flags, o
             b->shadow_mapped = 1;
             m->p = b->shadow;
         } else {
-            if (type == 4 && b->gen_used[b->cur] >= g_done_frame && b->gen_used[b->cur] != 0) {
+            if (type == 4 && b->gens[b->cur].last_used > g_done_frame) {
                 /* Discard: move to a copy the GPU is not reading. */
-                int i, found = -1;
-                for (i = 0; i < b->ngens; i++)
-                    if (b->gen_used[i] == 0 || b->gen_used[i] <= g_done_frame) { found = i; break; }
-                if (found < 0) {
-                    if (buffer_add_gen(b)) found = b->ngens - 1;
-                    else { logf_("out of generations, buffer %u", b->size); found = b->cur; }
+                size_t next = 0;
+                while (next < b->ngens && b->gens[next].last_used > g_done_frame) next++;
+                if (next == b->ngens && !buffer_add_gen(b)) {
+                    logf_("Vulkan discard allocation failed: %u-byte buffer, %zu in-flight generations",
+                          b->size, b->ngens);
+                    return E_OOM_;
                 }
-                b->cur = found;
+                b->cur = next;
             }
-            m->p = b->gens[b->cur].ptr;
+            m->p = b->gens[b->cur].buffer.ptr;
             if (g_dynamic_map_mode) __atomic_store_n(&b->mapped_type,type,__ATOMIC_RELAXED);
         }
         m->row = m->slice = b->size;
@@ -2652,11 +2674,11 @@ static void write_stage(desc_build *d, const oa_shader_info *i, oa_buffer **cbs,
             b->range = x->size;
             d->dyn[d->nbuf - 1] = x->ring_off;
         } else if (x) {
-            b->buffer = x->gens[x->cur].buf;
+            b->buffer = x->gens[x->cur].buffer.buf;
             b->offset = 0;
             b->range = x->size;
             d->dyn[d->nbuf - 1] = 0;
-            x->gen_used[x->cur] = g_frame;
+            x->gens[x->cur].last_used = g_frame;
         } else {
             b->buffer = g_zero_ubo.buf;
             b->offset = 0;
@@ -2667,7 +2689,7 @@ static void write_stage(desc_build *d, const oa_shader_info *i, oa_buffer **cbs,
             pass_constants = audit_hash(pass_constants, x ? x->size : 0);
             if (x) {
                 const void *data = x->ring ?
-                    (x->upload_data ? x->upload_data : x->shadow) : x->gens[x->cur].ptr;
+                    (x->upload_data ? x->upload_data : x->shadow) : x->gens[x->cur].buffer.ptr;
                 pass_constants = audit_bytes(pass_constants, data, x->size);
             }
         }
@@ -2814,10 +2836,10 @@ static int prepare_draw(oa_context *c) {
         for (i = 0; i < 4; i++) {
             oa_buffer *b = c->vb[i];
             if (b && !b->ring) {
-                bufs[i] = b->gens[b->cur].buf;
+                bufs[i] = b->gens[b->cur].buffer.buf;
                 offs[i] = c->vb_off[i];
                 strides[i] = c->vb_stride[i];
-                b->gen_used[b->cur] = g_frame;
+                b->gens[b->cur].last_used = g_frame;
             } else {
                 bufs[i] = g_zero_ubo.buf;
                 offs[i] = 0;
@@ -2934,9 +2956,9 @@ static void draw_i(oa_context *c, UINT n, UINT first) {
 static void draw_indexed_i(oa_context *c, UINT n, UINT first, INT base) {
     if (!c->ib || c->ib->ring) { g_n_skip_ib++; return; }
     if (skip_intro_cart_particle(c) || pred_skips(c) || !prepare_draw(c)) return;
-    c->ib->gen_used[c->ib->cur] = g_frame;
+    c->ib->gens[c->ib->cur].last_used = g_frame;
     {
-        VkBuffer b = c->ib->gens[c->ib->cur].buf;
+        VkBuffer b = c->ib->gens[c->ib->cur].buffer.buf;
         uint32_t ty = c->ib_fmt == 42 ? VK_INDEX_TYPE_UINT32 : VK_INDEX_TYPE_UINT16;
         if (b != c->set_ib || c->ib_off != c->set_ib_off || ty != c->set_ib_type) {
             pvkCmdBindIndexBuffer(g_cur->cmd, b, c->ib_off, (VkIndexType)ty);
@@ -3241,7 +3263,6 @@ static void pipeline_cache_maybe_save(uint64_t frame);
 static uint64_t g_frames_shown;
 static int64_t g_t_wait, g_t_acquire, g_t_submit;
 void oa_perf_frame(uint64_t,unsigned,unsigned);
-#include "oa_pause_vk.inc"
 #include "oa_waterfall.inc"
 
 static HRESULT COM s_present(oa_chain *s, UINT sync, UINT flags) {
@@ -3265,7 +3286,6 @@ static HRESULT COM s_present(oa_chain *s, UINT sync, UINT flags) {
     hdr_poll(s);
     af_poll();
     oa_waterfall_render(s, f, c);
-    oa_pause_render(s, f);
     uint64_t window_generation;
     ANativeWindow *window=oa_android_present_lock(&window_generation);
     r=present_ensure_window(s,window,window_generation);

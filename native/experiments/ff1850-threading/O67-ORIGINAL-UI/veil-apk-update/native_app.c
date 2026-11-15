@@ -45,7 +45,6 @@ __attribute__((visibility("hidden"))) void veil_tablet_wake_input(void)
 }
 
 #include "display_android.h"
-#include "oa_pause.h"
 #include <time.h>
 enum { BASE_WIDTH = 1920, BASE_HEIGHT = 1080 };
 static int display_width, display_height;
@@ -53,12 +52,36 @@ static _Atomic int render_width, render_height;
 static _Atomic int buffer_width, buffer_height;
 static OaViewport display_viewport;
 #include "oa_android_window_lifecycle.h"
+
+static void game_window_size(ANativeActivity *activity, int *width, int *height)
+{
+    JNIEnv *env = NULL;
+    if ((*activity->vm)->GetEnv(activity->vm, (void **)&env, JNI_VERSION_1_6) != JNI_OK)
+        return;
+    jclass type = (*env)->GetObjectClass(env, activity->clazz);
+    jmethodID method = type ? (*env)->GetMethodID(env, type, "gameWindowSize", "()J") : NULL;
+    jlong size = method ? (*env)->CallLongMethod(env, activity->clazz, method) : 0;
+    if (type) (*env)->DeleteLocalRef(env, type);
+    if ((*env)->ExceptionCheck(env)) {
+        (*env)->ExceptionClear(env);
+        return;
+    }
+    int window_width = (int)((uint64_t)size >> 32);
+    int window_height = (int)((uint64_t)size & UINT32_MAX);
+    if (window_width > 0 && window_height > 0) {
+        *width = window_width;
+        *height = window_height;
+    }
+}
+
 /* Match the drawable to the physical display aspect and letterbox the game image. */
 static void configure_drawable(struct android_app *app)
 {
     ANativeWindow *window = app->window;
     display_width = ANativeWindow_getWidth(window);
     display_height = ANativeWindow_getHeight(window);
+    // A recreated surface can already have scaled buffer dimensions.
+    game_window_size(app->activity, &display_width, &display_height);
     if (display_width <= 0 || display_height <= 0) {
         display_width = BASE_WIDTH;
         display_height = BASE_HEIGHT;
@@ -272,7 +295,7 @@ static int intro_movie_input(AInputEvent *event)
 }
 
 static int32_t input(struct android_app*app,AInputEvent*e){(void)app;if(intro_movie_input(e)||oa_gamepad_input(e))return 1;int type=AInputEvent_getType(e);
-    if(type==AINPUT_EVENT_TYPE_KEY && oa_pause_input(e,0,0,render_width,render_height))return 1;if(type==AINPUT_EVENT_TYPE_KEY){int key=AKeyEvent_getKeyCode(e),action=AKeyEvent_getAction(e);unsigned vk=0;if(key>=AKEYCODE_A&&key<=AKEYCODE_Z)vk='A'+key-AKEYCODE_A;else if(key>=AKEYCODE_0&&key<=AKEYCODE_9)vk='0'+key-AKEYCODE_0;else if(key==AKEYCODE_ENTER||key==AKEYCODE_BUTTON_A)vk=13;else if(key==AKEYCODE_BACK||key==AKEYCODE_ESCAPE||key==AKEYCODE_BUTTON_B)vk=27;else if(key==AKEYCODE_SPACE)vk=32;if(vk&&(action==AKEY_EVENT_ACTION_DOWN||action==AKEY_EVENT_ACTION_UP)){rt_android_key(vk,scan_code(vk),0,action==AKEY_EVENT_ACTION_DOWN);return 1;}}else if(type==AINPUT_EVENT_TYPE_MOTION){int action=AMotionEvent_getAction(e)&AMOTION_EVENT_ACTION_MASK;int x=AMotionEvent_getX(e,0),y=AMotionEvent_getY(e,0);if(display_width>0&&display_height>0){
+    if(type==AINPUT_EVENT_TYPE_KEY){int key=AKeyEvent_getKeyCode(e),action=AKeyEvent_getAction(e);unsigned vk=0;if(key>=AKEYCODE_A&&key<=AKEYCODE_Z)vk='A'+key-AKEYCODE_A;else if(key>=AKEYCODE_0&&key<=AKEYCODE_9)vk='0'+key-AKEYCODE_0;else if(key==AKEYCODE_ENTER||key==AKEYCODE_BUTTON_A)vk=13;else if(key==AKEYCODE_BACK||key==AKEYCODE_ESCAPE||key==AKEYCODE_BUTTON_B)vk=27;else if(key==AKEYCODE_SPACE)vk=32;if(vk&&(action==AKEY_EVENT_ACTION_DOWN||action==AKEY_EVENT_ACTION_UP)){rt_android_key(vk,scan_code(vk),0,action==AKEY_EVENT_ACTION_DOWN);return 1;}}else if(type==AINPUT_EVENT_TYPE_MOTION){int action=AMotionEvent_getAction(e)&AMOTION_EVENT_ACTION_MASK;int x=AMotionEvent_getX(e,0),y=AMotionEvent_getY(e,0);if(display_width>0&&display_height>0){
         int cover = veil_title_cover_is_presented();
         if (cover) {
             OaViewport crop = oa_title_crop(display_width, display_height, render_width, render_height);
@@ -284,7 +307,6 @@ static int32_t input(struct android_app*app,AInputEvent*e){(void)app;if(intro_mo
             y = oa_viewport_input(y, display_viewport.y, display_viewport.height, render_height);
         }
     }
-    if(oa_pause_input(e,x,y,render_width,render_height))return 1;
     if ((AInputEvent_getSource(e) & AINPUT_SOURCE_TOUCHSCREEN) == AINPUT_SOURCE_TOUCHSCREEN) {
         if (action == AMOTION_EVENT_ACTION_DOWN) veil_tablet_touch_mode();
         if (death_menu_touch(action, x, y)) return 1;
@@ -300,14 +322,12 @@ static int32_t input(struct android_app*app,AInputEvent*e){(void)app;if(intro_mo
     rt_android_mouse_move(x,y);if(action==AMOTION_EVENT_ACTION_DOWN)rt_android_mouse_button(0,1,x,y);else if(action==AMOTION_EVENT_ACTION_UP||action==AMOTION_EVENT_ACTION_CANCEL)rt_android_mouse_button(0,0,x,y);return 1;}return 0;}
 void android_main(struct android_app *app)
 {
-    extern int oa_pause_poll_timeout(void);
     oa_app = app;
     pthread_mutex_lock(&input_looper_lock);
     input_looper = app->looper;
     pthread_mutex_unlock(&input_looper_lock);
     veil_waterfall_assets(app->activity->assetManager);
     veil_ambience_load(app->activity->assetManager);
-    oa_pause_configure(app->activity->assetManager, app->activity->externalDataPath);
     app->onAppCmd = app_cmd;
     app->onInputEvent = input;
     JNIEnv *env = NULL;
@@ -320,12 +340,11 @@ void android_main(struct android_app *app)
     while (!app->destroyRequested) {
         int events;
         struct android_poll_source *source = NULL;
-        int timeout = touch.due ? 10 : oa_pause_poll_timeout();
+        int timeout = touch.due ? 10 : 1000;
         int id = ALooper_pollOnce(timeout, NULL, &events, (void **)&source);
         if (id >= 0 && source) source->process(app, source);
         oa_gamepad_poll();
         veil_tablet_poll_actions();
-        oa_pause_poll();
         if (!oa_app->window) finish_touch();
         else poll_touch();
     }

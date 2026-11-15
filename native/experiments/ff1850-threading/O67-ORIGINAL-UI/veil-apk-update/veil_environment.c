@@ -13,10 +13,10 @@
 #include <time.h>
 #include <unistd.h>
 
-enum { NIGHT_AMBIENCE = 1, DAY_AMBIENCE = 2, DARKER_NIGHTS = 4 };
+enum { NIGHT_AMBIENCE = 1, DAY_AMBIENCE = 2, AMBIENCE_MASK = NIGHT_AMBIENCE | DAY_AMBIENCE };
 enum { MINUTES_PER_DAY = 1440, VOLUME_STEPS = 101 };
 enum { INDOORS, DAY, NIGHT };
-static _Atomic unsigned options = NIGHT_AMBIENCE | DAY_AMBIENCE;
+static _Atomic unsigned options = AMBIENCE_MASK;
 static _Atomic unsigned outdoor_sample;
 static _Atomic int last_period = -1;
 static _Atomic uint64_t sample_at;
@@ -46,7 +46,7 @@ static void load_settings(void)
     FILE *file = fopen(settings_path, "r");
     if (file) {
         unsigned saved;
-        if (fscanf(file, "%u", &saved) == 1) atomic_store(&options, saved);
+        if (fscanf(file, "%u", &saved) == 1) atomic_store(&options, saved & AMBIENCE_MASK);
         fclose(file);
     }
 }
@@ -69,7 +69,6 @@ static unsigned setting(const char *key)
 {
     if (!strcasecmp(key, "VeilNightAmbience")) return NIGHT_AMBIENCE;
     if (!strcasecmp(key, "VeilDayAmbience")) return DAY_AMBIENCE;
-    if (!strcasecmp(key, "VeilDarkerNights")) return DARKER_NIGHTS;
     return 0;
 }
 
@@ -132,15 +131,6 @@ static unsigned current_sample(void)
     if (!veil_tablet_gameplay_active() ||
         now_ms() - atomic_load(&sample_at) >= 1800) return 0;
     return atomic_load(&outdoor_sample);
-}
-
-float veil_night_darkness(void)
-{
-    if (!(atomic_load(&options) & DARKER_NIGHTS)) return 0;
-    int minute = (int)(current_sample() / VOLUME_STEPS) - 1;
-    if (minute < 0 || (minute >= 390 && minute <= 19 * 60)) return 0;
-    int transition = minute < 390 ? 390 - minute : minute - 19 * 60;
-    return .62f * (transition < 120 ? transition / 120.0f : 1.0f);
 }
 
 enum { CUE_RATE = 24000, CUES_PER_PERIOD = 3 };

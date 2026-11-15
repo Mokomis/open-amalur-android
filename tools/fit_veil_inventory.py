@@ -1,4 +1,4 @@
-"""Fit the inventory list and details, and connect Veil to the original Item Radial."""
+"""Fit Veil inventory and Options layouts, and connect the original Item Radial."""
 
 import argparse
 from hashlib import sha256
@@ -7,7 +7,7 @@ from struct import iter_unpack, pack, pack_into, unpack_from
 from zlib import crc32
 
 from amalur_script import parse_bytes
-from fit_veil_panels import BOTTOM, Layout, LEFT, RELATIVE_RIGHT, RELATIVE_WIDTH, RIGHT, WIDTH
+from fit_veil_panels import BOTTOM, HEIGHT, Layout, LEFT, RELATIVE_RIGHT, RELATIVE_WIDTH, RIGHT, TOP, WIDTH
 from generate_veil_edits import index_of, read_entry
 from mark_veil_name_dialog import BATCH_NAME
 from mark_veil_portraits import Code, constant_value, insert
@@ -44,6 +44,25 @@ def item_details(data):
         layout.set(node, {WIDTH: width - 2})
     layout.set(308, {LEFT: width - 3})
     layout.set(310, {WIDTH: width - 60})
+    return layout.encode()
+
+
+def options_navigation(data):
+    layout = Layout(data)
+    background = 117
+    last = layout.nodes[background][1]
+    while layout.nodes[last][2] != -1:
+        last = layout.nodes[last][2]
+
+    label = len(layout.nodes)
+    layout.nodes[last][2] = label
+    layout.nodes.extend(([background, label + 1, -1, 0, 0],
+                         [label, -1, label + 2, 0, 0],
+                         [label, -1, -1, 0, 0]))
+    layout.attributes.extend(layout.attributes[index][:] for index in (360, 361, 362))
+    layout.set(label, {3971938: "veil_category_controls", 900629: "LB / RB   Category",
+                       LEFT: 62, TOP: 456, WIDTH: 232, HEIGHT: 34})
+    layout.set(label + 2, {27695: 171, 15212: 147, 96669: 100})
     return layout.encode()
 
 
@@ -146,8 +165,11 @@ def add_hud_shortcut(data):
     return insert_callback(data, 14, 134, edit)
 
 
-def fix_workbench_tutorials(data):
+def fix_tutorial_text(data):
     lessons = (
+        (35926227, "Some reagents are harder to harvest than others. "
+                   "Improve your Alchemy skill to harvest them more reliably."),
+        (24620006, "You found a reagent. Use reagents to make potions at an Alchemy workbench."),
         (21980198, "Choose Create to brew a potion from a recipe you know. "
                    "Choose Experiment to mix reagents and discover new recipes."),
         (82674331, "Select reagents to add them to your mixture. Add at least two, then choose "
@@ -168,7 +190,7 @@ def fix_workbench_tutorials(data):
             code.op("EQ", 1, register, code.index(lesson) + 256)
             code.jump(lesson)
         code.jump("formatted")
-        # These lessons fail in the formatted string box and cannot complete.
+        # Render these lessons through the plain text path.
         for lesson, help_text in lessons:
             code.mark(lesson)
             code.load(7, help_text)
@@ -178,7 +200,30 @@ def fix_workbench_tutorials(data):
         code.labels["plain"] = len(code.words) + (238 - 226)
         return code, register + 1
 
-    return insert_callback(data, 1, 226, edit)
+    # Delay showing the timed gameplay panel until it contains text. If text
+    # rendering throws, the player no longer sees an empty backdrop.
+    def reveal_timed_panel(fn):
+        register = fn["maximum_stack_size"]
+        code = Code(fn)
+        code.glob(register, "m_timed_tutorial")
+        code.op("TEST", register)
+        code.jump("done")
+        code.native(register, "set_visible")
+        code.op("MOVE", register + 1, 4)
+        code.op("LOADBOOL", register + 2, 1)
+        code.op("CALL_I", register, 3, 1)
+        code.mark("done")
+        return code, register + 3
+
+    def show_untimed_panel(fn):
+        code = Code(fn)
+        code.glob(9, "m_timed_tutorial")
+        code.op("NOT", 9, 9)
+        return code, fn["maximum_stack_size"]
+
+    data = insert_callback(data, 1, 246, reveal_timed_panel)
+    data = insert_callback(data, 1, 226, edit)
+    return insert_callback(data, 1, 152, show_untimed_panel)
 
 
 def death_menu_touch(data):
@@ -272,7 +317,7 @@ def patch_batch(batch):
         13517: ("97640493b79252e5021fe7926d350cf8b07e2ef77ec9e99e6625c8256fd9e22b", fit_inventory_actions),
         13519: ("11d6e7136727c5f5f4de9893a3213fa7c67db1eb5d6cf1ebe6840ae6d2c29a20", mark_map),
         249501: ("c3e3ded912e0b540f37355d5c40b016c1ccec8de08e477b395b510f986ca8e00", mark_radial),
-        733459: ("2f6d2b0cce3818b49458bb7227c6a9e9809dd80f6946cfa15dec594ea8bf0682", fix_workbench_tutorials),
+        733459: ("2f6d2b0cce3818b49458bb7227c6a9e9809dd80f6946cfa15dec594ea8bf0682", fix_tutorial_text),
         1402689: ("4742faad4b62de5c170c4a260751a62d9b4babde6a8e8a857accf409159f2b8e", add_hud_shortcut),
     }
     directory, members = [], []
@@ -303,6 +348,7 @@ def main():
         layouts = (
             ("1653751.ui_bxml", "dbc9232275c3f30ff19e44666569943aee9ff8c24fe78a5e885c06e41bae18d9", inventory_list),
             ("1621434.ui_bxml", "e5e71867b3db7c866f86b037c004df4144b008123d3a01b432638665e8e3ad88", item_details),
+            ("1650829.ui_bxml", "f3edf7abefc7ccc27752f539f983d6cd85b5c8e09805e61e1cbaa278cd5502fa", options_navigation),
         )
         batch = read_entry(pak, index[crc32(BATCH_NAME.encode("ascii"))])
         (args.output / BATCH_NAME).write_bytes(patch_batch(batch))

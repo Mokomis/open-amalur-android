@@ -1,4 +1,5 @@
 #include "waterfall_state.h"
+#include <math.h>
 #include <waterfall_composite.h>
 
 enum { FALL_WIDTH = 256, FALL_HEIGHT = 320, FALL_FRAMES = 100 };

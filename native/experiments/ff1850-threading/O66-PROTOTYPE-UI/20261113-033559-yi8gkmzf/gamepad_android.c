@@ -11,6 +11,7 @@ extern void rt_android_pad(uint32_t index, int connected, uint16_t buttons,
                            uint8_t lt, uint8_t rt, int16_t lx, int16_t ly,
                            int16_t rx, int16_t ry);
 extern void rt_android_pad_rumble(uint32_t index, uint16_t *left, uint16_t *right);
+extern int veil_options_is_visible(void);
 
 enum { MAX_PADS = 4, NO_DEVICE = -1 };
 enum {
@@ -52,16 +53,19 @@ static int controller_source(int source)
            has_source(source, AINPUT_SOURCE_JOYSTICK);
 }
 
-#include "oa_pause.h"
-
 static void publish(unsigned slot)
 {
     const Pad *pad = &pads[slot];
-    if (oa_pause_pad(slot, pad->id != NO_DEVICE && focused,
-                     pad->buttons | pad->hat, pad->sticks[0], pad->sticks[1])) return;
-    rt_android_pad(slot, pad->id != NO_DEVICE && focused, pad->buttons | pad->hat,
-                   pad->trigger_key[0] ? UINT8_MAX : pad->trigger[0],
-                   pad->trigger_key[1] ? UINT8_MAX : pad->trigger[1],
+    uint16_t buttons = pad->buttons | pad->hat;
+    uint8_t left = pad->trigger_key[0] ? UINT8_MAX : pad->trigger[0];
+    uint8_t right = pad->trigger_key[1] ? UINT8_MAX : pad->trigger[1];
+    if (veil_options_is_visible()) {
+        // The original Options categories use the trigger actions.
+        if (buttons & LEFT_BUMPER) left = UINT8_MAX;
+        if (buttons & RIGHT_BUMPER) right = UINT8_MAX;
+        buttons &= ~(LEFT_BUMPER | RIGHT_BUMPER);
+    }
+    rt_android_pad(slot, pad->id != NO_DEVICE && focused, buttons, left, right,
                    pad->sticks[0], pad->sticks[1], pad->sticks[2], pad->sticks[3]);
 }
 

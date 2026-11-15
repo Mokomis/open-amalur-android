@@ -6,6 +6,8 @@ import android.content.Intent;
 import android.graphics.Canvas;
 import android.graphics.PixelFormat;
 import android.graphics.Paint;
+import android.graphics.Point;
+import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.Typeface;
 import android.os.Build;
@@ -92,6 +94,22 @@ public final class VeilActivity extends NativeActivity {
                 return;
             }
         }
+    }
+
+    @SuppressWarnings("deprecation")
+    private long gameWindowSize() {
+        int width, height;
+        if (Build.VERSION.SDK_INT >= 30) {
+            Rect bounds = getWindowManager().getCurrentWindowMetrics().getBounds();
+            width = bounds.width();
+            height = bounds.height();
+        } else {
+            Point size = new Point();
+            getWindowManager().getDefaultDisplay().getRealSize(size);
+            width = size.x;
+            height = size.y;
+        }
+        return ((long)width << 32) | (height & 0xffffffffL);
     }
 
     @Override protected void onActivityResult(int request, int result, Intent data) {

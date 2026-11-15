@@ -78,7 +78,6 @@ Veil uses compact lists and a consistent set of buttons, tabs, and prompts acros
 - **Shadow Map Resolution** offers 512, 1024, 1536, and 2048 px.
 - **Shadow Distance** and **Vegetation Draw Distance** each offer 75, 100, 125, and 150 percent.
 - **Ambient Occlusion** offers Off, On, and High. **Depth of Field** offers 0, 50, 100, and 150 percent. The menu identifies settings that take effect after a restart.
-- **Darker Nights** deepens shadows outdoors after dusk while preserving bright highlights. The setting defaults to Off and takes effect immediately.
 - **Direct startup** opens the title menu when setup is complete.
 - **First-launch import** copies game files from the selected Android folder and applies Veil automatically.
 - **GitHub release status** appears on the main menu and links to the release page when a newer version is available.

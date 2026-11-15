@@ -2,7 +2,6 @@
    and HUD stay in place. A side pass preserves the highlight overflow that
    its four-input scene/bloom/effects merge discards before color grading. */
 #include "oa_hdr_shaders.h"
-#include "veil_environment.h"
 
 typedef struct {
     oa_tex image;
@@ -192,8 +191,6 @@ static void draw_fullscreen(VkCommandBuffer cmd, VkPipeline pipeline, VkPipeline
     pvkCmdEndRendering(cmd);
 }
 
-#include "oa_night_grade.inc"
-
 static VkImageView hdr_texture_view(oa_tex *texture)
 {
     if (!texture->hdr_view)
@@ -239,7 +236,7 @@ static void hdr_capture_merge(oa_context *context)
         return;
 
     const void *data = buffer->ring ? (buffer->upload_data ? buffer->upload_data : buffer->shadow) :
-        (buffer->ngens ? buffer->gens[buffer->cur].ptr : NULL);
+        (buffer->ngens ? buffer->gens[buffer->cur].buffer.ptr : NULL);
     float values[9];
     if (!data) return;
     memcpy(values, data, sizeof(values));
@@ -259,7 +256,6 @@ static void hdr_capture_merge(oa_context *context)
             break;
         }
     }
-    night_grade(context, target);
     if (!hdr_active || target->w < 640) return;
     OaHdrFrame *frame = &hdr_frames[g_cur - g_f];
     if (frame->frame == g_frame) return;

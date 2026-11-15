@@ -10,9 +10,8 @@ from fit_veil_inventory import insert_callback
 from mark_veil_portraits import Code, constant_value, insert
 
 TOGGLES = (
-    ("Audio", "VeilNightAmbience", "Night Ambience", 1, None),
-    ("Audio", "VeilDayAmbience", "Day Ambience", 1, None),
-    ("Graphics", "VeilDarkerNights", "Darker Nights", 0, 6),
+    ("VeilNightAmbience", "Night Ambience"),
+    ("VeilDayAmbience", "Day Ambience"),
 )
 
 
@@ -42,7 +41,7 @@ def append_callbacks(data, key):
     return repack_script(data, parsed, result), len(children)
 
 
-def add_toggle(code, register, category, key, label, get, default, position):
+def add_audio_toggle(code, register, key, label, get):
     call, section, row, value, field, second = range(register, register + 6)
 
     def add_field(name, literal=None):
@@ -64,11 +63,11 @@ def add_toggle(code, register, category, key, label, get, default, position):
     code.op("DATA")
     code.op("DATA")
     code.glob(section, "m_options_list")
-    code.field(section, section, category)
+    code.field(section, section, "Audio")
     code.op("NEWTABLE", row, 0, 7)
     add_field("id", key)
     add_field("display", label)
-    add_field("default", default + 1)
+    add_field("default", 2)
     code.wide("CLOSURE", value, get)
     add_field("get")
     code.wide("CLOSURE", value, get + 1)
@@ -81,21 +80,16 @@ def add_toggle(code, register, category, key, label, get, default, position):
         code.load(second, menu)
         code.op("SETTABLE_S", value, second, field)
     add_field("menu_type")
-    if position is None:
-        code.op("CALL_I", call, 3, 1)
-    else:
-        code.op("MOVE", value, row, 0)
-        code.load(row, position)
-        code.op("CALL_I", call, 4, 1)
+    code.op("CALL_I", call, 3, 1)
 
 
 def patch_options(data):
     if sha256(data).hexdigest() != "3fa5cad9d1337b3a98f140221803026ac29a7a2f8d6cb83da3e271453374a861":
         raise ValueError("Unrecognized Veil options")
     callbacks = []
-    for category, key, label, default, position in TOGGLES:
+    for key, label in TOGGLES:
         data, get = append_callbacks(data, key)
-        callbacks.append((category, key, label, get, default, position))
+        callbacks.append((key, label, get))
     parsed = parse_bytes(data)
     fn = parsed["chunk"]["root_function"]
     base = fn["maximum_stack_size"]
@@ -106,7 +100,7 @@ def patch_options(data):
     code.op("SETLIST", base, 2, 1)
     code.wide("SETGLOBAL", base, code.index("m_veil_toggle_labels"))
     for row in callbacks:
-        add_toggle(code, base, *row)
+        add_audio_toggle(code, base, *row)
     start, end, replacement = insert(data, fn, 2914, code, base + 6)
     return repack_script(data, parsed, data[:start] + replacement + data[end:])
 
