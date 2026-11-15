@@ -35,8 +35,14 @@ AAsset *veil_waterfall_open(void)
 
 int veil_waterfall_command(const char *section, const char *key, const char *value)
 {
-    if (!key || !value || strcasecmp(section, "DEFAULT") || strcasecmp(key, "VeilWaterfall"))
+    if (!section || !key || !value || strcasecmp(section, "DEFAULT") || strcasecmp(key, "VeilWaterfall"))
         return -1;
+    if (!strcmp(value, "0")) {
+        pthread_mutex_lock(&portrait_lock);
+        last_seen = 0;
+        pthread_mutex_unlock(&portrait_lock);
+        return 1;
+    }
     VeilWaterfallRect next = {0};
     if (strcmp(value, "1")) {
         if (sscanf(value, "rect,%f,%f,%f,%f", &next.left, &next.top, &next.width, &next.height) != 4 ||

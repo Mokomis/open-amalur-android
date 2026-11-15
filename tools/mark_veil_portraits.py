@@ -125,10 +125,18 @@ def ledger(data):
     return data[:start] + branch.finish() + data[start + 4:]
 
 
-def other_portrait(data, child):
+def other_portrait(data, child, skip_race=False):
     parsed = parse_bytes(data)
     fn = parsed["chunk"]["root_function"]["children"][child]
     code = Code(fn)
+    if skip_race:
+        code.glob(10, "m_cur_phase")
+        code.load(11, 1)  # Race is the first entry in m_char_gen_phases.
+        code.op("EQ", 0, 10, 11)
+        code.jump("portrait")
+        code.load(12, "0")
+        code.jump("send")
+        code.mark("portrait")
     code.glob(10, "m_portrait_wrapper")
     code.op("TEST", 10)
     code.jump("done")
@@ -147,6 +155,7 @@ def other_portrait(data, child):
         if i < 3:
             code.load(dest + 1, ",")
     code.op("CONCAT", 12, 13, 20)
+    code.mark("send")
     code.glob(10, "GAME")
     code.field(10, 10, "set_personal_ini_entry_str")
     code.load(11, "VeilWaterfall")
@@ -164,7 +173,7 @@ def patch_batch(data):
     directory = []
     members = []
     edits = {13520: ledger, 256627: lambda payload: other_portrait(payload, 24),
-             417426: lambda payload: other_portrait(payload, 28)}
+             417426: lambda payload: other_portrait(payload, 28, skip_race=True)}
     for name, length in iter_unpack("<II", data[4:offset]):
         payload = data[offset:offset + length]
         offset += length
