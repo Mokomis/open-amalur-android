@@ -44,7 +44,18 @@ The project-authored code is [MIT licensed](LICENSE). [Third-party notices](THIR
 
 ## Assemble a local APK
 
-`tools/build_apk.py` compiles the Android app with SDK Platform 35, Android Build Tools 36.0.0 and JDK 21. It accepts the library produced above, your Veil edit recipe and metadata, and your own APK signing key. Run `python tools/build_apk.py --help` for the paths. Use a distinct `--application-id` when installing a build signed with your own key alongside an existing build.
+`tools/build_apk.py` compiles the Android app with SDK Platform 35, Android Build Tools 36.0.0 and JDK 21. It accepts the library produced above and your own APK signing key. The resulting APK can use the original game menus, and supplying both `--veil-edits` and `--veil-properties` applies your Veil edits.
+
+```powershell
+$java = 'C:\Program Files\Java\jdk-21'
+$sdk = "$env:LOCALAPPDATA\Android\Sdk"
+$env:JAVA_HOME = "$java"
+& "$java\bin\keytool.exe" -genkeypair -keystore build\local.jks -alias openamalur -keyalg RSA -keysize 2048 -validity 10000
+.\.venv\Scripts\python.exe tools/build_apk.py --sdk "$sdk" --jdk "$java" `
+    --library build/liboaoriginal.so --keystore build/local.jks --key-alias openamalur `
+    --application-id org.openamalur.local --output build/OpenAmalur-local.apk
+```
+ Use a distinct `--application-id` when installing a build signed with your own key alongside an existing build.
 
 `tools/generate_veil_edits.py` takes your original game directory, a locally modded `patch_0.pak`, and output paths for the recipe, properties and a local reference archive. Use the original and modded archives from the same supported game version. The captured portrait waterfall and current Veil font assets are not part of this source checkout. You can build with a recipe for your own menus, and the portrait capture can be supplied separately for local testing.
 

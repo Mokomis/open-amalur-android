@@ -19,6 +19,7 @@ import java.nio.file.Files;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -225,8 +226,10 @@ final class GameFiles {
                     copy(require(data, name, false), new File(gameData, name), null, BASE_ARCHIVE_BYTES[i]);
                 }
             }
-            new VeilPatch(context.getAssets(), PATCH_BYTES, PATCH_DIRECTORY, PATCH_HASH)
-                    .applyToRetail(patch, new File(gameData, "initial_0.pak"), progress);
+            if (hasVeilRecipe(context)) {
+                new VeilPatch(context.getAssets(), PATCH_BYTES, PATCH_DIRECTORY, PATCH_HASH)
+                        .applyToRetail(patch, new File(gameData, "initial_0.pak"), progress);
+            }
             File target = new File(gameData, "videos");
             makeDirectory(target);
             copy(title, new File(target, TITLE_VIDEO), TITLE_VIDEO_HASH, TITLE_VIDEO_BYTES);
@@ -254,9 +257,19 @@ final class GameFiles {
             throws IOException {
         File installed = installedGame(storage);
         if (installed == null) throw new IOException("Open Amalur could not find the installed game.");
+        if (!hasVeilRecipe(context)) return;
         File data = new File(installed, "game/data");
         new VeilPatch(context.getAssets(), PATCH_BYTES, PATCH_DIRECTORY, PATCH_HASH)
                 .update(new File(data, "patch_0.pak"), new File(data, "initial_0.pak"), progress);
+    }
+
+    private static boolean hasVeilRecipe(Context context) throws IOException {
+        String[] entries = context.getAssets().list("local-build");
+        if (entries == null) return false;
+        boolean edits = Arrays.asList(entries).contains("veil-edits.bin");
+        boolean metadata = Arrays.asList(entries).contains("veil-edits.properties");
+        if (edits != metadata) throw new IOException("This APK contains an incomplete Veil recipe.");
+        return edits;
     }
 
     private InputStream open(Uri uri) throws IOException {

@@ -1,4 +1,4 @@
-"""Package a locally built library and Veil recipe into an Android APK."""
+"""Package a locally built library into an Android APK with optional Veil menus."""
 
 import argparse
 import os
@@ -51,8 +51,9 @@ def build(args):
             apk.writestr("AndroidManifest.xml", compiled.read("AndroidManifest.xml"))
             apk.write(work / "classes.dex", "classes.dex")
             apk.write(args.library, "lib/arm64-v8a/liboaoriginal.so", compress_type=ZIP_STORED)
-            apk.write(args.veil_edits, "assets/local-build/veil-edits.bin")
-            apk.write(args.veil_properties, "assets/local-build/veil-edits.properties")
+            if args.veil_edits is not None:
+                apk.write(args.veil_edits, "assets/local-build/veil-edits.bin")
+                apk.write(args.veil_properties, "assets/local-build/veil-edits.properties")
             apk.write(ROOT / "LICENSE", "assets/licenses/Open-Amalur.txt")
             apk.write(ROOT / "THIRD_PARTY_NOTICES.md", "assets/licenses/Third-party-notices.md")
             apk.write(ROOT / "native/third-party/FAudio-0c423758/LICENSE", "assets/licenses/FAudio.txt")
@@ -76,8 +77,10 @@ def build(args):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    for name in ("sdk", "jdk", "library", "veil-edits", "veil-properties", "keystore", "output"):
+    for name in ("sdk", "jdk", "library", "keystore", "output"):
         parser.add_argument("--" + name, required=True, type=Path)
+    parser.add_argument("--veil-edits", type=Path)
+    parser.add_argument("--veil-properties", type=Path)
     parser.add_argument("--key-alias", required=True)
     parser.add_argument("--password-env", help="name of an environment variable with the keystore password")
     parser.add_argument("--application-id", default=PACKAGE)
@@ -86,6 +89,8 @@ def main():
     args = parser.parse_args()
     if not re.fullmatch(r"[A-Za-z][\w]*(?:\.[A-Za-z][\w]*)+", args.application_id, re.ASCII):
         parser.error("invalid Android application ID")
+    if (args.veil_edits is None) != (args.veil_properties is None):
+        parser.error("provide both Veil files or omit both for original menus")
     build(args)
 
 
