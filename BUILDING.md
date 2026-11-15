@@ -48,7 +48,7 @@ Add `--prepare-only` to stop after translation and source transformations. The g
 
 Project-written translation and instruction lowering live in `translator/`. The Android ABI, process, input and file adapters live in `native/`. [The native build plan](native/build-plan.json) records the exact sources and flags. It includes the synchronization, thread placement, frame presentation, visibility and Vulkan renderer components from the tested Android build. The authored shaders are under `native/shaders`. Android launcher and Veil importer sources are under `android/`.
 
-The project-authored code is [MIT licensed](LICENSE). [Third-party notices](THIRD_PARTY_NOTICES.md) apply to the included dependencies. Translation outputs and local game inputs stay on the player's machines.
+The project-authored code is [MIT licensed](LICENSE). [Third-party notices](THIRD_PARTY_NOTICES.md) apply to the included dependencies. Generated C and game inputs stay on the build machine. The public Android APK downloads the compiled ARM64 library from its matching GitHub release.
 
 ## Assemble an APK
 
