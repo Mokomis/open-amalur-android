@@ -24,12 +24,11 @@ Download the Android APK and Veil build assets from [GitHub Releases](https://gi
 
 ## How the engine runs
 
-The first approach reconstructed parts of the engine from the game's data. It made selected locations playable, but the work exposed how much behavior and rendering would need to be recreated. The current project starts from the original Windows x86 engine and uses its behavior on Windows as a reference.
+Open Amalur runs the original game engine as a **native ARM64 Android library**. On your PC, the build tools translate the original game executable’s x86 machine code into C and compile that C for Android. The finished library runs on the tablet and uses the original game data and scripts.
 
-1. Recover and test bounded parts of the original engine. The early comparisons followed animation jobs through expression evaluation, blend trees, transforms, skinning, and GPU submission. The tests checked Windows results against the original x86 program and then ran the corresponding compiled code on ARM.
-2. Repair the x86-to-C translation path. We qualified instruction handling, register and flag behavior, floating-point operations, and Windows calling conventions against the original program. The current Android build compiles translated code to ARM64 ahead of time.
-3. Provide the Windows services the game expects. Android adapters handle threads and synchronization, file access, input, audio, local profiles and saves, and window and surface events. The graphics layer maps the game's Direct3D 11 work to Vulkan. On-device tests progressed from isolated scenes and captured graphics to live gameplay.
-4. Rebuild the original engine’s threading for Android. A substantial part of the port went into getting the original engine to distribute its work across multiple ARM CPU cores. We rebuilt the Windows threading and synchronization services the engine relies on, corrected how it discovers available cores, and changed how waiting workers are notified when jobs complete. We profiled the simulation, graphics recording, and background workers on the OPPO against matched gameplay scenes.
+- **Engine behavior.** We used matched inputs to compare the Android build with the original PC game, checking instruction handling, floating-point behavior, animation blending, skinning, and GPU submission.
+- **Android integration.** The runtime provides file access, input, audio, local profiles, saves, and display handling. The graphics layer translates the engine’s Direct3D 11 calls to Vulkan.
+- **Multicore threading.** We reworked how the engine discovers available CPU cores, synchronizes jobs, and wakes workers as jobs finish. We profiled simulation, graphics recording, and background work across multiple cores on the OPPO Pad Mini.
 
 The live tests so far are concentrated on the OPPO Pad Mini. Performance varies with scene, resolution, device, and temperature. Compatibility across the full campaign and the Fatesworn expansion is still being checked.
 
