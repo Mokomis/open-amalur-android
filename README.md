@@ -55,9 +55,9 @@ In a clean OPPO Pad Mini test with networking disabled, the signed v0.1.6 APK im
 Veil uses compact lists and a consistent set of buttons, tabs, and prompts across the menus. The APK includes the animated Allestar Glade waterfall used in Veil portraits. The menu font is Jost. [Edge UI](https://www.nexusmods.com/skyrimspecialedition/mods/130983) · [Jost license](android/licenses/Jost-OFL.txt)
 
 - **Main and pause menus** with a redesigned options sidebar and dedicated settings lists.
-- **Inventory, stash, and equipment** with compact item lists, a separate details pane, equipped-item markers, and appearance controls.
+- **Inventory, stash, and equipment** with compact item lists, a separate details pane, equipped-item markers, and appearance controls. Consumables can be mapped to the Item Radial. Weapons use Primary and Secondary slots.
 - **Character and progression screens** for stats, skills, abilities, destinies, and character creation. The four character creation screens use Veil-framed portraits with the animated Allestar Glade waterfall.
-- **Quest log and maps** with side-by-side quest lists and objectives, Veil map controls, and touch confirmation for quest tutorials.
+- **Quest log and maps** with side-by-side quest lists and objectives, pinch-to-zoom on maps, and touch confirmation for quest tutorials.
 - **Save and load** with full-screen slots and a touch action for creating or overwriting a save. Overwriting keeps the game's confirmation prompt.
 - **Dialogue** with tap selection, a draggable wheel in conversations that use one, and an on-screen Skip control.
 - **Trading, stash, and NPC services** including buying, selling, repair, training, and healing. Veil also covers alchemy, blacksmithing, sagecrafting, lockpicking, and the timed Dispel screen.
@@ -65,11 +65,12 @@ Veil uses compact lists and a consistent set of buttons, tabs, and prompts acros
 ### Gameplay and controls
 
 - **Transmog** changes the look of equipped armor and same-type weapons, such as a sword taking the appearance of another sword. The equipped item retains its stats. Appearance choices are saved with the character.
-- **Tablet controls** provide separate movement and camera sticks, Run/Leap, attacks, dodge, block, interaction, abilities, and shortcuts for the game menu, inventory, world map, and quests.
+- **Tablet controls** provide separate movement and camera sticks, Run/Leap, attacks, dodge, block, interaction, and shortcuts for the game menu, inventory, world map, quests, and Item Radial.
 - **Touch layout editor** moves and resizes individual controls and saves the layout.
-- **Ability and Reckoning controls** include a tappable 1–9/0 ability bar, on-screen LT and RT prompts, touch finishers, and Continue buttons on screens that require a controller button or key.
+- **Ability and Reckoning controls** include a tappable 1–9/0 ability bar, a Cast button for the selected spell, on-screen LT and RT prompts, touch finishers, and Continue buttons on screens that require a controller button or key.
 - **Controller support** covers gameplay and menu navigation.
 - **Camera Bounding** limits how far the camera pulls back during group fights.
+- **Outdoor ambience** plays occasional wildlife sounds according to the in-game clock. Day Ambience and Night Ambience can be turned on or off independently in Audio and follow the Effects Volume setting.
 
 ### Graphics and Android integration
 
@@ -77,6 +78,7 @@ Veil uses compact lists and a consistent set of buttons, tabs, and prompts acros
 - **Shadow Map Resolution** offers 512, 1024, 1536, and 2048 px.
 - **Shadow Distance** and **Vegetation Draw Distance** each offer 75, 100, 125, and 150 percent.
 - **Ambient Occlusion** offers Off, On, and High. **Depth of Field** offers 0, 50, 100, and 150 percent. The menu identifies settings that take effect after a restart.
+- **Darker Nights** deepens shadows outdoors after dusk while preserving bright highlights. The setting defaults to Off and takes effect immediately.
 - **Direct startup** opens the title menu when setup is complete.
 - **First-launch import** copies game files from the selected Android folder and applies Veil automatically.
 - **GitHub release status** appears on the main menu and links to the release page when a newer version is available.

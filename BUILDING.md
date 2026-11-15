@@ -80,6 +80,8 @@ Pass the resulting menu atlas files to `generate_veil_edits.py --replace` when r
 
 `tools/mark_veil_name_dialog.py` takes the Veil archive and writes a replacement UI script batch. Use it after applying the portrait and cutscene changes. The markers let the original dialog receive touches while it owns modal input.
 
+`tools/fit_veil_inventory.py` takes the Veil archive with the name-dialog changes and writes two inventory layouts and an updated UI script batch. Run `tools/patch_veil_environment.py` on that generated batch before passing the three replacements to `generate_veil_edits.py`. The APK builder includes the ambience clips and their credits automatically.
+
 The launcher reads shared game files directly. It checks the game version and validates the copied files, creates a local profile, and detects Fatesworn from its optional archive in `data_1278260`. The title screen's Game Files action can import the same archive into an existing install. The GitHub update badge is independent of game startup once the required files are installed.
 
 ## Verification

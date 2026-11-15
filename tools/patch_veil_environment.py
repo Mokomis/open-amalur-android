@@ -9,6 +9,12 @@ from amalur_script import parse_bytes
 from fit_veil_inventory import insert_callback
 from mark_veil_portraits import Code, constant_value, insert
 
+TOGGLES = (
+    ("Audio", "VeilNightAmbience", "Night Ambience", 1, None),
+    ("Audio", "VeilDayAmbience", "Day Ambience", 1, None),
+    ("Graphics", "VeilDarkerNights", "Darker Nights", 0, 6),
+)
+
 
 def repack_script(data, parsed, replacement):
     offset = parsed["wrapper"]["payload_file_offset"]
@@ -36,7 +42,7 @@ def append_callbacks(data, key):
     return repack_script(data, parsed, result), len(children)
 
 
-def add_toggle(code, register, category, key, label, get, default):
+def add_toggle(code, register, category, key, label, get, default, position):
     call, section, row, value, field, second = range(register, register + 6)
 
     def add_field(name, literal=None):
@@ -75,13 +81,21 @@ def add_toggle(code, register, category, key, label, get, default):
         code.load(second, menu)
         code.op("SETTABLE_S", value, second, field)
     add_field("menu_type")
-    code.op("CALL_I", call, 3, 1)
+    if position is None:
+        code.op("CALL_I", call, 3, 1)
+    else:
+        code.op("MOVE", value, row, 0)
+        code.load(row, position)
+        code.op("CALL_I", call, 4, 1)
 
 
 def patch_options(data):
     if sha256(data).hexdigest() != "3fa5cad9d1337b3a98f140221803026ac29a7a2f8d6cb83da3e271453374a861":
         raise ValueError("Unrecognized Veil options")
-    data, get = append_callbacks(data, "VeilNightAmbience")
+    callbacks = []
+    for category, key, label, default, position in TOGGLES:
+        data, get = append_callbacks(data, key)
+        callbacks.append((category, key, label, get, default, position))
     parsed = parse_bytes(data)
     fn = parsed["chunk"]["root_function"]
     base = fn["maximum_stack_size"]
@@ -91,7 +105,8 @@ def patch_options(data):
     code.load(base + 2, "On")
     code.op("SETLIST", base, 2, 1)
     code.wide("SETGLOBAL", base, code.index("m_veil_toggle_labels"))
-    add_toggle(code, base, "Audio", "VeilNightAmbience", "Night Ambience", get, 1)
+    for row in callbacks:
+        add_toggle(code, base, *row)
     start, end, replacement = insert(data, fn, 2914, code, base + 6)
     return repack_script(data, parsed, data[:start] + replacement + data[end:])
 

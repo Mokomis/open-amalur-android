@@ -9,6 +9,7 @@ SHADERS = {
         ("fullscreen.vert", "oa_hdr_vertex"),
         ("highlights.frag", "oa_hdr_merge_fragment"),
         ("hdr_present.frag", "oa_hdr_output_fragment"),
+        ("night_grade.frag", "oa_night_grade_fragment"),
     ),
     "oa_pause_spv.h": (
         ("pause.vert", "oa_pause_vertex"),

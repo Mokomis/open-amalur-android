@@ -2,6 +2,7 @@
    and HUD stay in place. A side pass preserves the highlight overflow that
    its four-input scene/bloom/effects merge discards before color grading. */
 #include "oa_hdr_shaders.h"
+#include "veil_environment.h"
 
 typedef struct {
     oa_tex image;
@@ -163,9 +164,9 @@ static void hdr_write_images(VkDescriptorSet set, VkDescriptorImageInfo *images,
     pvkUpdateDescriptorSets(g_dev, count, writes, 0, NULL);
 }
 
-static void hdr_draw(VkCommandBuffer cmd, VkPipeline pipeline, VkDescriptorSet set,
-                     VkImageView target, VkImageLayout image_layout, VkExtent2D extent,
-                     VkRect2D rect, float parameter, float paper_white)
+static void draw_fullscreen(VkCommandBuffer cmd, VkPipeline pipeline, VkPipelineLayout layout,
+                            VkDescriptorSet set, VkImageView target, VkImageLayout image_layout,
+                            VkExtent2D extent, VkRect2D rect, float parameter, float paper_white)
 {
     const VkRenderingAttachmentInfo color = {
         .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
@@ -184,12 +185,14 @@ static void hdr_draw(VkCommandBuffer cmd, VkPipeline pipeline, VkDescriptorSet s
     pvkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
     pvkCmdSetViewport(cmd, 0, 1, &viewport);
     pvkCmdSetScissor(cmd, 0, 1, &rect);
-    pvkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, hdr_layout, 0, 1, &set, 0, NULL);
+    pvkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, 0, 1, &set, 0, NULL);
     const float push[] = {parameter, paper_white};
-    pvkCmdPushConstants(cmd, hdr_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), push);
+    pvkCmdPushConstants(cmd, layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push), push);
     pvkCmdDraw(cmd, 3, 1, 0, 0);
     pvkCmdEndRendering(cmd);
 }
+
+#include "oa_night_grade.inc"
 
 static VkImageView hdr_texture_view(oa_tex *texture)
 {
@@ -230,7 +233,7 @@ static void hdr_capture_merge(oa_context *context)
         lut->tex->w != 256 || lut->tex->h != 16 || !scene || !effects || !bloom ||
         !scene->view || !effects->view || !bloom->view || !buffer || buffer->size < 36)
         return;
-    if (target->w < 640 || scene->tex->w != target->w || scene->tex->h != target->h ||
+    if (scene->tex->w != target->w || scene->tex->h != target->h ||
         effects->tex->w != target->w || effects->tex->h != target->h ||
         bloom->tex->w != (target->w + 2) / 4 || bloom->tex->h != (target->h + 2) / 4)
         return;
@@ -256,7 +259,8 @@ static void hdr_capture_merge(oa_context *context)
             break;
         }
     }
-    if (!hdr_active) return;
+    night_grade(context, target);
+    if (!hdr_active || target->w < 640) return;
     OaHdrFrame *frame = &hdr_frames[g_cur - g_f];
     if (frame->frame == g_frame) return;
     VkExtent2D extent = {(target->w + 1) / 2, (target->h + 1) / 2};
@@ -275,8 +279,8 @@ static void hdr_capture_merge(oa_context *context)
     barrier_all(g_cur->cmd);
     image_layout(g_cur->cmd, frame->image.image, VK_IMAGE_ASPECT_COLOR_BIT,
                  VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-    hdr_draw(g_cur->cmd, hdr_merge_pipeline, frame->merge_set, frame->view, VK_IMAGE_LAYOUT_GENERAL,
-             extent, (VkRect2D){{0, 0}, extent}, values[8], 0.0f);
+    draw_fullscreen(g_cur->cmd, hdr_merge_pipeline, hdr_layout, frame->merge_set, frame->view,
+                    VK_IMAGE_LAYOUT_GENERAL, extent, (VkRect2D){{0, 0}, extent}, values[8], 0.0f);
     context->pipeline_valid = 0;
     context->cache_valid = 0;
     frame->frame = g_frame;
@@ -350,7 +354,8 @@ static void hdr_render_present(oa_chain *chain, oa_frame *frame, uint32_t index)
     VkRect2D viewport = {{centered.x, centered.y}, {(uint32_t)centered.width, (uint32_t)centered.height}};
     barrier_all(frame->cmd);
     image_layout(frame->cmd, image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-    hdr_draw(frame->cmd, hdr_output_pipeline(chain->swap_fmt), highlights->output_set, target,
-             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, chain->extent, viewport, (float)have_highlights, hdr_paper_white);
+    draw_fullscreen(frame->cmd, hdr_output_pipeline(chain->swap_fmt), hdr_layout,
+                    highlights->output_set, target, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                    chain->extent, viewport, (float)have_highlights, hdr_paper_white);
     image_layout(frame->cmd, image, VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 }

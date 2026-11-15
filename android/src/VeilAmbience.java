@@ -12,8 +12,12 @@ import java.util.Random;
 
 final class VeilAmbience {
     private static final String TAG = "VeilAmbience";
-    private static final String[] CUES = {"night-crickets", "night-owl", "night-treefrog"};
-    private static native int volume();
+    private static final int CUES_PER_PERIOD = 3;
+    private static final String[] CUES = {
+        "day-thrush", "day-flicker", "day-grasshopper",
+        "night-crickets", "night-owl", "night-treefrog",
+    };
+    private static native int current();
 
     private final Context context;
     private final Random random = new Random();
@@ -22,6 +26,7 @@ final class VeilAmbience {
     private SoundPool pool;
     private long nextCheck, nextCue;
     private int stream;
+    private int activePeriod;
     private int previous = -1;
 
     VeilAmbience(Context context) {
@@ -53,18 +58,22 @@ final class VeilAmbience {
         long now = SystemClock.uptimeMillis();
         if (now < nextCheck) return;
         nextCheck = now + 200;
-        int strength = volume();
-        if (strength == 0) {
+        int sample = current();
+        int period = sample >> 7;
+        int strength = sample & 127;
+        if (activePeriod != period) {
             stop();
-            return;
+            activePeriod = period;
         }
+        if (period == 0) return;
         if (pool == null) load();
         if (nextCue == 0) nextCue = now + 2500 + random.nextInt(5000);
         if (now < nextCue) return;
 
-        int start = random.nextInt(samples.length);
-        for (int offset = 0; offset < samples.length; offset++) {
-            int index = (start + offset) % samples.length;
+        int first = (period - 1) * CUES_PER_PERIOD;
+        int start = random.nextInt(CUES_PER_PERIOD);
+        for (int offset = 0; offset < CUES_PER_PERIOD; offset++) {
+            int index = first + (start + offset) % CUES_PER_PERIOD;
             if (!loaded[index] || index == previous) continue;
             float gain = strength * .0025f;
             float pan = random.nextFloat() * .44f - .22f;
@@ -85,6 +94,7 @@ final class VeilAmbience {
         if (pool != null && stream != 0) pool.stop(stream);
         stream = 0;
         nextCue = 0;
+        activePeriod = 0;
     }
 
     void release() {
