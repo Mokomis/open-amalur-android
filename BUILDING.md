@@ -6,6 +6,14 @@ Install the signed APK from [GitHub Releases](https://github.com/Mokomis/open-am
 
 Install updates over the existing app to preserve saves, settings, and touch layouts. The release APK includes the Allestar Glade waterfall used in Veil portraits.
 
+## Android resolution choices
+
+Options → Resolution lists the distinct sizes returned by Android for the display hosting the game, plus the current window size and the existing 1920×1080 and 960×540 performance presets. Portrait mode dimensions are shown in landscape order, and modes that differ only in refresh rate share one resolution choice. A selection takes effect after restarting the game. Saved dimensions remain valid if Android changes its mode ordering; unavailable sizes fall back to 1920×1080.
+
+The app queries [`Display.getSupportedModes()`](https://developer.android.com/reference/android/view/Display#getSupportedModes()). The physical modes offered by Android vary by device; a device can expose only one physical size. Hardware Scaling remains a separate percentage of the selected resolution.
+
+When preparing a new Veil recipe, run `tools/patch_veil_display_modes.py` on the current `134230570_klua.batch`, then pass the output as a replacement to `generate_veil_edits.py` with the previous release metadata. The dynamic selector requires the matching Android engine. Run `python tools/tests/test_display_resolutions.py` on a host with a C compiler to verify enumeration, preference migration and mode reordering.
+
 ## Build from source
 
 Use these steps if you want to develop or mod the engine. The build translates the supported Windows x86 binaries to C and compiles that C to Android ARM64. It runs on a Windows x86-64 PC.

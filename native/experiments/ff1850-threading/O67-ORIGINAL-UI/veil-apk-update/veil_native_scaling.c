@@ -1,6 +1,8 @@
 #include "veil_native_scaling.h"
 
 #include <limits.h>
+#include <stdlib.h>
+#include <errno.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <string.h>
@@ -14,10 +16,48 @@ static char settings_path[PATH_MAX];
 static char resolution_path[PATH_MAX];
 static int display_width = 1920;
 static int display_height = 1080;
-enum { FULL_HD, NATIVE_DISPLAY, HALF_HD };
-static const char *const resolution_modes[] = {"100", "native", "50"};
-static int requested_resolution = FULL_HD;
-static int active_resolution = FULL_HD;
+typedef struct { int width, height; } Resolution;
+static Resolution fallback_resolutions[3] = {{1920, 1080}, {1920, 1080}, {960, 540}};
+static Resolution *resolutions = fallback_resolutions;
+static int resolution_count;
+static int native_resolution;
+static int requested_resolution;
+static int active_resolution;
+
+// A launch owns one immutable list: indices cannot change underneath an open
+// options menu. Persist dimensions, not OS mode IDs or enumeration order.
+static int add_resolution(int width, int height)
+{
+    if (width <= 0 || height <= 0) return -1;
+    if (height > width) { int swap = width; width = height; height = swap; }
+    for (int i = 0; i < resolution_count; ++i)
+        if (resolutions[i].width == width && resolutions[i].height == height) return i;
+    resolutions[resolution_count] = (Resolution){width, height};
+    return resolution_count++;
+}
+
+void veil_display_resolutions(const int *sizes, int count, int width, int height)
+{
+    pthread_mutex_lock(&lock);
+    if (!resolution_count) {
+        if (!sizes || count < 0) count = 0;
+        Resolution *items = calloc((size_t)count + 3, sizeof *items);
+        if (items) resolutions = items;
+        else count = 0;
+        add_resolution(1920, 1080);
+        native_resolution = add_resolution(width > 0 ? width : 1920, height > 0 ? height : 1080);
+        add_resolution(960, 540);
+        for (int i = 0; i < count; ++i) add_resolution(sizes[2*i], sizes[2*i+1]);
+    }
+    pthread_mutex_unlock(&lock);
+}
+
+static int resolution_index(int width, int height)
+{
+    for (int i = 0; i < resolution_count; ++i)
+        if (resolutions[i].width == width && resolutions[i].height == height) return i;
+    return 0;
+}
 static int initialized;
 static const int percentages[] = {0, 25, 50, 75, 100};
 enum { DEFAULT_PRESET = 4, PRESET_COUNT = sizeof percentages / sizeof percentages[0] };
@@ -60,6 +100,7 @@ int veil_native_scaling_percent(const char *root)
 int veil_render_resolution(const char *root, int window_width, int window_height,
                            int *width, int *height)
 {
+    veil_display_resolutions(NULL, 0, window_width, window_height);
     pthread_mutex_lock(&lock);
     display_width = window_width;
     display_height = window_height;
@@ -70,23 +111,23 @@ int veil_render_resolution(const char *root, int window_width, int window_height
         } else {
             FILE *file = fopen(resolution_path, "r");
             if (file) {
-                char mode[16];
-                if (fscanf(file, "%15s", mode) == 1) {
-                    for (int i = FULL_HD; i <= HALF_HD; ++i) {
-                        if (!strcmp(mode, resolution_modes[i])) {
-                            requested_resolution = i;
-                            break;
-                        }
-                    }
+                char mode[64], extra;
+                int width, height;
+                if (fscanf(file, "%63s", mode) == 1) {
+                    if (!strcmp(mode, "native")) requested_resolution = native_resolution;
+                    else if (!strcmp(mode, "50")) requested_resolution = resolution_index(960, 540);
+                    else if (sscanf(mode, "%dx%d%c", &width, &height, &extra) == 2)
+                        requested_resolution = resolution_index(width, height);
+                    // Legacy "100" and unavailable sizes use the safe 1920x1080 default.
                 }
                 fclose(file);
             }
         }
         active_resolution = requested_resolution;
     }
-    int native = active_resolution == NATIVE_DISPLAY;
-    *width = native ? display_width : active_resolution == HALF_HD ? 960 : 1920;
-    *height = native ? display_height : active_resolution == HALF_HD ? 540 : 1080;
+    int native = active_resolution == native_resolution;
+    *width = resolutions[active_resolution].width;
+    *height = resolutions[active_resolution].height;
     pthread_mutex_unlock(&lock);
     return native;
 }
@@ -97,7 +138,17 @@ int veil_native_scaling_read(const char *section, const char *key, char *value)
         return 0;
     pthread_mutex_lock(&lock);
     int handled = 1;
-    if (!strcasecmp(key, setting_key))
+    int mode_index;
+    char extra;
+    if (!strcasecmp(key, "VeilResolutionCount"))
+        snprintf(value, 8, "%d", resolution_count);
+    else if (sscanf(key, "VeilResolutionWidth%d%c", &mode_index, &extra) == 1 &&
+             mode_index >= 0 && mode_index < resolution_count)
+        snprintf(value, 8, "%d", resolutions[mode_index].width);
+    else if (sscanf(key, "VeilResolutionHeight%d%c", &mode_index, &extra) == 1 &&
+             mode_index >= 0 && mode_index < resolution_count)
+        snprintf(value, 8, "%d", resolutions[mode_index].height);
+    else if (!strcasecmp(key, setting_key))
         snprintf(value, 8, "%d", requested);
     else if (!strcasecmp(key, active_key))
         snprintf(value, 8, "%d", active);
@@ -110,7 +161,7 @@ int veil_native_scaling_read(const char *section, const char *key, char *value)
         int menu_width = 720 * display_width / display_height;
         // A native narrow backbuffer has no presentation crop to move the
         // title content left. Match the inset of the cropped widescreen title.
-        if (active_resolution == NATIVE_DISPLAY && menu_width < 1280)
+        if (active_resolution == native_resolution && menu_width < 1280)
             left -= (1280 - menu_width) * 3 / 8;
         snprintf(value, 8, "%d", left > 60 ? left : 60);
     } else if (!strcasecmp(key, "VeilOptionsWidth")) {
@@ -153,15 +204,23 @@ int veil_native_scaling_write(const char *section, const char *key, const char *
     int resolution = !strcasecmp(key, "VeilRenderResolution");
     if (!resolution && strcasecmp(key, setting_key))
         return -1;
-    int last_preset = resolution ? HALF_HD : PRESET_COUNT - 1;
-    if (!value || value[0] < '0' || value[0] > '0' + last_preset || value[1])
-        return 0;
-    int preset = value[0] - '0';
+    if (!value || !*value) return 0;
+    char *end;
+    errno = 0;
+    long parsed = strtol(value, &end, 10);
+    if (errno || *end || parsed < 0 || parsed > INT_MAX) return 0;
+    int preset = (int)parsed;
 
     pthread_mutex_lock(&lock);
+    if (preset >= (resolution ? resolution_count : PRESET_COUNT)) {
+        pthread_mutex_unlock(&lock);
+        return 0;
+    }
     int ok;
     if (resolution) {
-        ok = save_setting(resolution_path, resolution_modes[preset]);
+        char dimensions[64];
+        snprintf(dimensions, sizeof dimensions, "%dx%d", resolutions[preset].width, resolutions[preset].height);
+        ok = save_setting(resolution_path, dimensions);
         if (ok)
             requested_resolution = preset;
     } else {
