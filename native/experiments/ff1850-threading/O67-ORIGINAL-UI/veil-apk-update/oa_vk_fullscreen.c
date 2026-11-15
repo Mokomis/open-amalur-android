@@ -117,7 +117,7 @@ typedef struct {
 } vk_buffer;
 
 static int make_buffer_with_mapping(vk_buffer *b, VkDeviceSize size,
-                                    VkBufferUsageFlags usage, int place) {
+                                    VkBufferUsageFlags usage, int place, int prefer_cached) {
     VkBufferCreateInfo ci = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
     VkMemoryRequirements r;
     VkMemoryAllocateInfo ai = {VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
@@ -126,9 +126,20 @@ static int make_buffer_with_mapping(vk_buffer *b, VkDeviceSize size,
     if (pvkCreateBuffer(g_dev, &ci, NULL, &b->buf)) return 0;
     pvkGetBufferMemoryRequirements(g_dev, b->buf, &r);
     ai.allocationSize = r.size;
-    ai.memoryTypeIndex = mem_type(r.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-    if (pvkAllocateMemory(g_dev, &ai, NULL, &b->mem)) {
-        ai.memoryTypeIndex = mem_type(r.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+    const VkMemoryPropertyFlags coherent = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    const VkMemoryPropertyFlags cached = coherent | VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
+    VkResult allocated = VK_ERROR_FEATURE_NOT_PRESENT;
+    if (prefer_cached) {
+        ai.memoryTypeIndex = mem_type(r.memoryTypeBits, cached, coherent);
+        if ((g_mem.memoryTypes[ai.memoryTypeIndex].propertyFlags & cached) == cached)
+            allocated = pvkAllocateMemory(g_dev, &ai, NULL, &b->mem);
+    }
+    if (allocated != VK_SUCCESS) {
+        ai.memoryTypeIndex = mem_type(r.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | coherent, coherent);
+        allocated = pvkAllocateMemory(g_dev, &ai, NULL, &b->mem);
+    }
+    if (allocated != VK_SUCCESS) {
+        ai.memoryTypeIndex = mem_type(r.memoryTypeBits, coherent, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
         if (pvkAllocateMemory(g_dev, &ai, NULL, &b->mem)) {
             pvkDestroyBuffer(g_dev,b->buf,NULL);
             memset(b,0,sizeof *b);
@@ -193,7 +204,7 @@ failed:
 }
 
 static int make_buffer(vk_buffer *b, VkDeviceSize size, VkBufferUsageFlags usage) {
-    return make_buffer_with_mapping(b, size, usage, 0);
+    return make_buffer_with_mapping(b, size, usage, 0, 0);
 }
 
 /* The driver can drop a reserved address on vkFreeMemory. Keep placed
@@ -207,7 +218,7 @@ typedef struct {
 static DynamicBufferSlot dynamic_buffers[DYNAMIC_BUFFER_SLOTS];
 static pthread_mutex_t dynamic_buffer_lock = PTHREAD_MUTEX_INITIALIZER;
 
-static int dynamic_buffer_acquire(vk_buffer *buffer, uint32_t bytes, VkBufferUsageFlags usage)
+static int dynamic_buffer_acquire(vk_buffer *buffer, uint32_t bytes, VkBufferUsageFlags usage, int prefer_cached)
 {
     unsigned slot = DYNAMIC_BUFFER_SLOTS;
     pthread_mutex_lock(&dynamic_buffer_lock);
@@ -226,7 +237,7 @@ static int dynamic_buffer_acquire(vk_buffer *buffer, uint32_t bytes, VkBufferUsa
     pthread_mutex_unlock(&dynamic_buffer_lock);
     if (slot == DYNAMIC_BUFFER_SLOTS) return make_buffer(buffer, bytes, usage);
 
-    int result = make_buffer_with_mapping(buffer, bytes, usage, 2);
+    int result = make_buffer_with_mapping(buffer, bytes, usage, 2, prefer_cached);
     pthread_mutex_lock(&dynamic_buffer_lock);
     if (result && buffer->guest) {
         buffer->pool_slot = slot + 1;
@@ -1384,9 +1395,16 @@ static int buffer_add_gen(oa_buffer *b) {
     }
     const int place = g_dynamic_map_mode && b->size && b->size <= DYNAMIC_MAP_MAX_BUFFER &&
         b->usage == 2 && (b->bind & 3) && (b->cpu & 0x10000u);
+    int prefer_cached = 0;
+#ifdef _WIN32
+    /* The guest Map bridge reads the current vertex/index contents to find
+       changed bytes on NO_OVERWRITE. Reads from write-combined VRAM can stall
+       for milliseconds even though the GPU has finished the previous frame. */
+    prefer_cached = b->usage == 2 && (b->bind & 3) && (b->cpu & 0x10000u);
+#endif
     oa_buffer_generation gen = {0};
-    if (!(place ? dynamic_buffer_acquire(&gen.buffer, b->size, u) :
-                  make_buffer(&gen.buffer, b->size, u))) return 0;
+    if (!(place ? dynamic_buffer_acquire(&gen.buffer, b->size, u, prefer_cached) :
+                  make_buffer_with_mapping(&gen.buffer, b->size, u, 0, prefer_cached))) return 0;
     b->gens[b->ngens++] = gen;
     if (b->ngens == INLINE_BUFFER_GENERATIONS + 1)
         logf_("Vulkan expanded buffer generations: %u-byte buffer", b->size);
@@ -3790,7 +3808,7 @@ static int init_vulkan(void) {
                 g_f[i].qreset = QUERY_MAX;
             }
             if (!make_buffer_with_mapping(&g_f[i].rings[0], RING_SIZE,
-                    VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 1)) {
+                    VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 1, 0)) {
                 logf_("ring failed");
                 return 0;
             }
