@@ -6,7 +6,7 @@ This started as a personal experiment. I wanted to see if I could use AI to get 
 
 Open Amalur is unequivocally an AI-first project. I led the work and used ChatGPT, Claude, and Qwen throughout. If that’s a deal-breaker for you, this is your cue to walk away.
 
-Open Amalur is a recompilation of the original *Re-Reckoning* engine. The translator and runtime are open source, and you build the engine from your own copy of the game.
+Open Amalur is a recompilation of the original *Re-Reckoning* engine. The translator and runtime are open source. The Android app runs the prebuilt engine with the game files from your own copy.
 
 I substantially reworked the engine’s threading to improve how it schedules simulation, rendering, and background jobs across multiple CPU cores.
 
@@ -20,11 +20,13 @@ Veil draws visual inspiration from other interfaces, including Edge for Skyrim. 
 
 ## Download and install
 
-Download the Android APK and Veil build assets from [GitHub Releases](https://github.com/Mokomis/open-amalur-android/releases/latest). The [build and install guide](BUILDING.md) explains how to use your copy of Re-Reckoning.
+1. On your Android device, download the APK from [GitHub Releases](https://github.com/Mokomis/open-amalur-android/releases/latest) and install it.
+2. Open Open Amalur and select the Re-Reckoning folder containing `koa.exe` and `data`.
+3. Starting with v0.1.5, setup downloads the prebuilt ARM64 engine and any required support file, imports your game files, and opens the game. Internet access is needed for the first setup. You can play offline afterward.
 
 ## How the engine runs
 
-Open Amalur runs the original game engine as a **native ARM64 Android library**. On your PC, the build tools translate the original game executable’s x86 machine code into C and compile that C for Android. The finished library runs on the tablet and uses the original game data and scripts.
+Open Amalur runs the original game engine as a **native ARM64 Android library**. The project’s build tools translate the original game executable’s x86 machine code into C and compile it for Android. Setup downloads the resulting library, then runs it on the tablet with the original game data and scripts.
 
 - **Engine behavior.** We used matched inputs to compare the Android build with the original PC game, checking instruction handling, floating-point behavior, animation blending, skinning, and GPU submission.
 - **Android integration.** The runtime provides file access, input, audio, local profiles, saves, and display handling. The graphics layer translates the engine’s Direct3D 11 calls to Vulkan.
@@ -32,7 +34,7 @@ Open Amalur runs the original game engine as a **native ARM64 Android library**.
 
 The live tests so far are concentrated on the OPPO Pad Mini. Performance varies with scene, resolution, device, and temperature. Compatibility across the full campaign and the Fatesworn expansion is still being checked.
 
-[Read the engine and threading notes](ENGINE.md) · [Build the Android native library](BUILDING.md).
+[Read the engine and threading notes](ENGINE.md) · [Build the engine from source](BUILDING.md#build-from-source).
 
 ## Added features
 
@@ -87,13 +89,13 @@ Captured on the OPPO Pad Mini. Select an image to open it at full size.
 
 ## Game files
 
-You will need your own supported PC installation of Re-Reckoning. This repository contains the project source, native build instructions, and documentation. Commercial game files, extracted game assets, generated engine translations, saves, and signing keys stay private.
+You will need a supported copy of your Re-Reckoning game files on Android. This repository contains the project source, native build instructions, and documentation. Full game installations, generated C sources, saves, and signing keys stay local.
 
-Build the engine once on Windows from your game files and copy the resulting `liboaoriginal.so` to Android. The release APK asks for that file after importing the game. It includes the prepared waterfall loop for Veil portraits. [Build and install guide](BUILDING.md)
+The release APK includes the prepared waterfall loop for Veil portraits. [Install and build guide](BUILDING.md)
 
 The tested candidate recognizes Steam build 10619381 of Re-Reckoning. First-launch setup asks for the game folder. Keep the English, French, and German game archives together because the engine opens all three at startup. Keep `data/videos/well.bik` in the source folder for the animated main menu. Setup can restore that file to an existing install.
 
-The importer reads the selected folder directly. Steam, a Steam sign-in, and an internet connection are unnecessary for play. The update badge uses GitHub when a connection is available. Put the matching 32-bit Microsoft `d3dcompiler_43.dll` in that folder to import everything in one step. Setup can also ask for the DLL separately.
+The importer reads the selected folder directly. Setup uses an internet connection to fetch the engine and, if needed, the matching shader compiler from Microsoft. Play works offline once setup is complete. The update badge checks GitHub when a connection is available.
 
 If the folder contains a supported `data_1278260/dlc_mit_0.pak`, setup imports Fatesworn with the base game. To add Fatesworn later, open **Game Files** at the title screen, select **Add Fatesworn**, and choose the updated Re-Reckoning folder or its `data_1278260` folder. Open Amalur verifies and copies the expansion. Close and reopen the app to load it.
 

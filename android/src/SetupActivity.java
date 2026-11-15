@@ -105,10 +105,7 @@ public final class SetupActivity extends Activity {
                         runOnUiThread(() -> status.setText(total > 0
                                 ? String.format(Locale.ROOT, "Importing %s (%d%%)", name, copied * 100 / total)
                                 : "Importing " + name + "…"))).install(compiler);
-                prepareGame();
-                runOnUiThread(this::startEngine);
-            } catch (LocalEngine.EngineRequired missing) {
-                runOnUiThread(() -> showEngineRequest(missing.getMessage()));
+                runOnUiThread(this::launchExistingGame);
             } catch (GameFiles.CompilerRequired missing) {
                 runOnUiThread(() -> {
                     status.setText(missing.getMessage());
@@ -177,7 +174,10 @@ public final class SetupActivity extends Activity {
     }
 
     private void prepareGame() throws IOException {
-        LocalEngine.load(getApplicationContext());
+        LocalEngine.prepare(getApplicationContext(), (message, copied, total) ->
+                runOnUiThread(() -> status.setText(total > 0
+                        ? String.format(Locale.ROOT, "%s (%d%%)", message, copied * 100 / total)
+                        : message + "…")));
         GameFiles.updateInstalledVeil(getApplicationContext(), getExternalFilesDir(null),
                 (message, copied, total) -> runOnUiThread(() -> status.setText(total > 0
                         ? String.format(Locale.ROOT, "%s (%d%%)", message, copied * 100 / total) : message + "…")));

@@ -1,8 +1,16 @@
-# Build the Android native library
+# Install and build Open Amalur
 
-The build translates the supported Windows x86 binaries to C and compiles that C to Android ARM64. Use a Windows x86-64 PC for the build. An Android device can run the resulting library inside an APK.
+## Install on Android
 
-## Inputs
+Install the signed APK from [GitHub Releases](https://github.com/Mokomis/open-amalur-android/releases/latest) and select your Re-Reckoning folder. Starting with v0.1.5, the app downloads the ARM64 engine, checks the SHA-256 pinned in the APK, and installs it automatically. If the game folder lacks the matching shader compiler, setup fetches it from Microsoft. Once setup finishes, the game runs offline.
+
+Install updates over the existing app to preserve saves, settings, and touch layouts. An update reuses the installed engine when its SHA-256 matches. The release APK includes the Allestar Glade waterfall used in Veil portraits.
+
+## Build from source
+
+Use these steps if you want to develop or mod the engine. The build translates the supported Windows x86 binaries to C and compiles that C to Android ARM64. It runs on a Windows x86-64 PC.
+
+### Inputs
 
 - A supported Steam installation of Kingdoms of Amalur: Re-Reckoning, version `cs:15032` (Steam build 10619381). Set the game directory to the folder with `koa.exe` and `binkw32.dll`.
 - The matching 32-bit Microsoft `d3dcompiler_43.dll`, typically in `C:\Windows\SysWOW64` after installing the legacy DirectX runtime. The builder checks all three files and rebases a copy of the compiler DLL in its output directory.
@@ -10,7 +18,7 @@ The build translates the supported Windows x86 binaries to C and compiles that C
 - [LLVM-mingw 20261006](https://github.com/mstorsjo/llvm-mingw/releases/tag/20261006), Windows x86-64 UCRT. Use its `bin` directory.
 - [Android NDK r30](https://developer.android.com/ndk/downloads) for Windows, version `30.0.16248370`. The Veil hooks verify generated ARM instructions and require this compiler.
 
-## Build
+### Compile the engine
 
 From a checkout, run these PowerShell commands after setting the three directories to your local paths.
 
@@ -29,14 +37,6 @@ $ndk = 'C:\tools\android-ndk-r30'
 ```
 
 The library is `build/liboaoriginal.so`. The build prints its SHA-256 and leaves per-module translation logs and compiler diagnostics in the output directory. Use a new output directory for another build. `--jobs` sets the compiler worker count.
-
-## Install with the release APK
-
-Build the engine from the matching release tag on Windows, then copy `build/liboaoriginal.so` to shared storage on Android. Install the signed release APK and choose your Re-Reckoning folder. When prompted, choose the engine file you built. The app verifies the library against the SHA-256 in the signed APK before loading it. Building and installing work offline once the listed tools and game files are available.
-
-An update reuses the installed engine when its SHA-256 is unchanged. If a release changes the engine, rebuild from that release tag and select the new library at the prompt. Keep the app installed when upgrading to preserve its saves, settings and touch layout.
-
-The release APK includes the animated Allestar Glade waterfall used in Veil portraits. Setup needs only the game files and locally built engine.
 
 ## Modding the generated engine
 
@@ -66,7 +66,7 @@ $env:JAVA_HOME = "$java"
 
 Use a distinct `--application-id` when installing a build signed with your own key alongside an existing build.
 
-To assemble a release launcher, replace `--library build/liboaoriginal.so` with `--local-engine build/liboaoriginal.so --ndk "$ndk"` and supply the Veil recipe and pause overlay. The APK records the engine SHA-256 and packages the launcher. Pass the release application ID and use its existing signing key for a normal Android upgrade.
+To assemble a release launcher, replace `--library build/liboaoriginal.so` with `--local-engine build/liboaoriginal.so --ndk "$ndk" --download-engine` and supply the Veil recipe and pause overlay. The APK records the engine SHA-256 and the version-specific download address. Upload that exact `liboaoriginal.so` to the matching GitHub release. Pass the release application ID and use its existing signing key for a normal Android upgrade.
 
 Extract the build-assets ZIP from the matching [GitHub release](https://github.com/Mokomis/open-amalur-android/releases) and pass `veil-edits.bin` to `--veil-edits`, `veil-edits.properties` to `--veil-properties`, `oa_prototype_ui.bin` to `--prototype-ui`, and `veil-waterfall.bc3` to `--waterfall`. The included `engine.sha256` gives the expected hash of the locally built library.
 
@@ -80,7 +80,7 @@ Pass the resulting menu atlas files to `generate_veil_edits.py --replace` when r
 
 `tools/fit_veil_panels.py` and `tools/mark_veil_portraits.py` take a compatible local Veil archive and an output folder. They produce the responsive quest, save, equipment and character creation layouts, the portrait rendering hooks, and the opening cutscene markers for `--replace`.
 
-The launcher works from shared game files without Steam or Internet access. It checks the game version and validates the copied files, creates a local profile, and detects Fatesworn from its optional archive in `data_1278260`. The title screen's Game Files action can import the same archive into an existing install. The GitHub update badge is independent of game startup.
+The launcher reads shared game files directly. It checks the game version and validates the copied files, creates a local profile, and detects Fatesworn from its optional archive in `data_1278260`. The title screen's Game Files action can import the same archive into an existing install. The GitHub update badge is independent of game startup once the required files are installed.
 
 ## Verification
 

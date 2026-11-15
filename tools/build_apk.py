@@ -11,6 +11,7 @@ from zipfile import ZIP_DEFLATED, ZIP_STORED, ZipFile
 
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = "org.openamalur.originalengine"
+ENGINE_RELEASES = "https://github.com/Mokomis/open-amalur-android/releases/download"
 WATERFALL_BYTES = 256 * 320 * 100
 
 
@@ -70,6 +71,10 @@ def build(args):
             apk.write(library, "lib/arm64-v8a/" + library_name, compress_type=ZIP_STORED)
             if engine_pin is not None:
                 apk.writestr("assets/local-build/engine.sha256", engine_pin)
+                if args.download_engine:
+                    version, = re.findall(r'android:versionName="([0-9]+\.[0-9]+\.[0-9]+)"', manifest)
+                    apk.writestr("assets/local-build/engine.url",
+                                 f"{ENGINE_RELEASES}/v{version}/liboaoriginal.so\n")
             if args.veil_edits is not None:
                 apk.write(args.veil_edits, "assets/local-build/veil-edits.bin")
                 apk.write(args.veil_properties, "assets/local-build/veil-edits.properties")
@@ -102,6 +107,8 @@ def main():
     engine.add_argument("--library", type=Path, help="embed an engine in a personal APK")
     engine.add_argument("--local-engine", type=Path, help="record the expected engine hash without embedding it")
     parser.add_argument("--ndk", type=Path, help="Android NDK used to build the launcher")
+    parser.add_argument("--download-engine", action="store_true",
+                        help="download the matching liboaoriginal.so from GitHub during setup")
     parser.add_argument("--veil-edits", type=Path)
     parser.add_argument("--veil-properties", type=Path)
     parser.add_argument("--key-alias", required=True)
@@ -116,6 +123,8 @@ def main():
         parser.error("provide both Veil files or omit both for original menus")
     if args.local_engine is not None and args.ndk is None:
         parser.error("--local-engine requires --ndk")
+    if args.download_engine and args.local_engine is None:
+        parser.error("--download-engine requires --local-engine")
     if args.waterfall is not None and (
         not args.waterfall.is_file() or args.waterfall.stat().st_size != WATERFALL_BYTES
     ):

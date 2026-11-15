@@ -237,10 +237,10 @@ final class GameFiles {
         Entry bink = require(root, "binkw32.dll", false);
         for (String name : BASE_ARCHIVES) require(data, name, false);
         Entry compilerInFolder = root.get("d3dcompiler_43.dll");
-        if (shaderCompiler == null) {
-            if (compilerInFolder == null || compilerInFolder.directory) throw new CompilerRequired();
+        if (shaderCompiler == null && compilerInFolder != null && !compilerInFolder.directory) {
             shaderCompiler = compilerInFolder.uri;
         }
+        if (shaderCompiler == null && !LocalEngine.downloadEnabled(context)) throw new CompilerRequired();
         Entry depot = root.get(FATESWORN_DIR);
         Entry fatesworn = depot == null ? null
                 : require(list(require(root, FATESWORN_DIR, true).id), FATESWORN_ARCHIVE, false);
@@ -252,7 +252,13 @@ final class GameFiles {
         try {
             copy(executable, new File(stage, "koa.exe"), EXE_HASH, 23741952L);
             copy(bink, new File(stage, "binkw32.dll"), BINK_HASH, 198144L);
-            prepareCompiler(shaderCompiler, new File(stage, "d3dcompiler_43.dll"));
+            File compiler = new File(stage, "d3dcompiler_43.dll");
+            if (shaderCompiler == null) {
+                progress.report("Microsoft’s shader compiler", 0, 0);
+                prepareCompiler(CompilerDownload.fetch(), compiler);
+            } else {
+                prepareCompiler(shaderCompiler, compiler);
+            }
             File game = new File(stage, "game");
             File gameData = new File(game, "data");
             makeDirectory(gameData);
@@ -347,7 +353,7 @@ final class GameFiles {
     }
 
     private void prepareCompiler(Uri uri, File target) throws IOException {
-        byte[] bytes = new byte[2106216];
+        byte[] bytes = new byte[CompilerDownload.DLL_BYTES];
         try (InputStream input = new BufferedInputStream(open(uri))) {
             int copied = 0;
             while (copied < bytes.length) {
@@ -357,6 +363,10 @@ final class GameFiles {
             }
             if (input.read() != -1) throw new IOException("Select the supported 32-bit Microsoft d3dcompiler_43.dll.");
         }
+        prepareCompiler(bytes, target);
+    }
+
+    private static void prepareCompiler(byte[] bytes, File target) throws IOException {
         String hash = hex(sha256().digest(bytes));
         if (COMPILER_HASH.equals(hash)) {
             rebaseCompiler(bytes);
