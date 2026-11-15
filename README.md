@@ -1,4 +1,4 @@
-# Open Amalur
+<img src="screenshots/open-amalur-icon.png" width="112" height="112" alt="Open Amalur icon">
 
 Right. Let’s get this out of the way so we don’t waste each other’s time.
 
@@ -73,7 +73,7 @@ The OPPO Pad Mini test confirmed that the engine detects and mounts the supporte
 
 ### Screenshots
 
-Captured on the OPPO Pad Mini. Select an image to open it at full size.
+Captured in v0.1.5 on the OPPO Pad Mini. Select an image to open it at full size.
 
 | Touch controls | Inventory and equipment details |
 | --- | --- |
@@ -81,11 +81,11 @@ Captured on the OPPO Pad Mini. Select an image to open it at full size.
 | **Character screen** | **Quest log** |
 | [![Character screen with the waterfall backdrop](screenshots/character.jpg)](screenshots/character.jpg) | [![Quest list alongside objectives](screenshots/quest-log.jpg)](screenshots/quest-log.jpg) |
 | **Dialogue wheel** | **Save screen** |
-| [![Dialogue wheel in a conversation with Agarth](screenshots/dialogue.jpg)](screenshots/dialogue.jpg) | [![Save slots with the selected save’s preview and details](screenshots/save.jpg)](screenshots/save.jpg) |
+| [![Dialogue options in a conversation with Aewin Rathgar](screenshots/dialogue.jpg)](screenshots/dialogue.jpg) | [![Save slots with the selected save’s preview and details](screenshots/save.jpg)](screenshots/save.jpg) |
 | **Title screen and update status** | **First-launch folder setup** |
 | [![Main menu showing GitHub release status](screenshots/title-updates.jpg)](screenshots/title-updates.jpg) | [![First-launch prompt to choose the Re-Reckoning folder](screenshots/setup.jpg)](screenshots/setup.jpg) |
 | **Veil Graphics** | |
-| [![Graphics options with Android hardware scaling, shadow resolution and distance, ambient occlusion, and depth of field](screenshots/graphics.jpg)](screenshots/graphics.jpg) | |
+| [![Graphics options with shadow resolution and distance, vegetation draw distance, ambient occlusion, and depth of field](screenshots/graphics.jpg)](screenshots/graphics.jpg) | |
 
 ## Game files
 
