@@ -1283,7 +1283,13 @@ static void *ring_alloc(uint32_t size, VkBuffer *buf, uint32_t *off) {
 static void desc_retire_pools(void);
 #define QUERY_MAX 32768u
 static long g_n_culled, g_n_tests, g_n_test_skipped;
+#ifdef _WIN32
+/* Previous-frame predicate results can suppress visible draws on Windows.
+   Draw those objects unconditionally to avoid intermittent pink surfaces. */
+static const int g_cull = 0;
+#else
 static int g_cull = 1;
+#endif
 
 static void read_queries(oa_frame *f) {
     static uint32_t r[QUERY_MAX];
@@ -3485,8 +3491,10 @@ static HRESULT COM s_present(oa_chain *s, UINT sync, UINT flags) {
                    (unsigned long long)__atomic_load_n(&texture_upload_fallbacks,__ATOMIC_RELAXED),
                    (unsigned long long)__atomic_load_n(&texture_upload_staging_bytes,__ATOMIC_RELAXED));
         }
+#ifndef _WIN32
         int want = GetFileAttributesA("Z:\\storage\\emulated\\0\\Download\\oa\\nocull") == INVALID_FILE_ATTRIBUTES && GetFileAttributesA("nocull") == INVALID_FILE_ATTRIBUTES;
         if (want != g_cull) { g_cull = want; logf_("culling %s at frame %llu", want ? "on" : "off", (unsigned long long)g_frames_shown); }
+#endif
     }
 
     static int last_draw_preparation = -1;
