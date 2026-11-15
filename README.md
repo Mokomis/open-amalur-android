@@ -6,8 +6,6 @@ This started as a personal experiment. I wanted to see if I could use AI to get 
 
 Open Amalur is unequivocally an AI-first project. I led the work and used ChatGPT, Claude, and Qwen throughout. If that’s a deal-breaker for you, this is your cue to walk away.
 
-Getting the game running was easier than I expected, thanks to those tools. Making it feel good to play on a tablet turned a small experiment into a much bigger project. The result is a version of Amalur I actually want to play on Android.
-
 Open Amalur is a recompilation of the original *Re-Reckoning* engine. The translator and runtime are open source, and you build the engine from your own copy of the game.
 
 I substantially reworked the engine’s threading to improve how it schedules simulation, rendering, and background jobs across multiple CPU cores.
@@ -103,3 +101,9 @@ If the folder contains a supported `data_1278260/dlc_mit_0.pak`, setup imports F
 The Android folder picker can see game folders on shared storage. If your DroidDeck library is installed inside DroidDeck's private storage, copy the game folder into a shared Steam library or a folder such as `Documents/Amalur` before importing. [Android file picker access](https://developer.android.com/training/data-storage/shared/documents-files) · [DroidDeck](https://github.com/Droid-Deck/DroidDeck)
 
 Open Amalur is a fan project and is independent of THQ Nordic and Kaiko.
+
+## AI contributors
+
+- ChatGPT
+- Claude
+- Qwen
