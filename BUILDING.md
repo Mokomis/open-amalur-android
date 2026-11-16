@@ -6,6 +6,14 @@ Install the signed APK from [GitHub Releases](https://github.com/Mokomis/open-am
 
 Install updates over the existing app to preserve saves, settings, and touch layouts. The release APK includes the Allestar Glade waterfall used in Veil portraits.
 
+## Android resolution choices
+
+Options → Resolution lists the distinct sizes returned by Android for the display hosting the game, plus the current window size and the existing 1920×1080 and 960×540 performance presets. Portrait mode dimensions are shown in landscape order, and modes that differ only in refresh rate share one resolution choice. A selection takes effect after restarting the game. Saved dimensions remain valid if Android changes its mode ordering; unavailable sizes fall back to 1920×1080.
+
+The app queries [`Display.getSupportedModes()`](https://developer.android.com/reference/android/view/Display#getSupportedModes()). The physical modes offered by Android vary by device; a device can expose only one physical size. Hardware Scaling remains a separate percentage of the selected resolution.
+
+When preparing a new Veil recipe, run `tools/patch_veil_display_modes.py` on the current `134230570_klua.batch`, then pass the output as a replacement to `generate_veil_edits.py` with the previous release metadata. The dynamic selector requires the matching Android engine. Run `python tools/tests/test_display_resolutions.py` on a host with a C compiler to verify enumeration, preference migration and mode reordering.
+
 ## Build from source
 
 Use these steps if you want to develop or mod the engine. The build translates the supported Windows x86 binaries to C and compiles that C to Android ARM64. It runs on a Windows x86-64 PC.
@@ -99,10 +107,14 @@ $python = '.\.venv\Scripts\python.exe'
 & $python tools/build_native.py --prepare-only --game-dir $game --llvm-bin $llvm --output build\translation
 & $python tools/build_windows.py --translation build\translation --llvm-bin $llvm --ndk $ndk --output build\windows
 
-$apk = 'C:\path\to\open-amalur-veil-0.1.8-release.apk'
+$apk = 'C:\path\to\open-amalur-veil-0.1.9-release.apk'
 $profile = Join-Path $PWD 'build\windows-profile'
 & $python tools/install_windows_veil.py --game-dir $game --apk $apk --profile $profile
 & .\build\windows\OpenAmalur.exe $game $profile "$profile\assets"
 ```
 
 The Windows installer applies the signed release's Veil recipe into a local profile using your game files. It keeps the original archives read-only and omits Android Hardware Scaling from the Resolution tab. The profile also holds Windows settings, saves and runtime logs.
+
+Windows Options → Resolution includes every distinct size reported by Windows for attached desktop displays, plus the current desktop size and the existing 1920×1080 and 960×540 presets. Duplicate refresh-rate/color-depth modes share one size; portrait dimensions retain their orientation. Selections are saved by dimensions and take effect after restarting the game. The list is detected again each launch; a saved size that is no longer available falls back to 1920×1080. This changes the game render/window size, not the desktop display mode.
+
+For Windows testing, launch with `VK_LOADER_LAYERS_DISABLE=~implicit~` and remove `VK_INSTANCE_LAYERS` to keep implicit Vulkan overlays disabled.

@@ -96,6 +96,20 @@ public final class VeilActivity extends NativeActivity {
         }
     }
 
+    // Query the display hosting this activity; native code removes repeated
+    // sizes (the OS can report one mode per refresh rate).
+    @SuppressWarnings("deprecation")
+    private int[] gameDisplaySizes() {
+        Display display = getWindowManager().getDefaultDisplay();
+        Display.Mode[] modes = display.getSupportedModes();
+        int[] sizes = new int[modes.length * 2];
+        for (int i = 0; i < modes.length; ++i) {
+            sizes[i * 2] = modes[i].getPhysicalWidth();
+            sizes[i * 2 + 1] = modes[i].getPhysicalHeight();
+        }
+        return sizes;
+    }
+
     @SuppressWarnings("deprecation")
     private long gameWindowSize() {
         int width, height;

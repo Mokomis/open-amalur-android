@@ -6,6 +6,7 @@
 #include "veil_native_scaling.h"
 #include "veil_environment.h"
 #include "waterfall_state.h"
+#include "display_modes.h"
 
 int oa_guest_main(int, char **);
 void oa_vk_android_initialize_log(const char *);
@@ -100,8 +101,25 @@ int main(int argc, char **argv)
     unsigned count = system.dwNumberOfProcessors;
     snprintf(cpu_count, sizeof cpu_count, "%u", count > 8 ? 8 : count);
     _putenv_s("ME_PC_CPUS", cpu_count);
-    veil_render_resolution(profile, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN),
+    OaWindowsDisplayModes modes;
+    int detected = oa_windows_display_modes(&modes);
+    veil_display_resolutions(modes.sizes, modes.count, modes.width, modes.height);
+    veil_render_resolution(profile, modes.width, modes.height,
                            &oa_windows_render_width, &oa_windows_render_height);
+    fprintf(stderr, "WINDOWS_DISPLAY devices=%d os_sizes=%d detected=%d desktop=%dx%d render=%dx%d\n",
+            modes.devices, modes.count, detected, modes.width, modes.height,
+            oa_windows_render_width, oa_windows_render_height);
+    char count_text[8];
+    veil_native_scaling_read("DEFAULT", "VeilResolutionCount", count_text);
+    for (int index = 0; index < atoi(count_text); ++index) {
+        char key[64], width[8], height[8];
+        snprintf(key, sizeof key, "VeilResolutionWidth%d", index);
+        veil_native_scaling_read("DEFAULT", key, width);
+        snprintf(key, sizeof key, "VeilResolutionHeight%d", index);
+        veil_native_scaling_read("DEFAULT", key, height);
+        fprintf(stderr, "WINDOWS_RESOLUTION index=%d size=%sx%s\n", index, width, height);
+    }
+    free(modes.sizes);
 
     static AAssetManager assets;
     assets.directory = asset_path;

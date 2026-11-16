@@ -56,22 +56,59 @@ static OaViewport display_viewport;
 static void game_window_size(ANativeActivity *activity, int *width, int *height)
 {
     JNIEnv *env = NULL;
-    if ((*activity->vm)->GetEnv(activity->vm, (void **)&env, JNI_VERSION_1_6) != JNI_OK)
-        return;
+    int status = (*activity->vm)->GetEnv(activity->vm, (void **)&env, JNI_VERSION_1_6);
+    int attached = status == JNI_EDETACHED;
+    if (attached) {
+        if ((*activity->vm)->AttachCurrentThread(activity->vm, &env, NULL) != JNI_OK) return;
+    } else if (status != JNI_OK) return;
     jclass type = (*env)->GetObjectClass(env, activity->clazz);
     jmethodID method = type ? (*env)->GetMethodID(env, type, "gameWindowSize", "()J") : NULL;
     jlong size = method ? (*env)->CallLongMethod(env, activity->clazz, method) : 0;
     if (type) (*env)->DeleteLocalRef(env, type);
     if ((*env)->ExceptionCheck(env)) {
         (*env)->ExceptionClear(env);
+        if (attached) (*activity->vm)->DetachCurrentThread(activity->vm);
         return;
     }
+    if (attached) (*activity->vm)->DetachCurrentThread(activity->vm);
     int window_width = (int)((uint64_t)size >> 32);
     int window_height = (int)((uint64_t)size & UINT32_MAX);
     if (window_width > 0 && window_height > 0) {
         *width = window_width;
         *height = window_height;
     }
+}
+
+static void game_display_sizes(ANativeActivity *activity, int width, int height)
+{
+    JNIEnv *env = NULL;
+    int status = (*activity->vm)->GetEnv(activity->vm, (void **)&env, JNI_VERSION_1_6);
+    int attached = status == JNI_EDETACHED;
+    if (attached) {
+        if ((*activity->vm)->AttachCurrentThread(activity->vm, &env, NULL) != JNI_OK) return;
+    } else if (status != JNI_OK) return;
+    jclass type = (*env)->GetObjectClass(env, activity->clazz);
+    jmethodID method = type ? (*env)->GetMethodID(env, type, "gameDisplaySizes", "()[I") : NULL;
+    jintArray sizes = method ? (jintArray)(*env)->CallObjectMethod(env, activity->clazz, method) : NULL;
+    if ((*env)->ExceptionCheck(env)) {
+        (*env)->ExceptionClear(env);
+    } else if (sizes) {
+        jsize count = (*env)->GetArrayLength(env, sizes);
+        jint *values = (*env)->GetIntArrayElements(env, sizes, NULL);
+        if (values) {
+            veil_display_resolutions(values, count / 2, width, height);
+            char available[8];
+            veil_native_scaling_read("DEFAULT", "VeilResolutionCount", available);
+            __android_log_print(ANDROID_LOG_INFO, "OpenAmalur",
+                                "DISPLAY_MODES os_modes=%d choices=%s window=%dx%d",
+                                count / 2, available, width, height);
+            (*env)->ReleaseIntArrayElements(env, sizes, values, JNI_ABORT);
+        }
+    }
+    if ((*env)->ExceptionCheck(env)) (*env)->ExceptionClear(env);
+    if (sizes) (*env)->DeleteLocalRef(env, sizes);
+    if (type) (*env)->DeleteLocalRef(env, type);
+    if (attached) (*activity->vm)->DetachCurrentThread(activity->vm);
 }
 
 /* Match the drawable to the physical display aspect and letterbox the game image. */
@@ -88,6 +125,7 @@ static void configure_drawable(struct android_app *app)
     }
 
     const char *root = app->activity->externalDataPath;
+    game_display_sizes(app->activity, display_width, display_height);
     int hardware_percent = veil_native_scaling_percent(root);
     int width, height;
     int native = veil_render_resolution(root, display_width, display_height, &width, &height);

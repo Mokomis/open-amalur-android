@@ -1,4 +1,4 @@
-"""Build a Windows Veil overlay using a local game and the signed v0.1.8 APK."""
+"""Build a Windows Veil overlay using a local game and the signed v0.1.9 APK."""
 
 import argparse
 from hashlib import file_digest, sha256
@@ -15,7 +15,7 @@ from build_native import require_input
 from generate_veil_edits import index_of, read_entry
 from mark_veil_portraits import constant_value
 
-RELEASE_APK_SHA256 = "4db7f4e0cdec6c5edd1fca1c04d1351d22a1275f415a3369f18cdaa3159a5624"
+RELEASE_APK_SHA256 = "a275b68ea47c2367320667966eaf9b5c58f5249bc32f346106d0b9305aaf9403"
 OPTIONS_SCRIPT = 13523
 TUTORIAL_SCRIPT = 733459
 SCRIPT_BATCH_KEY = crc32(b"134230570_klua.batch")
@@ -145,7 +145,7 @@ def install(game, profile, package):
     require_input(game / "binkw32.dll", "bink")
     with package.open("rb") as signed:
         if file_digest(signed, "sha256").hexdigest() != RELEASE_APK_SHA256:
-            raise ValueError("Use the published Open Amalur v0.1.8 APK")
+            raise ValueError("Use the published Open Amalur v0.1.9 APK")
     destination = profile / "runtime/overlay/data/patch_0.pak"
     destination.parent.mkdir(parents=True, exist_ok=True)
     assets = profile / "assets"
