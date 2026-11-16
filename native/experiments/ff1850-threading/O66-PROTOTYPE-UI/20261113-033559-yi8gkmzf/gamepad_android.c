@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <time.h>
+#include "options_navigation.h"
 
 extern void rt_android_pad(uint32_t index, int connected, uint16_t buttons,
                            uint8_t lt, uint8_t rt, int16_t lx, int16_t ly,
@@ -33,6 +34,7 @@ typedef struct {
 } Pad;
 
 static Pad pads[MAX_PADS];
+static OaOptionsNavigation options_navigation[MAX_PADS];
 static jclass input_device;
 static jmethodID get_ids, get_device, get_name, get_vendor, get_product;
 static jmethodID get_sources, get_range, range_min, range_max;
@@ -56,17 +58,16 @@ static int controller_source(int source)
 static void publish(unsigned slot)
 {
     const Pad *pad = &pads[slot];
+    if (pad->id == NO_DEVICE || !focused)
+        options_navigation[slot] = (OaOptionsNavigation){0};
     uint16_t buttons = pad->buttons | pad->hat;
     uint8_t left = pad->trigger_key[0] ? UINT8_MAX : pad->trigger[0];
     uint8_t right = pad->trigger_key[1] ? UINT8_MAX : pad->trigger[1];
-    if (veil_options_is_visible()) {
-        // The original Options categories use the trigger actions.
-        if (buttons & LEFT_BUMPER) left = UINT8_MAX;
-        if (buttons & RIGHT_BUMPER) right = UINT8_MAX;
-        buttons &= ~(LEFT_BUMPER | RIGHT_BUMPER);
-    }
+    int16_t lx = pad->sticks[0], ly = pad->sticks[1];
+    oa_options_navigation(&options_navigation[slot], veil_options_is_visible(),
+                          &buttons, &left, &right, &lx, &ly);
     rt_android_pad(slot, pad->id != NO_DEVICE && focused, buttons, left, right,
-                   pad->sticks[0], pad->sticks[1], pad->sticks[2], pad->sticks[3]);
+                   lx, ly, pad->sticks[2], pad->sticks[3]);
 }
 
 static Axis get_axis(jobject device, int axis)
@@ -255,6 +256,7 @@ void oa_gamepad_focus(int active)
 {
     if (focused == active) return;
     focused = active;
+    if (!active) memset(options_navigation, 0, sizeof options_navigation);
     last_scan = -1;
     if (active) {
         oa_gamepad_poll();
