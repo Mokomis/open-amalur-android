@@ -5,26 +5,36 @@ import android.content.Intent;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Environment;
+import android.provider.Settings;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
 import android.widget.LinearLayout;
+import android.widget.RadioButton;
+import android.widget.RadioGroup;
 import android.widget.TextView;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.Locale;
 
 public final class SetupActivity extends Activity {
-    private static final int GAME_FOLDER = 1, COMPILER_FILE = 2, ENGINE_FILE = 3;
+    private static final int GAME_FOLDER = 1, COMPILER_FILE = 2, ENGINE_FILE = 3,
+            ALL_FILES_ACCESS = 4;
     private Uri gameFolder;
     private TextView status;
     private Button browse;
     private boolean importing;
+    private File selectedStorage;
 
     @Override protected void onCreate(Bundle saved) {
         super.onCreate(saved);
-        boolean installed = GameFiles.ready(this, getExternalFilesDir(null));
-        boolean repairTitle = !installed && GameFiles.needsTitleRepair(this, getExternalFilesDir(null));
+        File storage = GameStorage.root(this);
+        File[] storageChoices = GameStorage.available(this);
+        boolean missingStorage = GameStorage.selectedVolumeMissing(this);
+        boolean installed = GameFiles.ready(this, storage);
+        boolean repairTitle = !installed && GameFiles.needsTitleRepair(this, storage);
         if (saved != null) gameFolder = saved.getParcelable("gameFolder");
         LinearLayout panel = new LinearLayout(this);
         panel.setOrientation(LinearLayout.VERTICAL);
@@ -41,14 +51,41 @@ public final class SetupActivity extends Activity {
         status.setTextSize(16);
         status.setTextColor(Color.LTGRAY);
         status.setPadding(0, 24, 0, 24);
-        status.setText(installed ? "Opening Open Amalur…" : repairTitle
+        status.setText(missingStorage ? "The selected SD card is unavailable. Reinsert it and retry."
+                : GameStorage.directConfigured(this) && GameStorage.sourceRoot(this) == null
+                ? "The game folder or All files access is unavailable. Check the storage volume and grant access to continue."
+                : installed ? "Opening Open Amalur…" : repairTitle
                 ? "The title animation is missing. Choose your Re-Reckoning folder to restore it."
                 : "Choose the Kingdoms of Amalur: Re-Reckoning folder containing koa.exe and data.\n"
-                        + "For a private DroidDeck library, copy the game folder to shared storage first.");
+                        + (storageChoices.length > 1 ? "Choose an install location below. "
+                        : "Only device storage is available. ")
+                        + "Open Amalur uses that folder in place on the selected volume. "
+                        + "It needs about 1.5 GB free there for its patched archive, plus saves.");
         panel.addView(status);
+        if (!installed && !missingStorage) {
+            selectedStorage = GameStorage.recommended(this, storageChoices);
+            if (storageChoices.length > 1) {
+                RadioGroup locations = new RadioGroup(this);
+                locations.setOrientation(RadioGroup.VERTICAL);
+                for (int index = 0; index < storageChoices.length; ++index) {
+                    File choice = storageChoices[index];
+                    RadioButton option = new RadioButton(this);
+                    option.setId(View.generateViewId());
+                    option.setText(GameStorage.label(choice));
+                    option.setTextColor(Color.WHITE);
+                    option.setTextSize(16);
+                    option.setOnClickListener(view -> selectedStorage = choice);
+                    locations.addView(option);
+                    if (choice.equals(selectedStorage)) locations.check(option.getId());
+                }
+                panel.addView(locations);
+            }
+        }
         browse = new Button(this);
-        browse.setText(installed ? "Retry" : "Choose game folder");
-        if (installed) {
+        browse.setText(installed || missingStorage ? "Retry" : "Choose game folder");
+        if (missingStorage) {
+            browse.setOnClickListener(view -> recreate());
+        } else if (installed) {
             browse.setOnClickListener(view -> launchExistingGame());
             browse.setVisibility(View.GONE);
         } else {
@@ -65,6 +102,13 @@ public final class SetupActivity extends Activity {
     }
 
     private void selectFolder() {
+        try {
+            GameStorage.select(this, selectedStorage == null ? GameStorage.requireRoot(this)
+                    : selectedStorage);
+        } catch (IOException error) {
+            status.setText(error.getMessage());
+            return;
+        }
         Intent picker = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
         picker.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         startActivityForResult(picker, GAME_FOLDER);
@@ -72,9 +116,27 @@ public final class SetupActivity extends Activity {
 
     @Override protected void onActivityResult(int request, int result, Intent data) {
         super.onActivityResult(request, result, data);
+        if (request == ALL_FILES_ACCESS) {
+            if (gameFolder != null && android.os.Build.VERSION.SDK_INT >= 30
+                    && Environment.isExternalStorageManager())
+                importFiles(gameFolder, null);
+            else status.setText("Allow All files access to play from the SD card, then retry.");
+            return;
+        }
         if (result != RESULT_OK || data == null || data.getData() == null || importing) return;
         if (request == GAME_FOLDER) {
             gameFolder = data.getData();
+            if (android.os.Build.VERSION.SDK_INT < 30) {
+                status.setText("Direct play requires Android 11 or newer. Existing imports remain playable on this device.");
+                return;
+            }
+            if (!Environment.isExternalStorageManager()) {
+                status.setText("Allow All files access so Open Amalur can read the selected game folder without copying it.");
+                Intent access = new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                        Uri.parse("package:" + getPackageName()));
+                startActivityForResult(access, ALL_FILES_ACCESS);
+                return;
+            }
             importFiles(gameFolder, null);
         } else if (request == COMPILER_FILE && gameFolder != null) {
             importFiles(gameFolder, data.getData());
@@ -178,10 +240,11 @@ public final class SetupActivity extends Activity {
                 runOnUiThread(() -> status.setText(total > 0
                         ? String.format(Locale.ROOT, "%s (%d%%)", message, copied * 100 / total)
                         : message + "…")));
-        GameFiles.updateInstalledVeil(getApplicationContext(), getExternalFilesDir(null),
+        File storage = GameStorage.requireRoot(this);
+        GameFiles.updateInstalledVeil(getApplicationContext(), storage,
                 (message, copied, total) -> runOnUiThread(() -> status.setText(total > 0
                         ? String.format(Locale.ROOT, "%s (%d%%)", message, copied * 100 / total) : message + "…")));
-        GameFiles.prepareLocalProfile(getExternalFilesDir(null));
+        GameFiles.prepareLocalProfile(storage);
     }
 
     private void startEngine() {

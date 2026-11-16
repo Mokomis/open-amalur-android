@@ -109,6 +109,11 @@ static void overlay_path(const char *g, char *out, size_t n)
 
 static int game_path(const char *g, char *out, size_t n)
 {
+    const char *veil = getenv("OA_VEIL_PATCH_PATH");
+    if (veil && !_stricmp(g, GUEST_ROOT "\\data\\patch_0.pak")) {
+        snprintf(out, n, "%s", veil);
+        return 1;
+    }
     const char *rel = under_root(g);
     static const char fatesworn[] = "C:\\data_1278260";
     size_t depot_length = sizeof fatesworn - 1;

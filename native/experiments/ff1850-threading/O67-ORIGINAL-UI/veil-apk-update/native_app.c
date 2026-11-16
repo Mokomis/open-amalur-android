@@ -34,6 +34,8 @@ __attribute__((visibility("hidden"))) void veil_tablet_death_menu_tap(void);
 #include <sys/stat.h>
 #include <time.h>
 static struct android_app*oa_app;static int started;
+static char *selected_storage_path;
+static char *selected_source_path;
 static pthread_mutex_t input_looper_lock = PTHREAD_MUTEX_INITIALIZER;
 static ALooper *input_looper;
 
@@ -124,7 +126,7 @@ static void configure_drawable(struct android_app *app)
         display_height = BASE_HEIGHT;
     }
 
-    const char *root = app->activity->externalDataPath;
+    const char *root = selected_storage_path;
     game_display_sizes(app->activity, display_width, display_height);
     int hardware_percent = veil_native_scaling_percent(root);
     int width, height;
@@ -166,12 +168,21 @@ ANativeWindow*oa_android_window(void){return rt_android_window();}
 int oa_android_width(void){int width=atomic_load(&render_width);return width>0?width:BASE_WIDTH;}
 int oa_android_height(void){int height=atomic_load(&render_height);return height>0?height:BASE_HEIGHT;}
 int oa_android_connectivity(void){if(!oa_app)return -1;JNIEnv*env=NULL;JavaVM*vm=oa_app->activity->vm;int attach=(*vm)->GetEnv(vm,(void**)&env,JNI_VERSION_1_6)==JNI_EDETACHED;if(attach&&(*vm)->AttachCurrentThread(vm,&env,NULL)!=JNI_OK)return -1;int flags=-1;jobject activity=oa_app->activity->clazz;jclass ac=(*env)->GetObjectClass(env,activity);jmethodID get=(*env)->GetMethodID(env,ac,"getSystemService","(Ljava/lang/String;)Ljava/lang/Object;");jstring name=(*env)->NewStringUTF(env,"connectivity");jobject cm=get?(*env)->CallObjectMethod(env,activity,get,name):NULL;if(cm&&!(*env)->ExceptionCheck(env)){jclass cc=(*env)->GetObjectClass(env,cm);jmethodID gn=(*env)->GetMethodID(env,cc,"getActiveNetwork","()Landroid/net/Network;");jobject network=gn?(*env)->CallObjectMethod(env,cm,gn):NULL;flags=0;if(network){flags=0x20;jmethodID gc=(*env)->GetMethodID(env,cc,"getNetworkCapabilities","(Landroid/net/Network;)Landroid/net/NetworkCapabilities;");jobject cap=gc?(*env)->CallObjectMethod(env,cm,gc,network):NULL;if(cap){jclass cl=(*env)->GetObjectClass(env,cap);jmethodID has=(*env)->GetMethodID(env,cl,"hasCapability","(I)Z");if(has&&(*env)->CallBooleanMethod(env,cap,has,12)&&(*env)->CallBooleanMethod(env,cap,has,16))flags=0x40;(*env)->DeleteLocalRef(env,cl);(*env)->DeleteLocalRef(env,cap);}(*env)->DeleteLocalRef(env,network);}(*env)->DeleteLocalRef(env,cc);(*env)->DeleteLocalRef(env,cm);}if((*env)->ExceptionCheck(env)){(*env)->ExceptionClear(env);flags=-1;}(*env)->DeleteLocalRef(env,name);(*env)->DeleteLocalRef(env,ac);if(attach)(*vm)->DetachCurrentThread(vm);return flags;}
-static void*engine_thread(void*unused){(void)unused;const char*root=oa_app->activity->externalDataPath;if(!root){__android_log_print(ANDROID_LOG_ERROR,"OpenAmalur","external app path unavailable");return NULL;}char run[2048],overlay[2048],path[2048],game[2048],koa[2048];snprintf(run,sizeof run,"%s/run-%lld",root,(long long)time(NULL));mkdir(run,0770);snprintf(overlay,sizeof overlay,"%s/overlay",run);mkdir(overlay,0770);chdir(run);
+static void*engine_thread(void*unused){(void)unused;const char*root=selected_storage_path;if(!root){__android_log_print(ANDROID_LOG_ERROR,"OpenAmalur","selected game path unavailable");return NULL;}char run[2048],overlay[2048],path[2048],game[2048],koa[2048];snprintf(run,sizeof run,"%s/run-%lld",root,(long long)time(NULL));mkdir(run,0770);snprintf(overlay,sizeof overlay,"%s/overlay",run);mkdir(overlay,0770);chdir(run);
 {char folder[2048];snprintf(folder,sizeof folder,"%s/overlay",overlay);mkdir(folder,0770);snprintf(folder,sizeof folder,"%s/overlay/kaiko",overlay);mkdir(folder,0770);snprintf(folder,sizeof folder,"%s/overlay/kaiko/koa",overlay);mkdir(folder,0770);snprintf(folder,sizeof folder,"%s/overlay/kaiko/koa/personal.ini",overlay);FILE*ini=fopen(folder,"wb");if(ini){const char*text="[DEFAULT]\nDisplayFullscreen=0\n";fputc(0xff,ini);fputc(0xfe,ini);for(const char*c=text;*c;c++){fputc(*c,ini);fputc(0,ini);}fclose(ini);}}
 snprintf(path,sizeof path,"%s/pc-runtime.log",run);setenv("ME_PC_LOG_PATH",path,1);snprintf(path,sizeof path,"%s/oa-vulkan.log",run);oa_vk_android_initialize_log(path);char install[2048], ready[2048];
 snprintf(ready, sizeof ready, "%s/imported-install/.ready", root);
 snprintf(install, sizeof install, "%s%s", root, access(ready, R_OK) == 0 ? "/imported-install" : "");
-snprintf(koa,sizeof koa,"%s/koa.exe",install);snprintf(game,sizeof game,"%s/game",install);snprintf(path,sizeof path,"%s/binkw32.dll",install);setenv("OA_BINK_PATH",path,1);setenv("OA_OFFLINE_ROOT",root,1);setenv("OA_GAME_ROOT",game,1);veil_shadow_init();{long online=sysconf(_SC_NPROCESSORS_ONLN);int cpus=online>0?(online>8?8:(int)online):1;char config[2048],value[16];snprintf(config,sizeof config,"%s/guest-cpus",root);FILE*cf=fopen(config,"r");if(cf){int requested=0;if(fscanf(cf,"%d",&requested)==1&&requested>=1&&requested<=8&&requested<=online)cpus=requested;fclose(cf);}snprintf(value,sizeof value,"%d",cpus);setenv("ME_PC_CPUS",value,1);__android_log_print(ANDROID_LOG_INFO,"OpenAmalur","ENGINE_CPUS online=%ld reported=%d; existing ordered guest memory enabled",online,cpus);}setenv("ME_PC_MOUSE_CAPTURE","0",1);snprintf(path,sizeof path,"%s/fatesworn-trace",root);if (access(path,F_OK)==0) setenv("ME_PC_LOG_FILES","1",1); else unsetenv("ME_PC_LOG_FILES");unsetenv("ME_PC_LOG_EH");setenv("OA_PE_PATH",koa,1);
+if (selected_source_path) {
+    snprintf(install, sizeof install, "%s", selected_source_path);
+    snprintf(path, sizeof path, "%s/veil-patch_0.pak", root);
+    if (access(path, R_OK) != 0) {
+        __android_log_print(ANDROID_LOG_ERROR, "OpenAmalur", "SD Veil archive unavailable");
+        return NULL;
+    }
+    setenv("OA_VEIL_PATCH_PATH", path, 1);
+} else unsetenv("OA_VEIL_PATCH_PATH");
+snprintf(koa,sizeof koa,"%s/koa.exe",install);snprintf(game,sizeof game,"%s%s",install,selected_source_path?"":"/game");snprintf(path,sizeof path,"%s/binkw32.dll",install);setenv("OA_BINK_PATH",path,1);setenv("OA_OFFLINE_ROOT",root,1);setenv("OA_GAME_ROOT",game,1);veil_shadow_init();{long online=sysconf(_SC_NPROCESSORS_ONLN);int cpus=online>0?(online>8?8:(int)online):1;char config[2048],value[16];snprintf(config,sizeof config,"%s/guest-cpus",root);FILE*cf=fopen(config,"r");if(cf){int requested=0;if(fscanf(cf,"%d",&requested)==1&&requested>=1&&requested<=8&&requested<=online)cpus=requested;fclose(cf);}snprintf(value,sizeof value,"%d",cpus);setenv("ME_PC_CPUS",value,1);__android_log_print(ANDROID_LOG_INFO,"OpenAmalur","ENGINE_CPUS online=%ld reported=%d; existing ordered guest memory enabled",online,cpus);}setenv("ME_PC_MOUSE_CAPTURE","0",1);snprintf(path,sizeof path,"%s/fatesworn-trace",root);if (access(path,F_OK)==0) setenv("ME_PC_LOG_FILES","1",1); else unsetenv("ME_PC_LOG_FILES");unsetenv("ME_PC_LOG_EH");setenv("OA_PE_PATH",koa,1);
 FILE*f=fopen("nocull","wb");if(f){fputs("Disabled during initial native parity bring-up; original engine decides visibility.\n",f);fclose(f);}/* runtime option, no original game state patched */
 snprintf(path,sizeof path,"%s/latest-run.txt",root);f=fopen(path,"w");if(f){fputs(run,f);fclose(f);}__android_log_print(ANDROID_LOG_INFO,"OpenAmalur","starting original compiled game, native ARM64; log=%s",run);
 oa_perf_start(root);char*argv[]={"OpenAmalur",koa,game,overlay,NULL};int rc=main(4,argv);__android_log_print(ANDROID_LOG_INFO,"OpenAmalur","original entry returned %d",rc);return NULL;}
@@ -358,6 +369,49 @@ static int32_t input(struct android_app*app,AInputEvent*e){(void)app;if(intro_mo
         return 1;
     }
     rt_android_mouse_move(x,y);if(action==AMOTION_EVENT_ACTION_DOWN)rt_android_mouse_button(0,1,x,y);else if(action==AMOTION_EVENT_ACTION_UP||action==AMOTION_EVENT_ACTION_CANCEL)rt_android_mouse_button(0,0,x,y);return 1;}return 0;}
+static int select_game_storage(ANativeActivity *activity, JNIEnv *env)
+{
+    if (!env) return 0;
+    jclass type = (*env)->GetObjectClass(env, activity->clazz);
+    jmethodID method = type ? (*env)->GetMethodID(env, type, "gameStoragePath",
+                                                   "()Ljava/lang/String;") : NULL;
+    jstring path = method ? (jstring)(*env)->CallObjectMethod(env, activity->clazz, method) : NULL;
+    if ((*env)->ExceptionCheck(env)) {
+        (*env)->ExceptionClear(env);
+        path = NULL;
+    }
+    if (path) {
+        const char *text = (*env)->GetStringUTFChars(env, path, NULL);
+        if (text) {
+            selected_storage_path = strdup(text);
+            (*env)->ReleaseStringUTFChars(env, path, text);
+        }
+        (*env)->DeleteLocalRef(env, path);
+    }
+    if (type) {
+        jmethodID source_method = (*env)->GetMethodID(env, type, "gameSourcePath",
+                                                       "()Ljava/lang/String;");
+        jstring source = source_method ? (jstring)(*env)->CallObjectMethod(env,
+                activity->clazz, source_method) : NULL;
+        if ((*env)->ExceptionCheck(env)) {
+            (*env)->ExceptionClear(env);
+            source = NULL;
+        }
+        if (source) {
+            const char *value = (*env)->GetStringUTFChars(env, source, NULL);
+            if (value) {
+                selected_source_path = strdup(value);
+                (*env)->ReleaseStringUTFChars(env, source, value);
+            }
+            (*env)->DeleteLocalRef(env, source);
+        }
+    }
+    if (type) (*env)->DeleteLocalRef(env, type);
+    if (!selected_storage_path) return 0;
+    __android_log_print(ANDROID_LOG_INFO, "OpenAmalur", "Game storage: %s", selected_storage_path);
+    return 1;
+}
+
 void android_main(struct android_app *app)
 {
     oa_app = app;
@@ -372,6 +426,12 @@ void android_main(struct android_app *app)
     JavaVM *vm = app->activity->vm;
     int attach = (*vm)->GetEnv(vm, (void **)&env, JNI_VERSION_1_6) == JNI_EDETACHED;
     if (attach && (*vm)->AttachCurrentThread(vm, &env, NULL) != JNI_OK) env = NULL;
+    if (!select_game_storage(app->activity, env)) {
+        __android_log_print(ANDROID_LOG_ERROR, "OpenAmalur", "Selected game storage is unavailable");
+        if (attach && env) (*vm)->DetachCurrentThread(vm);
+        ANativeActivity_finish(app->activity);
+        return;
+    }
     if (env) oa_gamepad_init(env, app->activity->clazz);
 
     ANativeActivity_setWindowFlags(app->activity, AWINDOW_FLAG_FULLSCREEN | AWINDOW_FLAG_KEEP_SCREEN_ON, 0);

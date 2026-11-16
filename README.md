@@ -22,7 +22,7 @@ Veil draws visual inspiration from other interfaces, including Edge for Skyrim. 
 
 1. Download the APK directly to your Android device and install it. [GitHub Releases](https://github.com/Mokomis/open-amalur-android/releases/latest)
 2. Open Open Amalur and choose the Re-Reckoning folder containing `koa.exe` and `data`.
-3. Setup imports your game files, applies Veil, and starts the game with the engine bundled in the APK.
+3. Setup prepares Veil and starts the game with the engine bundled in the APK. It reads your existing game folder directly, on internal or SD storage.
 
 With the v0.1.6 APK and game files on your device, setup and play work offline. Install updates over your existing copy of Open Amalur to keep your saves, settings, and touch layout.
 
@@ -32,9 +32,13 @@ Setup validates the files in the selected folder directly and creates a local pr
 
 Choose a folder that Android’s file picker can access. If your game files are in DroidDeck’s private storage, copy the full game folder to shared storage, such as `Documents/Amalur`. [Android file picker access](https://developer.android.com/training/data-storage/shared/documents-files) · [DroidDeck](https://github.com/Droid-Deck/DroidDeck)
 
+Select the internal or SD volume that already contains your Re-Reckoning files, then select the game folder on that same volume. On Android 11 or newer, Android will ask you to allow **All files access** so the native engine can read the original archives in place. Keep the folder in shared storage rather than another app's private `Android/data` folder. Setup writes only Open Amalur's patched Veil archive (about 1.2 GB) and saves/settings to its app folder on the selected volume. Allow about 1.5 GB free there for setup and additional room for future Veil updates. It does not make a second copy of the 42.5 GB game. Keep an SD card inserted while playing. Back up saves before uninstalling: Android removes app-specific files when the app is uninstalled. Existing imports continue to use their original location. Android 10 devices can keep using an existing import but cannot set up a new direct install with this release.
+
+The APK requests SD installation and keeps its native library uncompressed so Android can load it directly. Android ultimately chooses the APK location and still requires some internal storage for app data and optimized code. A device with completely full internal storage may be unable to install any APK. Direct play on a removable SD card has not yet been tested on a device with a card.
+
 ### Fatesworn
 
-Setup detects and imports Fatesworn if the game folder contains the supported `data_1278260/dlc_mit_0.pak` archive. To add it later, choose **Game Files → Add Fatesworn** from the title screen and select the updated game folder or its `data_1278260` folder. Restart the app to load the expansion.
+Setup detects Fatesworn if the game folder contains the supported `data_1278260/dlc_mit_0.pak` archive. In direct mode, add it to that same original game folder and restart the app. With an existing import, choose **Game Files → Add Fatesworn** from the title screen and select the updated game folder or its `data_1278260` folder.
 
 ## How the engine runs
 

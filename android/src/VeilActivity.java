@@ -24,6 +24,7 @@ import android.view.WindowInsetsController;
 import android.view.WindowManager;
 
 import java.io.IOException;
+import java.io.File;
 
 public final class VeilActivity extends NativeActivity {
     private static final Typeface CONTROL_LABEL_FONT = Typeface.create("sans-serif-medium", Typeface.NORMAL);
@@ -51,6 +52,11 @@ public final class VeilActivity extends NativeActivity {
             throw new IllegalStateException(error);
         }
         super.onCreate(state);
+        if (GameStorage.root(this) == null || !GameFiles.ready(this, GameStorage.root(this))) {
+            startActivity(new Intent(this, SetupActivity.class));
+            finish();
+            return;
+        }
         requestDisplayMode();
         overlay = new TouchControls();
         gameFileActions = new GameFileActions(this);
@@ -79,6 +85,17 @@ public final class VeilActivity extends NativeActivity {
             getWindowManager().addView(overlay, controls);
             overlay.resume();
         });
+    }
+
+    /** NativeActivity's built-in externalDataPath always names the primary volume. */
+    public String gameStoragePath() {
+        File root = GameStorage.root(this);
+        return root == null ? null : root.getAbsolutePath();
+    }
+
+    public String gameSourcePath() {
+        File source = GameStorage.sourceRoot(this);
+        return source == null ? null : source.getAbsolutePath();
     }
 
     private void requestDisplayMode() {

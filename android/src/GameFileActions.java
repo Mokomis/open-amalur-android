@@ -20,7 +20,14 @@ final class GameFileActions {
 
     void show() {
         if (importing) return;
-        boolean installed = GameFiles.hasFatesworn(activity, activity.getExternalFilesDir(null));
+        boolean installed = GameFiles.hasFatesworn(activity, GameStorage.root(activity));
+        if (GameStorage.directConfigured(activity)) {
+            new AlertDialog.Builder(activity).setTitle("Game Files")
+                    .setMessage(installed ? "Fatesworn is in the original game folder."
+                            : "To add Fatesworn, put its files in the original game folder, then restart Open Amalur.")
+                    .setPositiveButton("OK", null).show();
+            return;
+        }
         new AlertDialog.Builder(activity).setTitle("Game Files")
                 .setMessage(installed ? "Fatesworn is installed."
                         : "Choose your updated Re-Reckoning folder to add Fatesworn.")
