@@ -7,6 +7,7 @@
 #include <direct.h>
 #include <sys/stat.h>
 #include <stdio.h>
+#include <string.h>
 #include "rt.h"
 #include "window_mode.h"
 
@@ -109,6 +110,7 @@ void *host_d3d9_create(uint32_t sdk_version)
 
 /* ---- windows: one real top-level window per guest top-level window ---- */
 static HWND main_window;
+static volatile LONG touch_primary_down;
 
 void host_window_set_mode(int mode)
 {
@@ -179,6 +181,62 @@ void *host_window_create(int w, int h, const char *title)
 }
 
 static __thread MSG last_msg; /* per thread: each guest thread pumps its own host queue */
+static UINT touch_pointer_id;
+static int touch_pointer_active;
+static int touch_click_pending, touch_release_pending;
+static ULONGLONG touch_click_at, touch_release_at;
+static POINT touch_click_screen, touch_click_client;
+
+/* Moonlight can deliver a touchscreen as Windows pointer events rather than
+   compatibility mouse messages. Feed the primary contact through the same
+   path as a desktop mouse so Veil's menu hit testing sees the tap position. */
+static void pointer_as_mouse(MSG *message, int remove)
+{
+    if (message->hwnd != main_window ||
+        (message->message != WM_POINTERDOWN && message->message != WM_POINTERUPDATE &&
+         message->message != WM_POINTERUP)) return;
+    UINT id = GET_POINTERID_WPARAM(message->wParam);
+    POINTER_INFO info;
+    if (!GetPointerInfo(id, &info) ||
+        (info.pointerType != PT_TOUCH && info.pointerType != PT_PEN)) return;
+    if (message->message == WM_POINTERDOWN) {
+        if (touch_pointer_active && touch_pointer_id != id) return;
+    } else if (!touch_pointer_active || touch_pointer_id != id) {
+        return;
+    }
+    POINT screen = info.ptPixelLocation;
+    POINT client = screen;
+    if (!ScreenToClient(message->hwnd, &client)) return;
+    if (remove) {
+        SetCursorPos(screen.x, screen.y);
+        if (message->message == WM_POINTERDOWN) {
+            touch_pointer_id = id;
+            touch_pointer_active = 1;
+            touch_click_screen = screen;
+            touch_click_client = client;
+            touch_click_at = GetTickCount64() + 80;
+            touch_click_pending = 1;
+            touch_release_pending = 0;
+        } else if (message->message == WM_POINTERUP) {
+            touch_pointer_active = 0;
+            if (touch_click_pending) touch_release_pending = 1;
+            else InterlockedExchange(&touch_primary_down, 0);
+        }
+    }
+    if (message->message == WM_POINTERDOWN) {
+        message->message = WM_MOUSEMOVE;
+        message->wParam = 0;
+    } else if (message->message == WM_POINTERUP && touch_click_pending) {
+        message->message = WM_NULL;
+        message->wParam = 0;
+    } else {
+    message->message = message->message == WM_POINTERDOWN ? WM_LBUTTONDOWN :
+                       message->message == WM_POINTERUP ? WM_LBUTTONUP : WM_MOUSEMOVE;
+    message->wParam = (info.pointerFlags & POINTER_FLAG_INCONTACT) ? MK_LBUTTON : 0;
+    }
+    message->lParam = MAKELPARAM(client.x, client.y);
+    message->pt = screen;
+}
 
 HRAWINPUT oa_windows_raw_input(uint32_t token)
 {
@@ -192,7 +250,31 @@ int host_peek_message(void **hwnd, uint32_t *msg, uint32_t *wp, uint32_t *lp, ui
                       int remove)
 {
     MSG m;
-    if (!PeekMessageW(&m, NULL, 0, 0, remove ? PM_REMOVE : PM_NOREMOVE)) return 0;
+    ULONGLONG now = GetTickCount64();
+    if (touch_click_pending && now >= touch_click_at) {
+        memset(&m, 0, sizeof m);
+        m.hwnd = main_window;
+        m.message = WM_LBUTTONDOWN;
+        m.wParam = MK_LBUTTON;
+        m.lParam = MAKELPARAM(touch_click_client.x, touch_click_client.y);
+        m.pt = touch_click_screen;
+        if (remove) {
+            touch_click_pending = 0;
+            InterlockedExchange(&touch_primary_down, 1);
+            if (touch_release_pending) touch_release_at = now + 80;
+        }
+    } else if (touch_release_pending && !touch_click_pending && now >= touch_release_at) {
+        memset(&m, 0, sizeof m);
+        m.hwnd = main_window;
+        m.message = WM_LBUTTONUP;
+        m.lParam = MAKELPARAM(touch_click_client.x, touch_click_client.y);
+        m.pt = touch_click_screen;
+        if (remove) {
+            touch_release_pending = 0;
+            InterlockedExchange(&touch_primary_down, 0);
+        }
+    } else if (!PeekMessageW(&m, NULL, 0, 0, remove ? PM_REMOVE : PM_NOREMOVE)) return 0;
+    pointer_as_mouse(&m, remove);
     if (remove) {
         last_msg = m;
         oa_window_mode_event(m.hwnd, m.message, m.wParam);
@@ -375,7 +457,8 @@ int host_mouse_poll(int32_t *dx, int32_t *dy, uint8_t buttons[3])
         captured = 1;
     }
     SetCursorPos(c.x, c.y);
-    buttons[0] = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) ? 0x80 : 0;
+    buttons[0] = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) ||
+                 InterlockedCompareExchange(&touch_primary_down, 0, 0) ? 0x80 : 0;
     buttons[1] = (GetAsyncKeyState(VK_RBUTTON) & 0x8000) ? 0x80 : 0;
     buttons[2] = (GetAsyncKeyState(VK_MBUTTON) & 0x8000) ? 0x80 : 0;
     return 1;
