@@ -107,7 +107,7 @@ $python = '.\.venv\Scripts\python.exe'
 & $python tools/build_native.py --prepare-only --game-dir $game --llvm-bin $llvm --output build\translation
 & $python tools/build_windows.py --translation build\translation --llvm-bin $llvm --ndk $ndk --output build\windows
 
-$apk = 'C:\path\to\open-amalur-veil-0.1.9-release.apk'
+$apk = 'C:\path\to\open-amalur-veil-0.1.10-release.apk'
 $profile = Join-Path $PWD 'build\windows-profile'
 & $python tools/install_windows_veil.py --game-dir $game --apk $apk --profile $profile
 & .\build\windows\OpenAmalur.exe $game $profile "$profile\assets"

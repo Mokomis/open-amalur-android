@@ -16,7 +16,7 @@ from generate_veil_edits import index_of, read_entry
 from mark_veil_portraits import constant_value
 from fix_veil_menu_overlap import fix_batch
 
-RELEASE_APK_SHA256 = "a275b68ea47c2367320667966eaf9b5c58f5249bc32f346106d0b9305aaf9403"
+RELEASE_APK_SHA256 = "32e41b16c88e838cc2edae8476dcb460a9dc2b1fb87f9fa6af3479a59a795ff5"
 OPTIONS_SCRIPT = 13523
 TUTORIAL_SCRIPT = 733459
 SCRIPT_BATCH_KEY = crc32(b"134230570_klua.batch")
@@ -234,7 +234,7 @@ def install(game, profile, package):
     require_input(game / "binkw32.dll", "bink")
     with package.open("rb") as signed:
         if file_digest(signed, "sha256").hexdigest() != RELEASE_APK_SHA256:
-            raise ValueError("Use the published Open Amalur v0.1.9 APK")
+            raise ValueError("Use the published Open Amalur v0.1.10 APK")
     destination = profile / "runtime/overlay/data/patch_0.pak"
     destination.parent.mkdir(parents=True, exist_ok=True)
     assets = profile / "assets"
