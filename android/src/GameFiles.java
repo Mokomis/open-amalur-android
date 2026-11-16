@@ -248,8 +248,11 @@ final class GameFiles {
             if (hasVeilRecipe(context)) new VeilPatch(context.getAssets(), PATCH_BYTES,
                     PATCH_DIRECTORY, PATCH_HASH).applyToRetail(stage,
                     new File(source, "data/initial_0.pak"), progress);
-            Files.move(stage.toPath(), patch.toPath(), StandardCopyOption.ATOMIC_MOVE,
-                    StandardCopyOption.REPLACE_EXISTING);
+            try {
+                android.system.Os.rename(stage.getPath(), patch.getPath());
+            } catch (ErrnoException error) {
+                throw new IOException("Android could not finish the patched archive on this volume.", error);
+            }
             GameStorage.saveSource(context, source);
             Files.write(new File(storage, DIRECT_READY).toPath(), new byte[]{'1'});
         } finally {
