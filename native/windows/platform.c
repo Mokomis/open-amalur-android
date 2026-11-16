@@ -191,7 +191,25 @@ static void get_raw_input_data(X86Ctx *ctx)
 }
 static HMODULE xinput_module;
 static FARPROC xinput_symbol(const char*name){if(!xinput_module)xinput_module=LoadLibraryExW(L"xinput1_3.dll",NULL,LOAD_LIBRARY_SEARCH_SYSTEM32);FARPROC f=xinput_module?GetProcAddress(xinput_module,name):NULL;if(!f)rt_fatal("native XInput export unavailable");return f;}
-static void xinput_state(X86Ctx*ctx){RET(((DWORD(WINAPI*)(DWORD,XINPUT_STATE*))xinput_symbol("XInputGetState"))(ARG(0),(XINPUT_STATE*)rt_ptr(ARG(1))));}
+extern int veil_options_is_visible(void);
+static void xinput_state(X86Ctx *ctx)
+{
+    XINPUT_STATE *state = (XINPUT_STATE *)rt_ptr(ARG(1));
+    DWORD result = ((DWORD(WINAPI *)(DWORD, XINPUT_STATE *))
+                   xinput_symbol("XInputGetState"))(ARG(0), state);
+    if (result == ERROR_SUCCESS && veil_options_is_visible()) {
+        // Match Android's Options-only mapping. The title and pause menus
+        // route shoulder events differently, but both accept trigger actions.
+        WORD buttons = state->Gamepad.wButtons;
+        if (buttons & XINPUT_GAMEPAD_LEFT_SHOULDER)
+            state->Gamepad.bLeftTrigger = 255;
+        if (buttons & XINPUT_GAMEPAD_RIGHT_SHOULDER)
+            state->Gamepad.bRightTrigger = 255;
+        state->Gamepad.wButtons &= ~(XINPUT_GAMEPAD_LEFT_SHOULDER |
+                                    XINPUT_GAMEPAD_RIGHT_SHOULDER);
+    }
+    RET(result);
+}
 static void xinput_caps(X86Ctx*ctx){RET(((DWORD(WINAPI*)(DWORD,DWORD,XINPUT_CAPABILITIES*))xinput_symbol("XInputGetCapabilities"))(ARG(0),ARG(1),(XINPUT_CAPABILITIES*)rt_ptr(ARG(2))));}
 static void xinput_enable(X86Ctx*ctx){((void(WINAPI*)(BOOL))xinput_symbol("XInputEnable"))(ARG(0));}
 static void xinput_set(X86Ctx*ctx){RET(((DWORD(WINAPI*)(DWORD,XINPUT_VIBRATION*))xinput_symbol("XInputSetState"))(ARG(0),(XINPUT_VIBRATION*)rt_ptr(ARG(1))));}

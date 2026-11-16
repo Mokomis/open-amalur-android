@@ -119,6 +119,8 @@ Windows Options → Resolution includes every distinct size reported by Windows 
 
 For Windows testing, launch with `VK_LOADER_LAYERS_DISABLE=~implicit~` and remove `VK_INSTANCE_LAYERS` to keep implicit Vulkan overlays disabled.
 
+In Options, LB/RB switch categories, the D-pad or left stick selects rows, left/right adjusts values, A opens actions, and B goes back. Windows maps shoulder presses to the engine's category trigger actions only while Options is visible, matching Android's existing adapter. This handles both title-screen and paused-game Options without changing gameplay shoulder buttons.
+
 Android continues to use immersive fullscreen. Its floating windows, split-screen and desktop windowing are managed by Android and the device manufacturer; the Windows-only mode selector is not installed in Android menus.
 
 Run `python3 tools/tests/test_windows_window_mode.py` to check Windows preference defaults, valid/invalid choices, persistence and restart semantics using a host file-operation shim. Real Win32 window sizing, monitor switching and focus restoration require an interactive Windows session.
