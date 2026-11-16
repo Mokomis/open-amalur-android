@@ -111,20 +111,6 @@ def insert(data, fn, pc, code, stack):
     )
     return start - 8, const_end, payload
 
-def ledger(data):
-    # The original ledger keeps its portrait visible when switching from the
-    # summary to an inventory category. Bypass only the summary predicate.
-    fn = parse_bytes(data)["chunk"]["root_function"]["children"][47]
-    begin, *_, end = fn["instructions"][191:202]
-    if begin["word_hex"] != "aa00220a" or end["word_hex"] != "aa00100a":
-        raise ValueError("Unrecognized ledger portrait control flow")
-    branch = Code(fn)
-    branch.jump("update")
-    branch.labels["update"] = end["pc"] - begin["pc"]
-    start = begin["file_offset"]
-    return data[:start] + branch.finish() + data[start + 4:]
-
-
 def other_portrait(data, child, framed=False):
     parsed = parse_bytes(data)
     fn = parsed["chunk"]["root_function"]["children"][child]
@@ -188,7 +174,6 @@ def patch_batch(data):
     members = []
     edits = {
         13488: lambda payload: intro_cart(payload, 9, 956, active=True),
-        13520: ledger,
         256627: lambda payload: other_portrait(payload, 24),
         417426: lambda payload: other_portrait(payload, 28, framed=True),
         # This vignette's final frame hands control to character creation.

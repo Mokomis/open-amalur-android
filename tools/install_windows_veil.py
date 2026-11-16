@@ -14,6 +14,7 @@ from amalur_script import OPCODE_NAMES, parse_bytes
 from build_native import require_input
 from generate_veil_edits import index_of, read_entry
 from mark_veil_portraits import constant_value
+from fix_veil_menu_overlap import fix_batch
 
 RELEASE_APK_SHA256 = "a275b68ea47c2367320667966eaf9b5c58f5249bc32f346106d0b9305aaf9403"
 OPTIONS_SCRIPT = 13523
@@ -44,6 +45,23 @@ def windows_display_mode(script):
     script = script[:first] + pack(">I", get + 2) + script[first + 4:end] + b"".join(callbacks) + script[end:]
     offset = parsed["wrapper"]["payload_file_offset"]
     script = script[:offset - 4] + pack("<I", len(script) - offset) + script[offset:]
+    parsed = parse_bytes(script)
+    root = parsed["chunk"]["root_function"]
+    # Android's Touch Controls opens a launcher panel. Windows has no such
+    # panel, so omit this menu item instead of leaving a dead action.
+    touch = root["instructions"]
+    touch_sites = [i for i, ins in enumerate(touch)
+                   if ins["opcode_name"] == "LOADK"
+                   and constant_value(root["constants"][ins["Bx_raw"]]) == "veil_touch_controls"]
+    if (len(touch_sites) != 1
+            or touch[touch_sites[0] + 3]["opcode_name"] != "LOADK"
+            or constant_value(root["constants"][touch[touch_sites[0] + 3]["Bx_raw"]]) != "Touch Controls"
+            or touch[touch_sites[0] + 13]["opcode_name"] != "CALL_I"):
+        raise ValueError("Unexpected Touch Controls menu row")
+    result = bytearray(script)
+    pack_into(">I", result, touch[touch_sites[0] + 13]["file_offset"],
+              (OPCODE_NAMES.index("MOVE") << 25))
+    script = bytes(result)
     parsed = parse_bytes(script)
     root = parsed["chunk"]["root_function"]
     names = [constant_value(value) for value in root["constants"]]
@@ -126,6 +144,7 @@ def fix_tutorial_arguments(script):
 
 
 def patch_menu_batch(batch):
+    batch = fix_batch(batch)
     count, = unpack_from("<I", batch)
     offset = 4 + count * 8
     headers, records = [], []
@@ -146,7 +165,9 @@ def patch_menu_batch(batch):
     return batch[:4] + b"".join(headers) + b"".join(records)
 
 
-def patch_archive(patch, initial, recipe, output):
+def patch_archive(patch, initial, recipe, output, platform="windows"):
+    if platform not in ("windows", "android"):
+        raise ValueError("Unknown Veil platform")
     sources = (patch, initial)
     source_indexes = [index_of(archive) for archive in sources]
     directory = dict(source_indexes[0])
@@ -180,14 +201,14 @@ def patch_archive(patch, initial, recipe, output):
                 raise ValueError("Unknown Veil edit")
         if len(record) != new_size or sha256(record).digest() != after:
             raise ValueError("Could not reproduce a Veil record")
-        if key == SCRIPT_BATCH_KEY:
+        if key == SCRIPT_BATCH_KEY and platform == "windows":
             record = patch_menu_batch(record)
             found_options = True
         output.write(bytes(-output.tell() % 16))
         directory[key] = (output.tell() // 16, len(record))
         output.write(pack("<II", len(record), 0))
         output.write(record)
-    if recipe.read(1) or not found_options:
+    if recipe.read(1) or (platform == "windows" and not found_options):
         raise ValueError("The recipe must contain the Windows-adjusted Veil menu")
     offset = output.tell()
     output.write(pack("<II", len(directory), 0))
