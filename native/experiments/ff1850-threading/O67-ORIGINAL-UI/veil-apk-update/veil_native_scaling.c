@@ -19,6 +19,34 @@ static char settings_path[PATH_MAX];
 #endif
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 static char resolution_path[PATH_MAX];
+#ifdef _WIN32
+static char window_mode_path[PATH_MAX];
+static const char *const window_modes[] = {"windowed", "borderless", "fullscreen"};
+static int requested_window_mode, active_window_mode;
+
+int veil_windows_mode(const char *root)
+{
+    pthread_mutex_lock(&lock);
+    if (!window_mode_path[0] && root) {
+        int length = snprintf(window_mode_path, sizeof window_mode_path, "%s/window-mode", root);
+        if (length < 0 || (size_t)length >= sizeof window_mode_path) window_mode_path[0] = 0;
+        else {
+            FILE *file = fopen(window_mode_path, "r");
+            char value[32], extra;
+            if (file) {
+                if (fscanf(file, "%31s %c", value, &extra) == 1)
+                    for (int i = 0; i < 3; ++i)
+                        if (!strcmp(value, window_modes[i])) requested_window_mode = i;
+                fclose(file);
+            }
+        }
+        active_window_mode = requested_window_mode;
+    }
+    int mode = active_window_mode;
+    pthread_mutex_unlock(&lock);
+    return mode;
+}
+#endif
 static int display_width = 1920;
 static int display_height = 1080;
 typedef struct { int width, height; } Resolution;
@@ -150,6 +178,13 @@ int veil_native_scaling_read(const char *section, const char *key, char *value)
     int handled = 1;
     int mode_index;
     char extra;
+#ifdef _WIN32
+    if (!strcasecmp(key, "VeilWindowMode"))
+        snprintf(value, 8, "%d", requested_window_mode);
+    else if (!strcasecmp(key, "VeilWindowModeActive"))
+        snprintf(value, 8, "%d", active_window_mode);
+    else
+#endif
     if (!strcasecmp(key, "VeilResolutionCount"))
         snprintf(value, 8, "%d", resolution_count);
     else if (sscanf(key, "VeilResolutionWidth%d%c", &mode_index, &extra) == 1 &&
@@ -219,7 +254,8 @@ int veil_native_scaling_write(const char *section, const char *key, const char *
         return -1;
     int resolution = !strcasecmp(key, "VeilRenderResolution");
 #ifdef _WIN32
-    if (!resolution) return -1;
+    int window_mode = !strcasecmp(key, "VeilWindowMode");
+    if (!resolution && !window_mode) return -1;
 #else
     if (!resolution && strcasecmp(key, setting_key)) return -1;
 #endif
@@ -232,6 +268,9 @@ int veil_native_scaling_write(const char *section, const char *key, const char *
 
     pthread_mutex_lock(&lock);
     int count = resolution_count;
+#ifdef _WIN32
+    if (window_mode) count = 3;
+#endif
 #ifndef _WIN32
     if (!resolution) count = PRESET_COUNT;
 #endif
@@ -239,7 +278,15 @@ int veil_native_scaling_write(const char *section, const char *key, const char *
         pthread_mutex_unlock(&lock);
         return 0;
     }
-    int ok;
+    int ok = 0;
+#ifdef _WIN32
+    if (window_mode) {
+        ok = save_setting(window_mode_path, window_modes[preset]);
+        if (ok) requested_window_mode = preset;
+        pthread_mutex_unlock(&lock);
+        return ok;
+    }
+#endif
     if (resolution) {
         char dimensions[64];
         snprintf(dimensions, sizeof dimensions, "%dx%d", resolutions[preset].width, resolutions[preset].height);

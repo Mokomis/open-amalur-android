@@ -26,23 +26,88 @@ ASSETS = (
 )
 
 
-def remove_android_scaling(script):
-    root = parse_bytes(script)["chunk"]["root_function"]
+def windows_display_mode(script):
+    def string(value):
+        raw = value.encode("ascii") + b"\0"
+        return pack(">I", len(raw)) + raw
+
+    parsed = parse_bytes(script)
+    children = parsed["chunk"]["root_function"]["children"]
+    get = len(children)
+    first, end = children[0]["file_offset"] - 4, children[-1]["end_file_offset"]
+    callbacks = []
+    for child in children[183:185]:
+        callback = script[child["file_offset"]:child["end_file_offset"]]
+        callback = callback.replace(string("VeilRenderResolution"), string("VeilWindowMode"))
+        callback = callback.replace(string("m_veil_resolution_labels"), string("m_veil_window_mode_labels"))
+        callbacks.append(callback)
+    script = script[:first] + pack(">I", get + 2) + script[first + 4:end] + b"".join(callbacks) + script[end:]
+    offset = parsed["wrapper"]["payload_file_offset"]
+    script = script[:offset - 4] + pack("<I", len(script) - offset) + script[offset:]
+    parsed = parse_bytes(script)
+    root = parsed["chunk"]["root_function"]
     names = [constant_value(value) for value in root["constants"]]
-    option = names.index("veil_native_hardware_scaling")
     sites = [ins["pc"] for ins in root["instructions"]
-             if ins["opcode_name"] == "LOADK" and ins["Bx_raw"] == option]
+             if ins["opcode_name"] == "LOADK" and names[ins["Bx_raw"]] == "veil_native_hardware_scaling"]
     if len(sites) != 1:
         raise ValueError("Unexpected Android hardware scaling row")
-    # The verified row constructs its table locally, then inserts it into the
-    # Resolution list. Skip that insert without shifting subsequent jumps.
-    tail = root["instructions"][sites[0] + 1:sites[0] + 48]
-    insert = next(ins for ins in tail if ins["opcode_name"] == "CALL_I")
-    expected = (OPCODE_NAMES.index("CALL_I") << 25) | (4 << 17) | (1 << 8)
-    if int(insert["word_hex"], 16) != expected:
-        raise ValueError("Unexpected Android hardware scaling insert")
+    pc = sites[0]
+    instructions = root["instructions"]
     result = bytearray(script)
-    pack_into(">I", result, insert["file_offset"], OPCODE_NAMES.index("MOVE") << 25)
+
+    def op(relative, name, a, b=0, c=0):
+        pack_into(">I", result, instructions[pc + relative]["file_offset"],
+                  (OPCODE_NAMES.index(name) << 25) | (b << 17) | (c << 8) | a)
+
+    def load(relative, register, value):
+        index = next(i for i, v in enumerate(names) if type(v) is type(value) and v == value)
+        op(relative, "LOADK", register, index >> 9, index & 511)
+
+    if instructions[pc + 35]["opcode_name"] != "CALL_I" or instructions[pc + 27]["opcode_name"] != "SETLIST":
+        raise ValueError("Unexpected display mode row layout")
+    load(4, 4, 1)  # First discrete choice: Windowed.
+    op(6, "CLOSURE", 4, get >> 9, get & 511)
+    op(9, "CLOSURE", 4, (get + 1) >> 9, (get + 1) & 511)
+    load(17, 6, 2)  # Three choices in the integer range.
+    # Fallbacks in the getter and active-value callback must also be Windowed.
+    for child in (180, 182):
+        fn = root["children"][child]
+        start, end = fn["file_offset"], fn["end_file_offset"]
+        old = bytes(result[start:end])
+        fallback = b"\x03" + pack(">i", 4)
+        if old.count(fallback) != 1:
+            raise ValueError("Unexpected display mode callback default")
+        result[start:end] = old.replace(fallback, b"\x03" + pack(">i", 0))
+
+    # Replace the labels table without altering shared graphics constants.
+    from mark_veil_portraits import Code, insert
+    code = Code(root)
+    code.op("LOADNIL", 4, 4)
+    for name in ("int_range", "veil_active"):
+        code.load(5, name)
+        code.op("SETTABLE_S", 3, 5, 4)
+    code.op("NEWTABLE", 4, 3)
+    for register, value in enumerate((0, 1, 2), 5):
+        code.load(register, value)
+    code.op("SETLIST", 4, 3, 1)
+    code.load(5, "params")
+    code.op("SETTABLE_S", 3, 5, 4)
+    code.op("NEWTABLE", 4, 3)
+    for register, label in enumerate(("Windowed", "Borderless Fullscreen", "Fullscreen"), 5):
+        code.load(register, label)
+    code.op("SETLIST", 4, 3, 1)
+    code.wide("SETGLOBAL", 4, code.index("m_veil_window_mode_labels"))
+    code.load(5, "display_vals")
+    code.op("SETTABLE_S", 3, 5, 4)
+    start, end, replacement = insert(bytes(result), root, pc + 35, code, 10)
+    result = bytes(result[:start]) + replacement + bytes(result[end:])
+    for before, after in (("veil_native_hardware_scaling", "veil_window_mode"),
+                          ("Android Hardware Scaling", "Window Mode (restart required)"),
+                          ("VeilNativeHardwareScalingActive", "VeilWindowModeActive"),
+                          ("VeilNativeHardwareScaling", "VeilWindowMode")):
+        result = result.replace(string(before), string(after))
+    offset = parsed["wrapper"]["payload_file_offset"]
+    result = result[:offset - 4] + pack("<I", len(result) - offset) + result[offset:]
     parse_bytes(result)
     return result
 
@@ -63,19 +128,22 @@ def fix_tutorial_arguments(script):
 def patch_menu_batch(batch):
     count, = unpack_from("<I", batch)
     offset = 4 + count * 8
-    result = bytearray(batch)
+    headers, records = [], []
     matches = 0
     for key, size in iter_unpack("<II", batch[4:offset]):
+        record = batch[offset:offset + size]
         if key == OPTIONS_SCRIPT:
-            result[offset:offset + size] = remove_android_scaling(batch[offset:offset + size])
+            record = windows_display_mode(record)
             matches += 1
         elif key == TUTORIAL_SCRIPT:
-            result[offset:offset + size] = fix_tutorial_arguments(batch[offset:offset + size])
+            record = fix_tutorial_arguments(record)
             matches += 1
+        headers.append(pack("<II", key, len(record)))
+        records.append(record)
         offset += size
     if offset != len(batch) or matches != 2:
         raise ValueError("Malformed Veil menu batch")
-    return result
+    return batch[:4] + b"".join(headers) + b"".join(records)
 
 
 def patch_archive(patch, initial, recipe, output):

@@ -8,4 +8,8 @@ __attribute__((visibility("hidden"))) int veil_render_resolution(const char *roo
 __attribute__((visibility("hidden"))) int veil_native_scaling_read(const char *section, const char *key, char *value);
 __attribute__((visibility("hidden"))) int veil_native_scaling_write(const char *section, const char *key, const char *value);
 
+#ifdef _WIN32
+int veil_windows_mode(const char *root);
+#endif
+
 #endif

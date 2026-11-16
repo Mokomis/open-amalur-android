@@ -9,6 +9,7 @@
 #define ARG(i) rt_arg(ctx,i)
 #define RET(v) (ctx->eax=(uint32_t)(v))
 extern void *rt_user32_host_hwnd(uint32_t);
+extern int oa_windows_render_width, oa_windows_render_height;
 #define DESKTOP_TOKEN 0xd0000000u
 static HDC dcs[32];
 static HCURSOR cursors[64];
@@ -87,8 +88,27 @@ static void release_dc(X86Ctx *ctx){
 }
 static void device_caps(X86Ctx *ctx){HDC dc=dc_from_guest(ARG(0));if(!dc)rt_fatal("unknown guest DC %#x",ARG(0));RET(GetDeviceCaps(dc,ARG(1)));}
 static void window_rect(X86Ctx *ctx){RECT r;BOOL ok=GetWindowRect(hwnd_from_guest(ARG(0)),&r);if(ok)memcpy(rt_ptr(ARG(1)),&r,16);RET(ok);}
-static void client_rect(X86Ctx *ctx){RECT r;BOOL ok=GetClientRect(hwnd_from_guest(ARG(0)),&r);if(ok)memcpy(rt_ptr(ARG(1)),&r,16);RET(ok);}
-static void system_metrics(X86Ctx *ctx){RET(GetSystemMetrics(ARG(0)));}
+static void client_rect(X86Ctx *ctx)
+{
+    RECT r;
+    BOOL ok = GetClientRect(hwnd_from_guest(ARG(0)), &r);
+    if (ok) {
+        if (ARG(0) != DESKTOP_TOKEN) {
+            r.right = oa_windows_render_width;
+            r.bottom = oa_windows_render_height;
+        }
+        memcpy(rt_ptr(ARG(1)), &r, sizeof r);
+    }
+    RET(ok);
+}
+static void system_metrics(X86Ctx *ctx)
+{
+    switch (ARG(0)) {
+    case SM_CXSCREEN: case SM_CXFULLSCREEN: RET(oa_windows_render_width); break;
+    case SM_CYSCREEN: case SM_CYFULLSCREEN: RET(oa_windows_render_height); break;
+    default: RET(GetSystemMetrics(ARG(0))); break;
+    }
+}
 static void co_init(X86Ctx *ctx) { RET(CoInitializeEx(NULL,ARG(1))); }
 static void co_uninit(X86Ctx *ctx) { (void)ctx;CoUninitialize(); }
 static void co_free(X86Ctx *ctx) { rt_heap_free(ARG(0)); }

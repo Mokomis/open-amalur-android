@@ -315,6 +315,21 @@ static void track_input(uint32_t msg, uint32_t wp, uint32_t lp)
     if (msg == 0x020A) rt_input_mouse[2] += (int16_t)(wp >> 16); /* WM_MOUSEWHEEL */
 }
 
+/* The engine renders at the selected resolution even when its host window
+   fills a larger monitor. Convert client-space input across that boundary. */
+static void scale_client_point(Win *window, POINT *point, int to_host)
+{
+    RECT bounds;
+    if (!window || !window->host || !GetClientRect(window->host, &bounds) ||
+        bounds.right <= 0 || bounds.bottom <= 0) return;
+    int from_w = to_host ? SCREEN_W : bounds.right;
+    int from_h = to_host ? SCREEN_H : bounds.bottom;
+    int to_w = to_host ? bounds.right : SCREEN_W;
+    int to_h = to_host ? bounds.bottom : SCREEN_H;
+    point->x = (LONG)((int64_t)point->x * to_w / from_w);
+    point->y = (LONG)((int64_t)point->y * to_h / from_h);
+}
+
 /* Messages of the host queue for our windows, as guest MSGs. */
 static int next_message(uint32_t m, int remove)
 {
@@ -330,6 +345,14 @@ static int next_message(uint32_t m, int remove)
         }
         if (msg == 0x000F && hh) host_validate(hh); /* WM_PAINT: deliver once, then validated */
         if (remove) track_input(msg, wp, lp);
+        if (g && msg == WM_SIZE && wp != SIZE_MINIMIZED)
+            lp = (uint32_t)SCREEN_W | ((uint32_t)SCREEN_H << 16);
+        if (g && ((msg >= WM_MOUSEMOVE && msg <= WM_MBUTTONDBLCLK) ||
+                  (msg >= WM_XBUTTONDOWN && msg <= WM_XBUTTONDBLCLK))) {
+            POINT point = {(int16_t)lp, (int16_t)(lp >> 16)};
+            scale_client_point(win(g), &point, 0);
+            lp = (uint16_t)point.x | ((uint32_t)(uint16_t)point.y << 16);
+        }
         st32(m, g); st32(m + 4, msg); st32(m + 8, wp); st32(m + 12, lp);
         st32(m + 16, t); st32(m + 20, (uint32_t)x); st32(m + 24, (uint32_t)y);
         return 1;
@@ -421,13 +444,18 @@ static void u_GetClipCursor(X86Ctx *ctx)
 static void u_ScreenToClient(X86Ctx *ctx)
 {
     Win *window = win(ARG(0));
-    RET(window && window->host && ScreenToClient(window->host, rt_ptr(ARG(1))));
+    POINT *point = rt_ptr(ARG(1));
+    BOOL ok = window && window->host && ScreenToClient(window->host, point);
+    if (ok) scale_client_point(window, point, 0);
+    RET(ok);
 }
 
 static void u_ClientToScreen(X86Ctx *ctx)
 {
     Win *window = win(ARG(0));
-    RET(window && window->host && ClientToScreen(window->host, rt_ptr(ARG(1))));
+    POINT *point = rt_ptr(ARG(1));
+    if (window && window->host) scale_client_point(window, point, 1);
+    RET(window && window->host && ClientToScreen(window->host, point));
 }
 
 static void u_MapWindowPoints(X86Ctx *ctx)
@@ -435,7 +463,11 @@ static void u_MapWindowPoints(X86Ctx *ctx)
     Win *from = win(ARG(0));
     Win *to = win(ARG(1));
     if ((ARG(0) && !from) || (ARG(1) && !to)) { RET(0); return; }
-    RET(MapWindowPoints(from ? from->host : NULL, to ? to->host : NULL, rt_ptr(ARG(2)), ARG(3)));
+    POINT *points = rt_ptr(ARG(2));
+    for (uint32_t i = 0; i < ARG(3); ++i) scale_client_point(from, &points[i], 1);
+    int delta = MapWindowPoints(from ? from->host : NULL, to ? to->host : NULL, points, ARG(3));
+    for (uint32_t i = 0; i < ARG(3); ++i) scale_client_point(to, &points[i], 0);
+    RET(delta);
 }
 
 static void u_GetKeyState(X86Ctx *ctx) { RET(vk_down[ARG(0) & 0xFF] ? 0xFFFF8000u : 0); }

@@ -9,6 +9,7 @@
 #include "display_modes.h"
 
 int oa_guest_main(int, char **);
+void host_window_set_mode(int mode);
 void oa_vk_android_initialize_log(const char *);
 void oa_perf_start(const char *);
 void veil_shadow_init(void);
@@ -120,6 +121,7 @@ int main(int argc, char **argv)
         fprintf(stderr, "WINDOWS_RESOLUTION index=%d size=%sx%s\n", index, width, height);
     }
     free(modes.sizes);
+    host_window_set_mode(veil_windows_mode(profile));
 
     static AAssetManager assets;
     assets.directory = asset_path;

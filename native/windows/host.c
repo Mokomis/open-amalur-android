@@ -8,6 +8,7 @@
 #include <sys/stat.h>
 #include <stdio.h>
 #include "rt.h"
+#include "window_mode.h"
 
 void *host_reserve(size_t size) { return VirtualAlloc(NULL, size, MEM_RESERVE, PAGE_NOACCESS); }
 int host_commit(void *p, size_t size) { return VirtualAlloc(p, size, MEM_COMMIT, PAGE_READWRITE) != NULL; }
@@ -109,6 +110,12 @@ void *host_d3d9_create(uint32_t sdk_version)
 /* ---- windows: one real top-level window per guest top-level window ---- */
 static HWND main_window;
 
+void host_window_set_mode(int mode)
+{
+    oa_window_mode.requested = mode >= 0 && mode <= 2 ? mode : 0;
+    atexit(oa_window_mode_shutdown);
+}
+
 HWND oa_android_present_lock(uint64_t *generation)
 {
     if (generation) *generation = 1;
@@ -141,6 +148,7 @@ uint64_t oa_adpf_reports[2];
 
 static LRESULT CALLBACK host_wndproc(HWND h, UINT msg, WPARAM wp, LPARAM lp)
 {
+    oa_window_mode_event(h, msg, wp);
     if (msg == WM_DESTROY) {
         rt_log("host window closed: exiting");
         ExitProcess(0);
@@ -160,12 +168,12 @@ void *host_window_create(int w, int h, const char *title)
         RegisterClassW(&c);
         registered = 1;
     }
-    RECT r = {0, 0, w, h};
-    AdjustWindowRect(&r, WS_OVERLAPPEDWINDOW, FALSE);
     wchar_t wt[128];
     MultiByteToWideChar(CP_UTF8, 0, title, -1, wt, 128);
-    HWND hw = CreateWindowExW(0, L"OpenAmalur", wt, WS_OVERLAPPEDWINDOW | WS_VISIBLE, CW_USEDEFAULT,
-                              CW_USEDEFAULT, r.right - r.left, r.bottom - r.top, NULL, NULL, GetModuleHandleW(NULL), NULL);
+    HWND hw = main_window
+        ? CreateWindowExW(0, L"OpenAmalur", wt, WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,
+                          w, h, NULL, NULL, GetModuleHandleW(NULL), NULL)
+        : oa_window_mode_create(w, h, wt, L"OpenAmalur");
     if (hw && !main_window) main_window = hw;
     return hw;
 }
@@ -185,7 +193,10 @@ int host_peek_message(void **hwnd, uint32_t *msg, uint32_t *wp, uint32_t *lp, ui
 {
     MSG m;
     if (!PeekMessageW(&m, NULL, 0, 0, remove ? PM_REMOVE : PM_NOREMOVE)) return 0;
-    if (remove) last_msg = m;
+    if (remove) {
+        last_msg = m;
+        oa_window_mode_event(m.hwnd, m.message, m.wParam);
+    }
     if (remove && m.hwnd == main_window &&
         (m.message == WM_KEYUP || m.message == WM_SYSKEYUP || m.message == WM_LBUTTONUP))
         oa_intro_movie_input(1);

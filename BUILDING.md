@@ -113,8 +113,12 @@ $profile = Join-Path $PWD 'build\windows-profile'
 & .\build\windows\OpenAmalur.exe $game $profile "$profile\assets"
 ```
 
-The Windows installer applies the signed release's Veil recipe into a local profile using your game files. It keeps the original archives read-only and omits Android Hardware Scaling from the Resolution tab. The profile also holds Windows settings, saves and runtime logs.
+The Windows installer applies the signed release's Veil recipe into a local profile using your game files. It keeps the original archives read-only and replaces Android Hardware Scaling with Windows display modes in the Resolution tab. The profile also holds Windows settings, saves and runtime logs.
 
-Windows Options → Resolution includes every distinct size reported by Windows for attached desktop displays, plus the current desktop size and the existing 1920×1080 and 960×540 presets. Duplicate refresh-rate/color-depth modes share one size; portrait dimensions retain their orientation. Selections are saved by dimensions and take effect after restarting the game. The list is detected again each launch; a saved size that is no longer available falls back to 1920×1080. This changes the game render/window size, not the desktop display mode.
+Windows Options → Resolution includes every distinct size reported by Windows for attached desktop displays, plus the current desktop size and the existing 1920×1080 and 960×540 presets. Duplicate refresh-rate/color-depth modes share one size; portrait dimensions retain their orientation. Selections are saved by dimensions and take effect after restarting the game. The list is detected again each launch; a saved size that is no longer available falls back to 1920×1080. In Windowed mode this selects the game render/window size. Borderless Fullscreen covers the monitor at its desktop size while rendering at the selected resolution. Fullscreen temporarily switches the primary monitor to the selected resolution and restores the desktop when the game loses focus or exits. If a fullscreen size is unavailable on that monitor, a message explains the fallback to Borderless Fullscreen. Window Mode and Resolution changes apply after restarting.
 
 For Windows testing, launch with `VK_LOADER_LAYERS_DISABLE=~implicit~` and remove `VK_INSTANCE_LAYERS` to keep implicit Vulkan overlays disabled.
+
+Android continues to use immersive fullscreen. Its floating windows, split-screen and desktop windowing are managed by Android and the device manufacturer; the Windows-only mode selector is not installed in Android menus.
+
+Run `python3 tools/tests/test_windows_window_mode.py` to check Windows preference defaults, valid/invalid choices, persistence and restart semantics using a host file-operation shim. Real Win32 window sizing, monitor switching and focus restoration require an interactive Windows session.
