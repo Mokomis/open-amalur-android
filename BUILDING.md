@@ -119,6 +119,10 @@ Windows Options → Resolution includes every distinct size reported by Windows 
 
 For Windows testing, launch with `VK_LOADER_LAYERS_DISABLE=~implicit~` and remove `VK_INSTANCE_LAYERS` to keep implicit Vulkan overlays disabled.
 
+Windows audio queues six mixer quanta through waveOut. At the game's 48 kHz / 480-frame configuration this provides 60 ms of buffering: the previous 30 ms queue ran dry when the output device returned buffers in 40 ms batches. Verify output with Windows loopback capture during music and outdoor gameplay. Android uses AAudio and does not share this queue.
+
+For every Windows change, check the corresponding Android implementation and whether the live Android release needs the same fix. Verify relevant Android behavior where possible and record any remaining device-test limits.
+
 In Options, LB/RB switch categories, the D-pad or left stick selects rows, left/right adjusts values, A opens actions, and B goes back. Windows maps shoulder presses to the engine's category trigger actions only while Options is visible, matching Android's existing adapter. This handles both title-screen and paused-game Options without changing gameplay shoulder buttons.
 
 Android continues to use immersive fullscreen. Its floating windows, split-screen and desktop windowing are managed by Android and the device manufacturer; the Windows-only mode selector is not installed in Android menus.

@@ -4,6 +4,9 @@
 #ifdef _WIN32
 #include <mmsystem.h>
 #include <mmreg.h>
+/* waveOut can return completed buffers in 40 ms batches. Six 10 ms mixer
+ * quanta keep output queued across a batch and leave refill headroom. */
+#define WINDOWS_AUDIO_BUFFERS 6
 #else
 #include <aaudio/AAudio.h>
 #include <sys/resource.h>
@@ -20,7 +23,7 @@ typedef struct {
 #ifdef _WIN32
     HWAVEOUT stream;
     HANDLE ready;
-    WAVEHDR buffers[3];
+    WAVEHDR buffers[WINDOWS_AUDIO_BUFFERS];
     float *device_buffers;
     unsigned next_buffer;
 #else
@@ -46,7 +49,7 @@ static void close_output(AudioDevice *device)
     if (!device->stream) return;
 #ifdef _WIN32
     waveOutReset(device->stream);
-    for (unsigned i = 0; i < 3; ++i)
+    for (unsigned i = 0; i < WINDOWS_AUDIO_BUFFERS; ++i)
         if (device->buffers[i].dwFlags & WHDR_PREPARED)
             waveOutUnprepareHeader(device->stream, &device->buffers[i], sizeof device->buffers[i]);
     waveOutClose(device->stream);
@@ -65,7 +68,7 @@ static int open_output(AudioDevice *device)
 {
 #ifdef _WIN32
     const size_t samples = (size_t)device->quantum * device->channels;
-    device->device_buffers = calloc(3 * samples, sizeof(float));
+    device->device_buffers = calloc(WINDOWS_AUDIO_BUFFERS * samples, sizeof(float));
     if (!device->device_buffers) return -1;
     device->ready = CreateEventW(NULL, FALSE, FALSE, NULL);
     WAVEFORMATEX format = {
@@ -82,7 +85,7 @@ static int open_output(AudioDevice *device)
         free(device->device_buffers);
         return -1;
     }
-    for (unsigned i = 0; i < 3; ++i) {
+    for (unsigned i = 0; i < WINDOWS_AUDIO_BUFFERS; ++i) {
         WAVEHDR *buffer = &device->buffers[i];
         buffer->lpData = (char *)(device->device_buffers + i * samples);
         buffer->dwBufferLength = (DWORD)(samples * sizeof(float));
@@ -170,7 +173,7 @@ static void *mix_output(void *opaque)
             close_output(device);
             FAudio_sleep(20);
         } else {
-            device->next_buffer = (device->next_buffer + 1) % 3;
+            device->next_buffer = (device->next_buffer + 1) % WINDOWS_AUDIO_BUFFERS;
         }
 #else
         int written = 0;
