@@ -11,8 +11,7 @@ import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
 import android.widget.LinearLayout;
-import android.widget.RadioButton;
-import android.widget.RadioGroup;
+import android.widget.ScrollView;
 import android.widget.TextView;
 
 import java.io.File;
@@ -25,8 +24,12 @@ public final class SetupActivity extends Activity {
     private Uri gameFolder;
     private TextView status;
     private Button browse;
+    private Button internalChoice;
+    private Button sdChoice;
     private boolean importing;
     private File selectedStorage;
+    private File internalStorage;
+    private File sdStorage;
 
     @Override protected void onCreate(Bundle saved) {
         super.onCreate(saved);
@@ -56,30 +59,39 @@ public final class SetupActivity extends Activity {
                 ? "The game folder or All files access is unavailable. Check the storage volume and grant access to continue."
                 : installed ? "Opening Open Amalur…" : repairTitle
                 ? "The title animation is missing. Choose your Re-Reckoning folder to restore it."
-                : "Choose the Kingdoms of Amalur: Re-Reckoning folder containing koa.exe and data.\n"
-                        + (storageChoices.length > 1 ? "Choose an install location below. "
-                        : "Only device storage is available. ")
-                        + "Open Amalur uses that folder in place on the selected volume. "
-                        + "It needs about 1.5 GB free there for its patched archive, plus saves.");
+                : "Where are your Re-Reckoning game files? Choose the storage below, then select "
+                        + "the folder containing koa.exe and data. Open Amalur uses those files in place "
+                        + "without making another full game copy.");
         panel.addView(status);
-        if (!installed && !missingStorage) {
+        if (!installed) {
             selectedStorage = GameStorage.recommended(this, storageChoices);
-            if (storageChoices.length > 1) {
-                RadioGroup locations = new RadioGroup(this);
-                locations.setOrientation(RadioGroup.VERTICAL);
-                for (int index = 0; index < storageChoices.length; ++index) {
-                    File choice = storageChoices[index];
-                    RadioButton option = new RadioButton(this);
-                    option.setId(View.generateViewId());
-                    option.setText(GameStorage.label(choice));
-                    option.setTextColor(Color.WHITE);
-                    option.setTextSize(16);
-                    option.setOnClickListener(view -> selectedStorage = choice);
-                    locations.addView(option);
-                    if (choice.equals(selectedStorage)) locations.check(option.getId());
-                }
-                panel.addView(locations);
+            for (File choice : storageChoices) {
+                if (GameStorage.removable(choice)) sdStorage = choice;
+                else if (internalStorage == null) internalStorage = choice;
             }
+            internalChoice = new Button(this);
+            internalChoice.setText("Set up and play from internal storage");
+            internalChoice.setEnabled(internalStorage != null);
+            internalChoice.setOnClickListener(view -> chooseStorage(internalStorage));
+            panel.addView(internalChoice);
+            TextView internalNote = new TextView(this);
+            internalNote.setTextColor(Color.LTGRAY);
+            internalNote.setGravity(Gravity.CENTER);
+            internalNote.setText("Uses the existing folder on this device. About 1.5 GB free is needed for Veil and saves.");
+            panel.addView(internalNote);
+            sdChoice = new Button(this);
+            sdChoice.setText(sdStorage == null ? "Set up and play from SD card (no card detected)"
+                    : "Set up and play from SD card");
+            sdChoice.setEnabled(sdStorage != null);
+            sdChoice.setOnClickListener(view -> chooseStorage(sdStorage));
+            panel.addView(sdChoice);
+            TextView sdNote = new TextView(this);
+            sdNote.setTextColor(Color.LTGRAY);
+            sdNote.setGravity(Gravity.CENTER);
+            sdNote.setText(sdStorage == null ? "Insert an SD card with your game folder to use this option."
+                    : String.format(Locale.ROOT, "Uses the existing folder on the card. %.1f GB free on card.",
+                            sdStorage.getUsableSpace() / 1_000_000_000.0));
+            panel.addView(sdNote);
         }
         browse = new Button(this);
         browse.setText(installed || missingStorage ? "Retry" : "Choose game folder");
@@ -90,10 +102,20 @@ public final class SetupActivity extends Activity {
             browse.setVisibility(View.GONE);
         } else {
             browse.setOnClickListener(view -> selectFolder());
+            browse.setVisibility(View.GONE);
         }
         panel.addView(browse);
-        setContentView(panel);
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        scroll.addView(panel);
+        setContentView(scroll);
         if (installed) launchExistingGame();
+    }
+
+    private void chooseStorage(File choice) {
+        if (choice == null || importing) return;
+        selectedStorage = choice;
+        selectFolder();
     }
 
     @Override protected void onSaveInstanceState(Bundle out) {
@@ -120,7 +142,7 @@ public final class SetupActivity extends Activity {
             if (gameFolder != null && android.os.Build.VERSION.SDK_INT >= 30
                     && Environment.isExternalStorageManager())
                 importFiles(gameFolder, null);
-            else status.setText("Allow All files access to play from the SD card, then retry.");
+            else status.setText("Allow All files access to play from the selected game folder, then retry.");
             return;
         }
         if (result != RESULT_OK || data == null || data.getData() == null || importing) return;
@@ -160,6 +182,8 @@ public final class SetupActivity extends Activity {
     private void importFiles(Uri folder, Uri compiler) {
         importing = true;
         browse.setEnabled(false);
+        if (internalChoice != null) internalChoice.setEnabled(false);
+        if (sdChoice != null) sdChoice.setEnabled(false);
         status.setText("Checking game files…");
         new Thread(() -> {
             try {
@@ -174,7 +198,10 @@ public final class SetupActivity extends Activity {
                     browse.setText("Choose DirectX library");
                     browse.setOnClickListener(view -> selectCompiler());
                     browse.setEnabled(true);
+                    browse.setVisibility(View.VISIBLE);
                     importing = false;
+                    if (internalChoice != null) internalChoice.setEnabled(internalStorage != null);
+                    if (sdChoice != null) sdChoice.setEnabled(sdStorage != null);
                 });
             } catch (IOException | IllegalArgumentException | SecurityException error) {
                 runOnUiThread(() -> {
@@ -183,6 +210,9 @@ public final class SetupActivity extends Activity {
                     browse.setOnClickListener(view -> selectFolder());
                     browse.setEnabled(true);
                     importing = false;
+                    browse.setVisibility(View.GONE);
+                    if (internalChoice != null) internalChoice.setEnabled(internalStorage != null);
+                    if (sdChoice != null) sdChoice.setEnabled(sdStorage != null);
                 });
             }
         }, "game-file-import").start();

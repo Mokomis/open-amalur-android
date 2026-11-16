@@ -21,7 +21,7 @@ Veil draws visual inspiration from other interfaces, including Edge for Skyrim. 
 ## Download and install
 
 1. Download the APK directly to your Android device and install it. [GitHub Releases](https://github.com/Mokomis/open-amalur-android/releases/latest)
-2. Open Open Amalur and choose the Re-Reckoning folder containing `koa.exe` and `data`.
+2. Open Open Amalur. Choose **Set up and play from internal storage** or **Set up and play from SD card**, then select the Re-Reckoning folder containing `koa.exe` and `data` on that volume.
 3. Setup prepares Veil and starts the game with the engine bundled in the APK. It reads your existing game folder directly, on internal or SD storage.
 
 With the v0.1.6 APK and game files on your device, setup and play work offline. Install updates over your existing copy of Open Amalur to keep your saves, settings, and touch layout.
