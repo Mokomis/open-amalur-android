@@ -14,6 +14,8 @@ The app queries [`Display.getSupportedModes()`](https://developer.android.com/re
 
 When preparing a new Veil recipe, run `tools/patch_veil_display_modes.py` on the current `134230570_klua.batch`, then pass the output as a replacement to `generate_veil_edits.py` with the previous release metadata. The dynamic selector requires the matching Android engine. Run `python tools/tests/test_display_resolutions.py` on a host with a C compiler to verify enumeration, preference migration and mode reordering.
 
+For the v0.1.10 menu update, run `tools/fix_veil_menu_overlap.py` on the v0.1.9 UI script batch before regenerating the recipe with the previous release metadata. This restores the ledger's original detail-screen portrait predicate, keeping Status and inventory cards clear while retaining the full portrait on the Character summary. New builds from retail inputs no longer bypass that predicate in `tools/mark_veil_portraits.py`.
+
 ## Build from source
 
 Use these steps if you want to develop or mod the engine. The build translates the supported Windows x86 binaries to C and compiles that C to Android ARM64. It runs on a Windows x86-64 PC.
