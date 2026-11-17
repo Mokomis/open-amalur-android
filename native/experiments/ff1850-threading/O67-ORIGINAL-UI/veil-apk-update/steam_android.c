@@ -136,6 +136,23 @@ static void remote_quota(X86Ctx*ctx){Proxy*p=self(ctx);RET(((bool(*)(void*,uint6
 static void remote_timestamp(X86Ctx*ctx){Proxy*p=self(ctx);uint64_t t=((uint64_t(*)(void*,const char*))method(p,16))(p->host,rt_str(ARG(0)));ctx->eax=(uint32_t)t;ctx->edx=(uint32_t)(t>>32);}
 static void remote_account_cloud(X86Ctx*ctx){Proxy*p=self(ctx);RET(((bool(*)(void*))method(p,21))(p->host));}
 static void remote_app_cloud(X86Ctx*ctx){Proxy*p=self(ctx);RET(((bool(*)(void*))method(p,22))(p->host));}
+/* The original UI can request friend and DLC-store overlays. Offline Android
+ * has no overlay host; these void calls must return without opening one. */
+static void overlay_to_user(X86Ctx*ctx){
+#ifdef OA_STEAM_BRIDGE
+    Proxy*p=self(ctx);uint64_t id=(uint64_t)ARG(1)|((uint64_t)ARG(2)<<32);
+    ((void(*)(void*,const char*,uint64_t))method(p,29))(p->host,rt_str(ARG(0)),id);
+#else
+    (void)ctx;static unsigned logged;if(!logged++){rt_log("OFFLINE: friend overlay request ignored");}
+#endif
+}
+static void overlay_to_store(X86Ctx*ctx){
+#ifdef OA_STEAM_BRIDGE
+    Proxy*p=self(ctx);((void(*)(void*,uint32_t,uint32_t))method(p,31))(p->host,ARG(0),ARG(1));
+#else
+    (void)ctx;static unsigned logged;if(!logged++){rt_log("OFFLINE: store overlay request ignored");}
+#endif
+}
 static void local_presence_denied(X86Ctx*ctx){(void)rt_str(ARG(0));(void)rt_str(ARG(1));static int logged;if(!logged++){rt_log("DIAGNOSTIC POLICY: Steam SetRichPresence rejected locally; returning SDK failure, no status published");}RET(0);}
 static void persona(X86Ctx*ctx){Proxy*p=self(ctx);const char*s=((const char*(*)(void*))symbol("SteamAPI_ISteamFriends_GetPersonaName"))(p->host);if(!s){RET(0);return;}size_t n=strlen(s)+1;if(n>4096)rt_fatal("Steam persona exceeds bound");uint32_t g=rt_heap_alloc(n,0);memcpy(rt_ptr(g),s,n);RET(g);}
 static void language(X86Ctx *ctx){
@@ -179,7 +196,7 @@ static uint32_t make_proxy(void *host,const char *version){
         set_method(p,10,stats_store,0);
 #endif
         set_method(p,6,achievement_get,2);set_method(p,12,achievement_display,2);set_method(p,14,achievement_count,0);set_method(p,15,achievement_name,1);
-    }else if(!strcmp(version,"SteamFriends015")){set_method(p,0,persona,0);set_method(p,43,local_presence_denied,2);
+    }else if(!strcmp(version,"SteamFriends015")){set_method(p,0,persona,0);set_method(p,29,overlay_to_user,3);set_method(p,31,overlay_to_store,2);set_method(p,43,local_presence_denied,2);
     }else if(!strcmp(version,"SteamUser019")){set_method(p,2,user_id,1);set_method(p,1,user_logged_on,0);
     }else if(!strcmp(version,"STEAMAPPS_INTERFACE_VERSION008")){
         set_method(p,6,subscribed,1);set_method(p,7,dlc_installed,1);set_method(p,4,language,0);

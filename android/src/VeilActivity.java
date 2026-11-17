@@ -44,6 +44,7 @@ public final class VeilActivity extends NativeActivity {
     private final SparseArray<Vibrator> activeRumble = new SparseArray<>();
     private UpdateBadge updateBadge;
     private GameFileActions gameFileActions;
+    private boolean noOverlays;
 
     @Override public void onCreate(Bundle state) {
         try {
@@ -52,6 +53,7 @@ public final class VeilActivity extends NativeActivity {
             throw new IllegalStateException(error);
         }
         super.onCreate(state);
+        noOverlays = getIntent().getBooleanExtra("oa_no_overlays", false);
         if (GameStorage.root(this) == null || !GameFiles.ready(this, GameStorage.root(this))) {
             startActivity(new Intent(this, SetupActivity.class));
             finish();
@@ -62,7 +64,7 @@ public final class VeilActivity extends NativeActivity {
         gameFileActions = new GameFileActions(this);
         updateBadge = new UpdateBadge(this, gameFileActions::show);
         getWindow().getDecorView().post(() -> {
-            if (isFinishing() || isDestroyed()) return;
+            if (isFinishing() || isDestroyed() || noOverlays) return;
             WindowManager.LayoutParams controls = new WindowManager.LayoutParams(
                     WindowManager.LayoutParams.MATCH_PARENT,
                     WindowManager.LayoutParams.MATCH_PARENT,
@@ -321,7 +323,7 @@ public final class VeilActivity extends NativeActivity {
         private boolean hasGesture;
         private final Runnable pulse = new Runnable() {
             @Override public void run() {
-                updateBadge.show(VeilActivity.this.hasWindowFocus() && titleVisible() != 0);
+                updateBadge.show(!noOverlays && VeilActivity.this.hasWindowFocus() && titleVisible() != 0);
                 int current = mode();
                 if (current == 2) openEditor();
                 boolean next = current == 1 || current == 3;

@@ -285,7 +285,9 @@ public final class SetupActivity extends Activity {
 
     private void startEngine() {
         if (isFinishing() || isDestroyed()) return;
-        startActivity(new Intent(this, VeilActivity.class));
+        Intent game = new Intent(this, VeilActivity.class);
+        game.putExtra("oa_no_overlays", getIntent().getBooleanExtra("oa_no_overlays", false));
+        startActivity(game);
         finish();
     }
 }
