@@ -81,6 +81,19 @@ static void utils_big_picture(X86Ctx *ctx)
     RET(0); /* Offline Android has no Steam Big Picture session. */
 #endif
 }
+/* The original text-entry path falls back when the Steam gamepad overlay
+ * cannot be shown; preserve that branch in offline Android. */
+static void utils_gamepad_text_input(X86Ctx *ctx)
+{
+#ifdef OA_STEAM_BRIDGE
+    Proxy *p = self(ctx);
+    RET(((bool(*)(void *,int,int,const char *,uint32_t,const char *))method(p,20))(
+        p->host,(int)ARG(0),(int)ARG(1),rt_str(ARG(2)),ARG(3),
+        ARG(4)?rt_str(ARG(4)):NULL));
+#else
+    RET(0);
+#endif
+}
 static void dlc_installed(X86Ctx*ctx){Proxy*p=self(ctx);RET(((bool(*)(void*,uint32_t))method(p,7))(p->host,ARG(0)));}
 static void subscribed(X86Ctx *ctx){
     Proxy *p=self(ctx);
@@ -123,6 +136,76 @@ static void stats_store(X86Ctx *ctx)
     bool ok = commit_local_stats();
     rt_log("OFFLINE: StoreStats local result=%u", ok);
     RET(ok);
+}
+/* Leaderboards are remote-only. Complete the original async polling path with
+ * an empty local result so its UI can leave the pending state without Steam. */
+typedef struct { uint64_t handle; int callback; } OfflineApiCall;
+static OfflineApiCall offline_calls[64];
+static uint64_t next_offline_call = 1;
+static pthread_mutex_t offline_call_lock = PTHREAD_MUTEX_INITIALIZER;
+static uint64_t begin_offline_call(int callback)
+{
+    pthread_mutex_lock(&offline_call_lock);
+    unsigned slot = 0;
+    while (slot < 64 && offline_calls[slot].handle) ++slot;
+    if (slot == 64) { pthread_mutex_unlock(&offline_call_lock); rt_fatal("offline API call bound"); }
+    uint64_t handle = next_offline_call++;
+    if (!handle) handle = next_offline_call++;
+    offline_calls[slot] = (OfflineApiCall){handle, callback};
+    pthread_mutex_unlock(&offline_call_lock);
+    return handle;
+}
+static void return_offline_call(X86Ctx *ctx, int callback)
+{
+    uint64_t handle = begin_offline_call(callback);
+    ctx->eax = (uint32_t)handle;
+    ctx->edx = (uint32_t)(handle >> 32);
+}
+static void leaderboard_find(X86Ctx *ctx)
+{
+    if (ARG(0)) (void)rt_str(ARG(0));
+    return_offline_call(ctx, 1104); /* LeaderboardFindResult_t */
+    static unsigned logged;
+    if (!logged++) rt_log("OFFLINE: leaderboards unavailable; returning empty results locally");
+}
+static void leaderboard_download(X86Ctx *ctx)
+{
+    (void)ARG(0); (void)ARG(1); (void)ARG(2); (void)ARG(3); (void)ARG(4);
+    return_offline_call(ctx, 1105); /* LeaderboardScoresDownloaded_t */
+}
+static uint64_t offline_call_arg(X86Ctx *ctx)
+{
+    return (uint64_t)ARG(0) | ((uint64_t)ARG(1) << 32);
+}
+static void utils_api_call_completed(X86Ctx *ctx)
+{
+    uint64_t handle = offline_call_arg(ctx);
+    bool found = false;
+    pthread_mutex_lock(&offline_call_lock);
+    for (unsigned i = 0; i < 64; ++i) if (offline_calls[i].handle == handle && handle) { found = true; break; }
+    pthread_mutex_unlock(&offline_call_lock);
+    if (ARG(2)) st8(ARG(2), !found);
+    RET(found);
+}
+static void utils_api_call_result(X86Ctx *ctx)
+{
+    uint64_t handle = offline_call_arg(ctx);
+    uint32_t out = ARG(2), bytes = ARG(3);
+    int callback = (int)ARG(4);
+    bool valid = out && ((callback == 1104 && bytes == 16) || (callback == 1105 && bytes == 24));
+    bool found = false;
+    if (valid) {
+        pthread_mutex_lock(&offline_call_lock);
+        for (unsigned i = 0; i < 64; ++i) if (offline_calls[i].handle == handle && handle && offline_calls[i].callback == callback) {
+            offline_calls[i].handle = 0;
+            found = true;
+            break;
+        }
+        pthread_mutex_unlock(&offline_call_lock);
+    }
+    if (ARG(5)) st8(ARG(5), !found);
+    if (found) memset(rt_ptr(out), 0, bytes); /* not found / zero entries */
+    RET(found);
 }
 #endif
 static void remote_count(X86Ctx*ctx){Proxy*p=self(ctx);int n=((int(*)(void*))method(p,18))(p->host);rt_log("local platform file count=%d",n);RET(n);}
@@ -185,6 +268,11 @@ static uint32_t make_proxy(void *host,const char *version){
     }else if(!strcmp(version,"SteamController006")){
         set_method(p,0,controller_init,0);set_method(p,1,controller_shutdown,0);set_method(p,2,controller_frame,0);set_method(p,3,controller_connected,1);set_method(p,5,controller_set_handle,1);set_method(p,12,controller_digital_handle,1);set_method(p,15,controller_analog_handle,1);
     }else if(!strcmp(version,"SteamUtils009")){
+#ifndef OA_STEAM_BRIDGE
+        set_method(p,11,utils_api_call_completed,3);
+        set_method(p,13,utils_api_call_result,6);
+#endif
+        set_method(p,20,utils_gamepad_text_input,5);
         set_method(p,26,utils_big_picture,0);
     }else if(!strcmp(version,"STEAMUSERSTATS_INTERFACE_VERSION011")){
         set_method(p,0,current_stats,0);
@@ -194,6 +282,8 @@ static uint32_t make_proxy(void *host,const char *version){
         set_method(p,3,stat_set_int,2);
         set_method(p,4,stat_set_float,2);
         set_method(p,10,stats_store,0);
+        set_method(p,23,leaderboard_find,1);
+        set_method(p,28,leaderboard_download,5);
 #endif
         set_method(p,6,achievement_get,2);set_method(p,12,achievement_display,2);set_method(p,14,achievement_count,0);set_method(p,15,achievement_name,1);
     }else if(!strcmp(version,"SteamFriends015")){set_method(p,0,persona,0);set_method(p,29,overlay_to_user,3);set_method(p,31,overlay_to_store,2);set_method(p,43,local_presence_denied,2);
