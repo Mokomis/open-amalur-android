@@ -1,7 +1,11 @@
 package org.openamalur.originalengine;
 
 import android.app.Activity;
+import android.app.ActivityManager;
+import android.app.ApplicationExitInfo;
+import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
@@ -21,6 +25,8 @@ import java.util.Locale;
 public final class SetupActivity extends Activity {
     private static final int GAME_FOLDER = 1, COMPILER_FILE = 2, ENGINE_FILE = 3,
             ALL_FILES_ACCESS = 4;
+    private static final String CRASH_PREFERENCES = "crash-report-prompt";
+    private static final String ACKNOWLEDGED_CRASH = "acknowledged-crash";
     private Uri gameFolder;
     private TextView status;
     private Button browse;
@@ -93,13 +99,33 @@ public final class SetupActivity extends Activity {
                             sdStorage.getUsableSpace() / 1_000_000_000.0));
             panel.addView(sdNote);
         }
+        long crashTime = installed ? recentCrashTime() : 0;
+        boolean showCrashReport = crashTime > getSharedPreferences(CRASH_PREFERENCES,
+                MODE_PRIVATE).getLong(ACKNOWLEDGED_CRASH, 0);
+        if (showCrashReport)
+            status.setText("Open Amalur closed unexpectedly. You can send a crash report "
+                    + "or continue playing. No report is sent without your choice.");
+        if (showCrashReport) {
+            Button report = new Button(this);
+            report.setText("Create and share crash report");
+            report.setOnClickListener(view -> {
+                acknowledgeCrash(crashTime);
+                startActivity(new Intent(this, CrashReportActivity.class));
+                finish();
+            });
+            panel.addView(report);
+        }
         browse = new Button(this);
-        browse.setText(installed || missingStorage ? "Retry" : "Choose game folder");
+        browse.setText(showCrashReport ? "Play Open Amalur"
+                : installed || missingStorage ? "Retry" : "Choose game folder");
         if (missingStorage) {
             browse.setOnClickListener(view -> recreate());
         } else if (installed) {
-            browse.setOnClickListener(view -> launchExistingGame());
-            browse.setVisibility(View.GONE);
+            browse.setOnClickListener(view -> {
+                if (showCrashReport) acknowledgeCrash(crashTime);
+                launchExistingGame();
+            });
+            browse.setVisibility(showCrashReport ? View.VISIBLE : View.GONE);
         } else {
             browse.setOnClickListener(view -> selectFolder());
             browse.setVisibility(View.GONE);
@@ -109,7 +135,33 @@ public final class SetupActivity extends Activity {
         scroll.setFillViewport(true);
         scroll.addView(panel);
         setContentView(scroll);
-        if (installed) launchExistingGame();
+        if (installed && !showCrashReport) launchExistingGame();
+    }
+
+    private long recentCrashTime() {
+        if (android.os.Build.VERSION.SDK_INT < 30) return 0;
+        ActivityManager manager = (ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
+        if (manager == null) return 0;
+        try {
+            for (ApplicationExitInfo exit : manager.getHistoricalProcessExitReasons(
+                    getPackageName(), 0, 8)) {
+                if (!getPackageName().equals(exit.getProcessName())) continue;
+                int reason = exit.getReason();
+                if (reason == ApplicationExitInfo.REASON_CRASH ||
+                        reason == ApplicationExitInfo.REASON_CRASH_NATIVE ||
+                        reason == ApplicationExitInfo.REASON_ANR)
+                    return exit.getTimestamp();
+                return 0;
+            }
+        } catch (RuntimeException unavailable) {
+            android.util.Log.w("VeilSetup", "Cannot read recent process exits", unavailable);
+        }
+        return 0;
+    }
+
+    private void acknowledgeCrash(long timestamp) {
+        SharedPreferences preferences = getSharedPreferences(CRASH_PREFERENCES, MODE_PRIVATE);
+        preferences.edit().putLong(ACKNOWLEDGED_CRASH, timestamp).apply();
     }
 
     private void chooseStorage(File choice) {
