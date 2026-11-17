@@ -111,6 +111,7 @@ public final class SetupActivity extends Activity {
         scroll.setFillViewport(true);
         scroll.addView(panel);
         setContentView(scroll);
+        if (installed) launchExistingGame();
     }
 
     private void chooseStorage(File choice) {
