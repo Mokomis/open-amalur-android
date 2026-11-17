@@ -71,6 +71,16 @@ static void controller_action_handle(X86Ctx*ctx,unsigned slot){Proxy*p=self(ctx)
 static void controller_set_handle(X86Ctx*ctx){controller_action_handle(ctx,5);}
 static void controller_digital_handle(X86Ctx*ctx){controller_action_handle(ctx,12);}
 static void controller_analog_handle(X86Ctx*ctx){controller_action_handle(ctx,15);}
+/* SteamUtils009 slot 26 is IsSteamInBigPictureMode in the game's ABI. */
+static void utils_big_picture(X86Ctx *ctx)
+{
+#ifdef OA_STEAM_BRIDGE
+    Proxy *p = self(ctx);
+    RET(((bool(*)(void *))method(p,26))(p->host));
+#else
+    RET(0); /* Offline Android has no Steam Big Picture session. */
+#endif
+}
 static void dlc_installed(X86Ctx*ctx){Proxy*p=self(ctx);RET(((bool(*)(void*,uint32_t))method(p,7))(p->host,ARG(0)));}
 static void subscribed(X86Ctx *ctx){
     Proxy *p=self(ctx);
@@ -157,6 +167,8 @@ static uint32_t make_proxy(void *host,const char *version){
         set_method(p,1,remote_read,3);set_method(p,13,remote_exists,1);set_method(p,15,remote_size,1);set_method(p,16,remote_timestamp,1);set_method(p,18,remote_count,0);set_method(p,19,remote_name,2);set_method(p,20,remote_quota,2);set_method(p,21,remote_account_cloud,0);set_method(p,22,remote_app_cloud,0);
     }else if(!strcmp(version,"SteamController006")){
         set_method(p,0,controller_init,0);set_method(p,1,controller_shutdown,0);set_method(p,2,controller_frame,0);set_method(p,3,controller_connected,1);set_method(p,5,controller_set_handle,1);set_method(p,12,controller_digital_handle,1);set_method(p,15,controller_analog_handle,1);
+    }else if(!strcmp(version,"SteamUtils009")){
+        set_method(p,26,utils_big_picture,0);
     }else if(!strcmp(version,"STEAMUSERSTATS_INTERFACE_VERSION011")){
         set_method(p,0,current_stats,0);
 #ifndef OA_STEAM_BRIDGE
