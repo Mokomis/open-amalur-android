@@ -329,14 +329,15 @@ int rt_android_replace_name(const uint16_t *text, int length)
     if (!windows[0].used || !text || length < 1 || length > 24) return 0;
     HostWindow *window = &windows[0];
     pid_t owner = window->owner;
-    /* Select the game's initial name, then replace it using ordinary Win32 input. */
-    if (!post_to(owner, window, 0x0100, 0x11, 1u | 0x1du << 16) ||
-        !post_to(owner, window, 0x0100, 'A', 1u | 0x1eu << 16) ||
-        !post_to(owner, window, 0x0101, 'A', 1u | 0x1eu << 16 | 0xc0000000u) ||
-        !post_to(owner, window, 0x0101, 0x11, 1u | 0x1du << 16 | 0xc0000000u) ||
-        !post_to(owner, window, 0x0100, 0x08, 1u | 0x0eu << 16) ||
-        !post_to(owner, window, 0x0102, 0x08, 1u) ||
-        !post_to(owner, window, 0x0101, 0x08, 1u | 0x0eu << 16 | 0xc0000000u)) return 0;
+    /* This edit control ignores Ctrl+A. Move to the end and erase its initial
+       name with ordinary backspaces before delivering Android's committed text. */
+    if (!post_to(owner, window, 0x0100, 0x23, 1u | 0x4fu << 16) ||
+        !post_to(owner, window, 0x0101, 0x23, 1u | 0x4fu << 16 | 0xc0000000u)) return 0;
+    for (int i = 0; i < 12; ++i) {
+        if (!post_to(owner, window, 0x0100, 0x08, 1u | 0x0eu << 16) ||
+            !post_to(owner, window, 0x0102, 0x08, 1u) ||
+            !post_to(owner, window, 0x0101, 0x08, 1u | 0x0eu << 16 | 0xc0000000u)) return 0;
+    }
     for (int i = 0; i < length; ++i) {
         if (text[i] < 0x20 || text[i] == 0x7f ||
             !post_to(owner, window, 0x0102, text[i], 1u)) return 0;

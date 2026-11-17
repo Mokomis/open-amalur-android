@@ -18,6 +18,7 @@ import android.text.InputType;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.util.SparseArray;
+import android.util.Log;
 import android.view.Display;
 import android.view.InputDevice;
 import android.view.MotionEvent;
@@ -55,15 +56,21 @@ public final class VeilActivity extends NativeActivity {
     private boolean noOverlays;
     private AlertDialog namePrompt;
     private boolean promptedForName;
+    private boolean lastNameDialogState;
     private final Runnable watchNameDialog = new Runnable() {
         @Override public void run() {
             if (isFinishing() || isDestroyed()) return;
             boolean open = nameDialogVisible() != 0;
+            if (open != lastNameDialogState) {
+                Log.i("OANameInput", "name dialog=" + open + " focus=" + hasWindowFocus());
+                lastNameDialogState = open;
+            }
             if (!open) {
                 promptedForName = false;
                 if (namePrompt != null) namePrompt.dismiss();
             } else if (!promptedForName && hasWindowFocus()) {
                 promptedForName = true;
+                Log.i("OANameInput", "showing keyboard prompt");
                 showNamePrompt();
             }
             getWindow().getDecorView().postDelayed(this, 100);
@@ -80,9 +87,10 @@ public final class VeilActivity extends NativeActivity {
         int padding = (int)(24 * getResources().getDisplayMetrics().density);
         field.setPadding(padding, 0, padding, 0);
         namePrompt = new AlertDialog.Builder(this)
-                .setTitle("Enter your character's name")
-                .setMessage("Use name, then continue in the game.")
+                .setTitle("Name your character")
+                .setMessage("Enter a name to use in the game.")
                 .setView(field)
+                .setCancelable(false)
                 .setNegativeButton("Keep current", (dialog, button) -> {})
                 .setPositiveButton("Use name", (dialog, button) -> {
                     String name = field.getText().toString().trim();
@@ -99,6 +107,9 @@ public final class VeilActivity extends NativeActivity {
             return true;
         });
         namePrompt.show();
+        // Hide the game's own edit box while Android's keyboard is on screen.
+        namePrompt.getWindow().addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+        namePrompt.getWindow().setDimAmount(1f);
         namePrompt.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
         field.requestFocus();
     }
@@ -216,6 +227,7 @@ public final class VeilActivity extends NativeActivity {
 
     @Override protected void onResume() {
         super.onResume();
+        Log.i("OANameInput", "onResume");
         overlay.resume();
         getWindow().getDecorView().post(watchNameDialog);
     }
