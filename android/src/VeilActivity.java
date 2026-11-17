@@ -62,7 +62,7 @@ public final class VeilActivity extends NativeActivity {
         requestDisplayMode();
         overlay = new TouchControls();
         gameFileActions = new GameFileActions(this);
-        updateBadge = new UpdateBadge(this, gameFileActions::show);
+        updateBadge = new UpdateBadge(this, gameFileActions::show, this::openCrashReport);
         getWindow().getDecorView().post(() -> {
             if (isFinishing() || isDestroyed() || noOverlays) return;
             WindowManager.LayoutParams controls = new WindowManager.LayoutParams(
@@ -98,6 +98,11 @@ public final class VeilActivity extends NativeActivity {
     public String gameSourcePath() {
         File source = GameStorage.sourceRoot(this);
         return source == null ? null : source.getAbsolutePath();
+    }
+
+    private void openCrashReport() {
+        startActivity(new Intent(this, CrashReportActivity.class)
+                .putExtra(CrashReportActivity.CREATE_ON_OPEN, true));
     }
 
     private void requestDisplayMode() {

@@ -23,6 +23,7 @@ import java.io.InputStream;
 import java.io.RandomAccessFile;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.Arrays;
 import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -48,7 +49,7 @@ public final class CrashReportActivity extends Activity {
         title.setTextSize(26);
         panel.addView(title);
         status = new TextView(this);
-        status.setText("After a crash, tap below to share the latest run logs and Android's "
+        status.setText("After a crash, tap below to share the latest two run logs and Android's "
                 + "recorded exit details. The report does not contain game archives or saves. "
                 + "Logs can include local file paths; review who you send them to.");
         status.setTextColor(Color.LTGRAY);
@@ -110,20 +111,7 @@ public final class CrashReportActivity extends Activity {
                 .append(GameStorage.sourceRoot(this) != null).append('\n');
 
         try (ZipOutputStream zip = new ZipOutputStream(Files.newOutputStream(output.toPath()))) {
-            if (root != null) {
-                File marker = new File(root, "latest-run.txt");
-                if (marker.isFile()) {
-                    File run = new File(new String(Files.readAllBytes(marker.toPath()),
-                            StandardCharsets.UTF_8).trim()).getCanonicalFile();
-                    File canonicalRoot = root.getCanonicalFile();
-                    if (run.toPath().startsWith(canonicalRoot.toPath())
-                            && run.getName().startsWith("run-") && run.isDirectory()) {
-                        summary.append("Latest run: ").append(run.getName()).append('\n');
-                        addLog(zip, new File(run, "pc-runtime.log"));
-                        addLog(zip, new File(run, "oa-vulkan.log"));
-                    } else summary.append("Latest run marker is unavailable or invalid.\n");
-                } else summary.append("No previous run marker found.\n");
-            }
+            addRecentRuns(zip, summary, root);
             addExitInfo(zip, summary);
             zip.putNextEntry(new ZipEntry("report.txt"));
             zip.write(summary.toString().getBytes(StandardCharsets.UTF_8));
@@ -131,15 +119,54 @@ public final class CrashReportActivity extends Activity {
         }
     }
 
-    private static void addLog(ZipOutputStream zip, File file) throws IOException {
+    private static long runNumber(File file) {
+        String name = file.getName();
+        if (!name.matches("run-[0-9]{1,19}")) return -1;
+        try { return Long.parseLong(name.substring(4)); }
+        catch (NumberFormatException invalid) { return -1; }
+    }
+
+    private static void addRecentRuns(ZipOutputStream zip, StringBuilder summary, File root)
+            throws IOException {
+        if (root == null) {
+            summary.append("No selected storage for run logs.\n");
+            return;
+        }
+        File[] runs = root.listFiles(file -> file.isDirectory() && runNumber(file) >= 0);
+        if (runs == null || runs.length == 0) {
+            summary.append("No run logs found.\n");
+            return;
+        }
+        Arrays.sort(runs, (a, b) -> Long.compare(runNumber(b), runNumber(a)));
+        File canonicalRoot = root.getCanonicalFile();
+        int added = 0;
+        for (File candidate : runs) {
+            File run = candidate.getCanonicalFile();
+            if (!canonicalRoot.equals(run.getParentFile()) || !run.isDirectory()) continue;
+            String label = added == 0 ? "Latest run" : "Previous run";
+            String prefix = added == 0 ? "" : "previous-run/";
+            summary.append(label).append(": ").append(run.getName()).append('\n');
+            addLog(zip, new File(run, "pc-runtime.log"), prefix + "pc-runtime.log");
+            addLog(zip, new File(run, "oa-vulkan.log"), prefix + "oa-vulkan.log");
+            if (++added == 2) break;
+        }
+        if (added == 0) summary.append("No valid run log folders found.\n");
+    }
+
+    private static void addLog(ZipOutputStream zip, File file, String entryName) throws IOException {
         if (!file.isFile()) return;
-        zip.putNextEntry(new ZipEntry(file.getName()));
+        zip.putNextEntry(new ZipEntry(entryName));
         try (RandomAccessFile input = new RandomAccessFile(file, "r")) {
-            long skip = Math.max(0, input.length() - LOG_LIMIT);
-            input.seek(skip);
+            long length = input.length();
+            long remaining = Math.min(length, LOG_LIMIT);
+            input.seek(length - remaining);
             byte[] bytes = new byte[64 * 1024];
             int count;
-            while ((count = input.read(bytes)) != -1) zip.write(bytes, 0, count);
+            while (remaining > 0 && (count = input.read(bytes, 0,
+                    (int)Math.min(bytes.length, remaining))) != -1) {
+                zip.write(bytes, 0, count);
+                remaining -= count;
+            }
         }
         zip.closeEntry();
     }

@@ -57,7 +57,7 @@ public final class SetupActivity extends Activity {
         status.setText(missingStorage ? "The selected SD card is unavailable. Reinsert it and retry."
                 : GameStorage.directConfigured(this) && GameStorage.sourceRoot(this) == null
                 ? "The game folder or All files access is unavailable. Check the storage volume and grant access to continue."
-                : installed ? "Choose Play to start, or send a crash report if the game closed."
+                : installed ? "Choose Play to start. Crash reports are available from the main menu."
                 : repairTitle
                 ? "The title animation is missing. Choose your Re-Reckoning folder to restore it."
                 : "Where are your Re-Reckoning game files? Choose the storage below, then select "
@@ -94,11 +94,6 @@ public final class SetupActivity extends Activity {
                             sdStorage.getUsableSpace() / 1_000_000_000.0));
             panel.addView(sdNote);
         }
-        Button report = new Button(this);
-        report.setText("Create and share crash report");
-        report.setOnClickListener(view -> startActivity(new Intent(this, CrashReportActivity.class)
-                .putExtra(CrashReportActivity.CREATE_ON_OPEN, true)));
-        panel.addView(report);
         browse = new Button(this);
         browse.setText(installed ? "Play Open Amalur"
                 : missingStorage ? "Retry" : "Choose game folder");
