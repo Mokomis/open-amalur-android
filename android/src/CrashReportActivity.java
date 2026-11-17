@@ -29,6 +29,7 @@ import java.util.zip.ZipOutputStream;
 
 /** Launcher entry that works even if the game crashes before its title screen. */
 public final class CrashReportActivity extends Activity {
+    static final String CREATE_ON_OPEN = "create-on-open";
     private static final long LOG_LIMIT = 4L * 1024 * 1024;
     private static final long TRACE_LIMIT = 2L * 1024 * 1024;
     private TextView status;
@@ -59,6 +60,8 @@ public final class CrashReportActivity extends Activity {
         share.setOnClickListener(view -> createReport());
         panel.addView(share);
         setContentView(panel);
+        if (state == null && getIntent().getBooleanExtra(CREATE_ON_OPEN, false))
+            createReport();
     }
 
     private void createReport() {
