@@ -191,13 +191,78 @@ void oa_gamepad_focus(int);
 void oa_gamepad_poll(void);
 int oa_gamepad_input(AInputEvent *);
 
-static void app_cmd(struct android_app*app,int32_t cmd){if(cmd==APP_CMD_INIT_WINDOW&&app->window){pthread_mutex_lock(&oa_window_state.mutex);configure_drawable(app);uint64_t generation=oa_window_publish_locked(app->window);pthread_mutex_unlock(&oa_window_state.mutex);__android_log_print(ANDROID_LOG_INFO,"OpenAmalur","WINDOW init generation=%llu window=%p game=%dx%d",(unsigned long long)generation,(void*)app->window,oa_android_width(),oa_android_height());void *window_api = dlopen("libnativewindow.so", RTLD_NOW | RTLD_LOCAL); int32_t (*set_rate)(ANativeWindow *,float,int8_t)=window_api?dlsym(window_api,"ANativeWindow_setFrameRate"):NULL;int32_t vote=set_rate?set_rate(app->window,120.0f,0):-1;__android_log_print(ANDROID_LOG_INFO,"OpenAmalur","VEIL_REFRESH requested=120 status=%d",vote);if(window_api)dlclose(window_api);rt_android_set_window(app->window);rt_android_set_foreground(1);if(!started){started=1;pthread_t t;pthread_attr_t a;pthread_attr_init(&a);pthread_attr_setstacksize(&a,16u<<20);pthread_attr_setdetachstate(&a,PTHREAD_CREATE_DETACHED);int rc=pthread_create(&t,&a,engine_thread,NULL);pthread_attr_destroy(&a);if(rc)__android_log_print(ANDROID_LOG_ERROR,"OpenAmalur","engine thread creation failed %d",rc);}}else if(cmd==APP_CMD_TERM_WINDOW){uint64_t generation=oa_window_publish(NULL);rt_android_set_window(NULL);__android_log_print(ANDROID_LOG_INFO,"OpenAmalur","WINDOW term generation=%llu retained_game=%dx%d",(unsigned long long)generation,oa_android_width(),oa_android_height());}else if(cmd==APP_CMD_GAINED_FOCUS){
-    oa_gamepad_focus(1);
-    rt_android_set_foreground(1);
- }else if(cmd==APP_CMD_LOST_FOCUS){
-    oa_gamepad_focus(0);
-    rt_android_set_foreground(0);
- }}
+static int lifecycle_window;
+static int lifecycle_resumed;
+static int lifecycle_focused;
+
+static void refresh_foreground(void)
+{
+    int foreground = lifecycle_window && lifecycle_resumed && lifecycle_focused;
+    rt_android_set_foreground(foreground);
+    __android_log_print(ANDROID_LOG_INFO, "OpenAmalurAudio",
+                        "LIFECYCLE window=%d resumed=%d focused=%d foreground=%d",
+                        lifecycle_window, lifecycle_resumed, lifecycle_focused, foreground);
+}
+
+static void app_cmd(struct android_app *app, int32_t cmd)
+{
+    if (cmd == APP_CMD_INIT_WINDOW && app->window) {
+        pthread_mutex_lock(&oa_window_state.mutex);
+        configure_drawable(app);
+        uint64_t generation = oa_window_publish_locked(app->window);
+        pthread_mutex_unlock(&oa_window_state.mutex);
+        __android_log_print(ANDROID_LOG_INFO, "OpenAmalur",
+                            "WINDOW init generation=%llu window=%p game=%dx%d",
+                            (unsigned long long)generation, (void *)app->window,
+                            oa_android_width(), oa_android_height());
+        void *window_api = dlopen("libnativewindow.so", RTLD_NOW | RTLD_LOCAL);
+        int32_t (*set_rate)(ANativeWindow *, float, int8_t) =
+            window_api ? dlsym(window_api, "ANativeWindow_setFrameRate") : NULL;
+        int32_t vote = set_rate ? set_rate(app->window, 120.0f, 0) : -1;
+        __android_log_print(ANDROID_LOG_INFO, "OpenAmalur",
+                            "VEIL_REFRESH requested=120 status=%d", vote);
+        if (window_api) dlclose(window_api);
+        rt_android_set_window(app->window);
+        lifecycle_window = 1;
+        refresh_foreground();
+        if (!started) {
+            started = 1;
+            pthread_t t;
+            pthread_attr_t attr;
+            pthread_attr_init(&attr);
+            pthread_attr_setstacksize(&attr, 16u << 20);
+            pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
+            int rc = pthread_create(&t, &attr, engine_thread, NULL);
+            pthread_attr_destroy(&attr);
+            if (rc)
+                __android_log_print(ANDROID_LOG_ERROR, "OpenAmalur",
+                                    "engine thread creation failed %d", rc);
+        }
+    } else if (cmd == APP_CMD_TERM_WINDOW) {
+        lifecycle_window = 0;
+        refresh_foreground();
+        uint64_t generation = oa_window_publish(NULL);
+        rt_android_set_window(NULL);
+        __android_log_print(ANDROID_LOG_INFO, "OpenAmalur",
+                            "WINDOW term generation=%llu retained_game=%dx%d",
+                            (unsigned long long)generation,
+                            oa_android_width(), oa_android_height());
+    } else if (cmd == APP_CMD_RESUME) {
+        lifecycle_resumed = 1;
+        refresh_foreground();
+    } else if (cmd == APP_CMD_PAUSE || cmd == APP_CMD_STOP) {
+        lifecycle_resumed = 0;
+        refresh_foreground();
+    } else if (cmd == APP_CMD_GAINED_FOCUS) {
+        lifecycle_focused = 1;
+        oa_gamepad_focus(1);
+        refresh_foreground();
+    } else if (cmd == APP_CMD_LOST_FOCUS) {
+        lifecycle_focused = 0;
+        oa_gamepad_focus(0);
+        refresh_foreground();
+    }
+}
 static unsigned scan_code(unsigned vk){static const unsigned char letters[26]={30,48,46,32,18,33,34,35,23,36,37,38,50,49,24,25,16,19,31,20,22,47,17,45,21,44};if(vk>='A'&&vk<='Z')return letters[vk-'A'];if(vk>=49&&vk<=57)return vk-47;if(vk==48)return 11;if(vk==13)return 28;if(vk==27)return 1;if(vk==32)return 57;return 0;}
 static struct {
     int x, y;
@@ -415,6 +480,7 @@ static int select_game_storage(ANativeActivity *activity, JNIEnv *env)
 void android_main(struct android_app *app)
 {
     oa_app = app;
+    rt_android_set_foreground(0);
     pthread_mutex_lock(&input_looper_lock);
     input_looper = app->looper;
     pthread_mutex_unlock(&input_looper_lock);

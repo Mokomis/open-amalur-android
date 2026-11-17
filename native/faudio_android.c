@@ -64,17 +64,31 @@ static void *mix_output(void *opaque)
     pthread_setname_np(pthread_self(), "OA audio");
     setpriority(PRIO_PROCESS, 0, -5);
     int logged_audio = 0;
+    int stream_running = 0;
     while (!atomic_load_explicit(&device->stop, memory_order_relaxed)) {
+        if (!rt_android_is_foreground()) {
+            if (device->stream && stream_running) {
+                close_output(device);
+                stream_running = 0;
+                FAudio_Log("AAudio suspended in background");
+            }
+            FAudio_sleep(25);
+            continue;
+        }
         if (!device->stream) {
             if (open_output(device) != AAUDIO_OK) {
                 FAudio_sleep(250);
                 continue;
             }
+        }
+        if (!stream_running) {
             if (AAudioStream_requestStart(device->stream) != AAUDIO_OK) {
                 close_output(device);
                 FAudio_sleep(250);
                 continue;
             }
+            stream_running = 1;
+            FAudio_Log("AAudio active in foreground");
         }
         const size_t samples = (size_t)device->quantum * device->channels;
         memset(device->buffer, 0, samples * sizeof(float));
@@ -96,11 +110,13 @@ static void *mix_output(void *opaque)
                 veil_ambience_mix(device->buffer, device->quantum, device->rate, rt_android_is_foreground());
         }
         int written = 0;
-        while (written < device->quantum && !atomic_load_explicit(&device->stop, memory_order_relaxed)) {
+        while (written < device->quantum && rt_android_is_foreground() &&
+               !atomic_load_explicit(&device->stop, memory_order_relaxed)) {
             aaudio_result_t frames = AAudioStream_write(device->stream,
                 device->buffer + (size_t)written * device->channels, device->quantum - written, 30000000);
             if (frames < 0) {
                 close_output(device);
+                stream_running = 0;
                 FAudio_sleep(20);
                 break;
             }
@@ -146,7 +162,7 @@ void FAudio_PlatformInit(FAudio *engine, uint32_t flags, uint32_t index,
 int oa_faudio_start_output(FAudio *engine)
 {
     AudioDevice *device = engine->platform;
-    if (!device || AAudioStream_requestStart(device->stream) != AAUDIO_OK) return 0;
+    if (!device) return 0;
     if (pthread_create(&device->thread, NULL, mix_output, device) != 0) return 0;
     device->started = 1;
     __android_log_print(ANDROID_LOG_INFO, "OpenAmalurAudio", "AAudio started rate=%d channels=%d quantum=%d",
