@@ -36,6 +36,10 @@ Select the internal or SD volume that already contains your Re-Reckoning files, 
 
 The APK requests SD installation and keeps its native library uncompressed so Android can load it directly. Android ultimately chooses the APK location and still requires some internal storage for app data and optimized code. A device with completely full internal storage may be unable to install any APK. Direct play on a removable SD card has not yet been tested on a device with a card.
 
+### Send crash logs
+
+After a crash, open the separate **Send Amalur Crash Logs** icon in the Android launcher and tap **Create and share crash report**. The share sheet offers apps that can send or save a small ZIP. It contains the latest run's `pc-runtime.log` and `oa-vulkan.log`, device/app details, and Android's available process-exit record or native tombstone. The report is limited to recent log tails and does not include game archives or saves. The separate icon works even when launching the game itself crashes. Android may have already discarded a native trace; the other logs and exit record are still included when available.
+
 ### Fatesworn
 
 Setup detects Fatesworn if the game folder contains the supported `data_1278260/dlc_mit_0.pak` archive. In direct mode, add it to that same original game folder and restart the app. With an existing import, choose **Game Files → Add Fatesworn** from the title screen and select the updated game folder or its `data_1278260` folder.

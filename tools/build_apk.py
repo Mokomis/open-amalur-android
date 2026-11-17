@@ -31,8 +31,12 @@ def build(args):
         work = Path(temporary)
         manifest = (ROOT / "android/AndroidManifest.xml").read_text(encoding="utf-8")
         manifest = manifest.replace(f'package="{PACKAGE}"', f'package="{args.application_id}"')
-        for activity in ("VeilActivity", "SetupActivity"):
+        for activity in ("VeilActivity", "SetupActivity", "CrashReportActivity"):
             manifest = manifest.replace(f'android:name=".{activity}"', f'android:name="{PACKAGE}.{activity}"')
+        manifest = manifest.replace('android:name=".CrashReportProvider"',
+                                    f'android:name="{PACKAGE}.CrashReportProvider"')
+        manifest = manifest.replace(f'android:authorities="{PACKAGE}.crashreports"',
+                                    f'android:authorities="{args.application_id}.crashreports"')
         engine_pin = None
         library = args.library
         if args.local_engine is not None:
