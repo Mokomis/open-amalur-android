@@ -1,6 +1,7 @@
 package org.openamalur.originalengine;
 
 import android.app.NativeActivity;
+import android.app.AlertDialog;
 import android.content.SharedPreferences;
 import android.content.Intent;
 import android.graphics.Canvas;
@@ -12,6 +13,8 @@ import android.graphics.RectF;
 import android.graphics.Typeface;
 import android.os.Build;
 import android.os.Bundle;
+import android.text.InputFilter;
+import android.text.InputType;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.util.SparseArray;
@@ -22,6 +25,9 @@ import android.view.View;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.view.WindowManager;
+import android.view.inputmethod.EditorInfo;
+import android.widget.EditText;
+import android.widget.Toast;
 
 import java.io.IOException;
 import java.io.File;
@@ -39,12 +45,63 @@ public final class VeilActivity extends NativeActivity {
     private static native int finisherPosition();
     private static native int finisher();
     private static native int titleVisible();
+    private static native int nameDialogVisible();
+    private static native int submitName(String name);
 
     private TouchControls overlay;
     private final SparseArray<Vibrator> activeRumble = new SparseArray<>();
     private UpdateBadge updateBadge;
     private GameFileActions gameFileActions;
     private boolean noOverlays;
+    private AlertDialog namePrompt;
+    private boolean promptedForName;
+    private final Runnable watchNameDialog = new Runnable() {
+        @Override public void run() {
+            if (isFinishing() || isDestroyed()) return;
+            boolean open = nameDialogVisible() != 0;
+            if (!open) {
+                promptedForName = false;
+                if (namePrompt != null) namePrompt.dismiss();
+            } else if (!promptedForName && hasWindowFocus()) {
+                promptedForName = true;
+                showNamePrompt();
+            }
+            getWindow().getDecorView().postDelayed(this, 100);
+        }
+    };
+
+    private void showNamePrompt() {
+        EditText field = new EditText(this);
+        field.setSingleLine(true);
+        field.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+        field.setFilters(new InputFilter[]{new InputFilter.LengthFilter(24)});
+        field.setHint("Character name");
+        field.setImeOptions(EditorInfo.IME_ACTION_DONE);
+        int padding = (int)(24 * getResources().getDisplayMetrics().density);
+        field.setPadding(padding, 0, padding, 0);
+        namePrompt = new AlertDialog.Builder(this)
+                .setTitle("Enter your character's name")
+                .setMessage("Use name, then continue in the game.")
+                .setView(field)
+                .setNegativeButton("Keep current", (dialog, button) -> {})
+                .setPositiveButton("Use name", (dialog, button) -> {
+                    String name = field.getText().toString().trim();
+                    // Let the original game window regain focus before posting text.
+                    getWindow().getDecorView().postDelayed(() -> {
+                        if (!name.isEmpty() && submitName(name) != 0) return;
+                        Toast.makeText(this, "Could not enter the name. Try again.", Toast.LENGTH_SHORT).show();
+                        promptedForName = false;
+                    }, 200);
+                }).create();
+        field.setOnEditorActionListener((view, action, event) -> {
+            if (action != EditorInfo.IME_ACTION_DONE) return false;
+            namePrompt.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+            return true;
+        });
+        namePrompt.show();
+        namePrompt.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
+        field.requestFocus();
+    }
 
     @Override public void onCreate(Bundle state) {
         try {
@@ -160,6 +217,7 @@ public final class VeilActivity extends NativeActivity {
     @Override protected void onResume() {
         super.onResume();
         overlay.resume();
+        getWindow().getDecorView().post(watchNameDialog);
     }
 
     @Override public void onBackPressed() {
@@ -171,12 +229,15 @@ public final class VeilActivity extends NativeActivity {
     }
 
     @Override protected void onDestroy() {
+        getWindow().getDecorView().removeCallbacks(watchNameDialog);
+        if (namePrompt != null) namePrompt.dismiss();
         updateBadge.show(false);
         if (overlay.isAttachedToWindow()) getWindowManager().removeViewImmediate(overlay);
         super.onDestroy();
     }
 
     @Override protected void onPause() {
+        getWindow().getDecorView().removeCallbacks(watchNameDialog);
         updateBadge.show(false);
         overlay.suspend();
         super.onPause();

@@ -28,6 +28,7 @@ static _Atomic unsigned mash_taps;
 static _Atomic unsigned tutorial_mode;
 static _Atomic bool tutorial_tap;
 static _Atomic bool name_dialog;
+extern int rt_android_replace_name(const uint16_t *, int);
 static _Atomic uint64_t death_menu_update;
 static _Atomic bool death_menu_tap;
 static _Atomic bool item_radial;
@@ -279,6 +280,26 @@ JNI_API(mode)(JNIEnv *env, jclass type)
     if (now - atomic_load(&hud_update) >= 300)
         return 0;
     return atomic_load(&enabled) ? 1 : 3;
+}
+
+JNI_API(nameDialogVisible)(JNIEnv *env, jclass type)
+{
+    (void)env;
+    (void)type;
+    return atomic_load(&name_dialog);
+}
+
+JNI_API(submitName)(JNIEnv *env, jclass type, jstring name)
+{
+    (void)type;
+    if (!name || !atomic_load(&name_dialog)) return 0;
+    jsize length = (*env)->GetStringLength(env, name);
+    if (length < 1 || length > 24) return 0;
+    const jchar *chars = (*env)->GetStringChars(env, name, NULL);
+    if (!chars) return 0;
+    int accepted = rt_android_replace_name((const uint16_t *)chars, length);
+    (*env)->ReleaseStringChars(env, name, chars);
+    return accepted;
 }
 
 JNI_API(finisherPosition)(JNIEnv *env, jclass type)
