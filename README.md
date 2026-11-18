@@ -32,13 +32,13 @@ For a new setup on Android 11 or newer:
 
 ### Game files
 
-Setup validates the files in the selected folder directly and creates a local profile. The tested Re-Reckoning version is `cs:15032` (Steam build ID `10619381`). Keep the original folder structure, including the English, French, and German game archives and the animated title screen video at `data/videos/well.bik`.
+Copy your complete **Kingdoms of Amalur: Re-Reckoning** game folder to shared storage on your Android device or SD card, or select it where it already lives. Choose the folder that contains `koa.exe`, `binkw32.dll`, and `data/`. Leave the original archives and videos in that folder structure, including `data/videos/well.bik`. The tested PC files are from game version `cs:15032` (Steam build `10619381`).
 
-Choose a folder that Android’s file picker can access. If your game files are in DroidDeck’s private storage, copy the full game folder to shared storage, such as `Documents/Amalur`. [Android file picker access](https://developer.android.com/training/data-storage/shared/documents-files) · [DroidDeck](https://github.com/Droid-Deck/DroidDeck)
+For files stored inside another app's private folder, first copy the game folder to a location such as `Documents/Amalur` on the volume you'll use. [Save imports from GameNative or DroidDeck](#import-saves-from-gamenative-or-droiddeck) are available separately from the main menu.
 
-Open Amalur plays from the game folder you select, using one copy of the game files. Allow about **1.5 GB free on the selected volume** for the Veil archive and app data, plus room for future Veil updates. Keep the SD card inserted while playing from it. Back up your saves before uninstalling because Android removes app-specific files. Existing imports continue to use their original location, including on Android 10.
+Setup uses the existing game folder and needs about **1.5 GB of additional free space on that volume** for Veil and app data. With SD card setup, the game files, Veil archive, and saves live on the card. Android may still need space on internal storage to install the APK. Keep the card inserted while playing. Removable SD card setup still needs device testing.
 
-The APK requests SD installation and keeps its native library uncompressed so Android can load it directly. Android ultimately chooses the APK location and still requires some internal storage for app data and optimized code. A device with completely full internal storage may be unable to install any APK. Direct play on a removable SD card has not yet been tested on a device with a card.
+Existing imports keep working in their original location, including on Android 10. New setup requires Android 11 or newer. Back up saves before uninstalling Open Amalur because Android removes its app data.
 
 ### Send crash logs
 
