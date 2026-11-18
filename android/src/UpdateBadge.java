@@ -36,7 +36,7 @@ final class UpdateBadge {
     private boolean visible;
     private Uri download;
 
-    UpdateBadge(Activity activity, Runnable openGameFiles, Runnable openCrashReport) {
+    UpdateBadge(Activity activity, Runnable openGameFiles, Runnable openImportSaves, Runnable openCrashReport) {
         this.activity = activity;
         actions = new LinearLayout(activity);
         actions.setOrientation(LinearLayout.VERTICAL);
@@ -45,6 +45,7 @@ final class UpdateBadge {
         button.setOnClickListener(v -> open());
         button.setClickable(false);
         addButton("Game Files", 6).setOnClickListener(v -> openGameFiles.run());
+        addButton("Import Saves", 6).setOnClickListener(v -> openImportSaves.run());
         addButton("Send Crash Report", 6).setOnClickListener(v -> openCrashReport.run());
     }
 

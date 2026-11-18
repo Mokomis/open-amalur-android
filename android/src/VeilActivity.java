@@ -53,6 +53,7 @@ public final class VeilActivity extends NativeActivity {
     private final SparseArray<Vibrator> activeRumble = new SparseArray<>();
     private UpdateBadge updateBadge;
     private GameFileActions gameFileActions;
+    private SaveImportActions saveImportActions;
     private boolean noOverlays;
     private AlertDialog namePrompt;
     private boolean promptedForName;
@@ -130,7 +131,8 @@ public final class VeilActivity extends NativeActivity {
         requestDisplayMode();
         overlay = new TouchControls();
         gameFileActions = new GameFileActions(this);
-        updateBadge = new UpdateBadge(this, gameFileActions::show, this::openCrashReport);
+        saveImportActions = new SaveImportActions(this);
+        updateBadge = new UpdateBadge(this, gameFileActions::show, saveImportActions::show, this::openCrashReport);
         getWindow().getDecorView().post(() -> {
             if (isFinishing() || isDestroyed() || noOverlays) return;
             WindowManager.LayoutParams controls = new WindowManager.LayoutParams(
@@ -222,6 +224,8 @@ public final class VeilActivity extends NativeActivity {
         super.onActivityResult(request, result, data);
         if (request == GameFileActions.SELECT_FATESWORN && result == RESULT_OK && data != null) {
             gameFileActions.importFrom(data.getData());
+        } else if (request == SaveImportActions.SELECT_SAVES && result == RESULT_OK && data != null) {
+            saveImportActions.importFrom(data);
         }
     }
 

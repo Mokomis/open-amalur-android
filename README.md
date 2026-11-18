@@ -40,6 +40,10 @@ The APK requests SD installation and keeps its native library uncompressed so An
 
 After a crash, open the separate **Send Amalur Crash Logs** icon in the Android launcher and tap **Create and share crash report**. The share sheet offers apps that can send or save a small ZIP. It contains the latest run's `pc-runtime.log` and `oa-vulkan.log`, device/app details, and Android's available process-exit record or native tombstone. The report is limited to recent log tails and does not include game archives or saves. The separate icon works even when launching the game itself crashes. Android may have already discarded a native trace; the other logs and exit record are still included when available.
 
+### Import saves from GameNative
+
+Export the game's files from GameNative to a folder in `Download/GameNative/`. In Open Amalur's title screen, tap **Import Saves**, choose the `svd_fmt_*.sav` files from that export, and close and reopen the game before loading them. The Android file picker can read the exported folder even when a file manager cannot open Open Amalur's private `Android/data` folder. Existing saves with the same names are backed up under Open Amalur's `offline-saves/import-backups` folder before replacement. Keep a separate copy of the export until you have loaded the imported save successfully.
+
 ### Fatesworn
 
 Setup detects Fatesworn if the game folder contains the supported `data_1278260/dlc_mit_0.pak` archive. In direct mode, add it to that same original game folder and restart the app. With an existing import, choose **Game Files → Add Fatesworn** from the title screen and select the updated game folder or its `data_1278260` folder.
