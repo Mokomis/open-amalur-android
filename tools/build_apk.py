@@ -33,6 +33,10 @@ def build(args):
         manifest = manifest.replace(f'package="{PACKAGE}"', f'package="{args.application_id}"')
         for activity in ("VeilActivity", "SetupActivity", "CrashReportActivity"):
             manifest = manifest.replace(f'android:name=".{activity}"', f'android:name="{PACKAGE}.{activity}"')
+        manifest = manifest.replace('android:targetActivity=".CrashReportActivity"',
+                                    f'android:targetActivity="{PACKAGE}.CrashReportActivity"')
+        manifest = manifest.replace(f'android:taskAffinity="{PACKAGE}.crashlogs"',
+                                    f'android:taskAffinity="{args.application_id}.crashlogs"')
         manifest = manifest.replace('android:name=".CrashReportProvider"',
                                     f'android:name="{PACKAGE}.CrashReportProvider"')
         manifest = manifest.replace(f'android:authorities="{PACKAGE}.crashreports"',
