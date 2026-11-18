@@ -20,11 +20,15 @@ Veil draws visual inspiration from other interfaces, including Edge for Skyrim. 
 
 ## Download and install
 
-1. Download the APK directly to your Android device and install it. [GitHub Releases](https://github.com/Mokomis/open-amalur-android/releases/latest)
-2. Open Open Amalur and choose the Re-Reckoning folder containing `koa.exe` and `data`.
-3. Setup imports your game files, applies Veil, and starts the game with the engine bundled in the APK.
+**Open Amalur for Android v0.1.24** · [Download the latest APK](https://github.com/Mokomis/open-amalur-android/releases/latest) · [v0.1.24 release notes](https://github.com/Mokomis/open-amalur-android/releases/tag/v0.1.24)
 
-With the v0.1.6 APK and game files on your device, setup and play work offline. Install updates over your existing copy of Open Amalur to keep your saves, settings, and touch layout.
+To update, install the new APK over your existing Open Amalur app to keep your saves, settings, and touch layout. The first launch after an update may show **Verifying Veil** while the app checks the updated menu files.
+
+For a new setup on Android 11 or newer:
+
+1. Install the APK on your Android device. Put your Re-Reckoning game folder in shared storage on the device or SD card.
+2. Open Open Amalur and choose **Set up and play from internal storage** or **Set up and play from SD card**. Select the folder containing `koa.exe` and `data` on that same volume.
+3. When Android asks, grant **All files access** so the game can open the original archives. Setup prepares Veil and opens the main menu. Once the APK and game files are on the device, setup and play work offline.
 
 ### Game files
 
@@ -32,9 +36,28 @@ Setup validates the files in the selected folder directly and creates a local pr
 
 Choose a folder that Android’s file picker can access. If your game files are in DroidDeck’s private storage, copy the full game folder to shared storage, such as `Documents/Amalur`. [Android file picker access](https://developer.android.com/training/data-storage/shared/documents-files) · [DroidDeck](https://github.com/Droid-Deck/DroidDeck)
 
+Open Amalur plays from the game folder you select, using one copy of the game files. Allow about **1.5 GB free on the selected volume** for the Veil archive and app data, plus room for future Veil updates. Keep the SD card inserted while playing from it. Back up your saves before uninstalling because Android removes app-specific files. Existing imports continue to use their original location, including on Android 10.
+
+The APK requests SD installation and keeps its native library uncompressed so Android can load it directly. Android ultimately chooses the APK location and still requires some internal storage for app data and optimized code. A device with completely full internal storage may be unable to install any APK. Direct play on a removable SD card has not yet been tested on a device with a card.
+
+### Send crash logs
+
+Choose **Send Crash Report** from the main menu. If the game closes before you can reach the menu, open **Send Amalur Crash Logs** from the Android launcher and tap **Create and share crash report**.
+
+Android's share sheet lets you save or send the ZIP. It contains recent sections of `pc-runtime.log` and `oa-vulkan.log` from up to two runs, device and app details, and available Android crash records. The ZIP excludes saves and game archives.
+
+### Import saves from GameNative or DroidDeck
+
+On the main menu, select **Import Saves** below **New Game** and choose your source.
+
+- **GameNative:** Export the game's files, then select the `svd_fmt_*.sav` files from the export under `Download/GameNative/`.
+- **DroidDeck:** Open DroidDeck once, then choose **DroidDeck** in Android's file picker. Turn on **Show hidden files** to see `.local`. Select the `svd_fmt_*.sav` files from `files/linuxfs/root/.local/share/Steam/userdata/<account>/1041720/remote/autocloud/save/`.
+
+Restart Open Amalur after importing, then open **Load Game**. Open Amalur backs up any saves with matching filenames to its `offline-saves/import-backups` folder before replacing them.
+
 ### Fatesworn
 
-Setup detects and imports Fatesworn if the game folder contains the supported `data_1278260/dlc_mit_0.pak` archive. To add it later, choose **Game Files → Add Fatesworn** from the title screen and select the updated game folder or its `data_1278260` folder. Restart the app to load the expansion.
+Choose **DLC Status** from the main menu to check whether Fatesworn is installed. To add it when playing from the original game folder, put the supported `data_1278260/dlc_mit_0.pak` archive in that folder and restart. With an older Open Amalur import, choose **DLC Status → Add Fatesworn** and select the updated game folder or its `data_1278260` folder, then restart.
 
 ## How the engine runs
 
@@ -44,9 +67,9 @@ We built the **native ARM64 engine** by translating the original executable’s 
 - **Android integration.** The runtime provides file access, input, audio, local profiles, saves, and display handling. The graphics layer translates the engine’s Direct3D 11 calls to Vulkan. The native `D3DReflect` implementation reads metadata from the game’s compiled shaders.
 - **Multicore threading.** We reworked how the engine discovers available CPU cores, synchronizes jobs, and wakes workers as jobs finish. We profiled simulation, graphics recording, and background work across multiple cores on the OPPO Pad Mini.
 
-In a clean OPPO Pad Mini test with networking disabled, the signed v0.1.6 APK imported the game files, detected Fatesworn, and reached the Veil title screen. A tap on **OK** confirmed the character name and advanced the opening scene. The full campaign and expansion still need broader playtesting.
+On the OPPO Pad Mini, testing covered setup, launching to the main menu, menu navigation, and character naming. The full campaign and expansion still need broader playtesting.
 
-[Engine and threading notes](ENGINE.md) · [Developer build guide](BUILDING.md#build-from-source)
+[Engine and threading notes](ENGINE.md) · [v0.1.24 source](https://github.com/Mokomis/open-amalur-android/tree/v0.1.24) · [Developer build guide](https://github.com/Mokomis/open-amalur-android/blob/v0.1.24/BUILDING.md#build-from-source)
 
 ## Added features
 
@@ -56,7 +79,7 @@ Veil uses compact lists and a consistent set of buttons, tabs, and prompts acros
 
 - **Main and pause menus** with a redesigned options sidebar and dedicated settings lists.
 - **Inventory, stash, and equipment** with compact item lists, a separate details pane, equipped-item markers, and appearance controls. Consumables can be mapped to the Item Radial. Weapons use Primary and Secondary slots.
-- **Character and progression screens** for stats, skills, abilities, destinies, and character creation. The four character creation screens use Veil-framed portraits with the animated Allestar Glade waterfall.
+- **Character and progression screens** for stats, skills, abilities, destinies, and character creation. Character creation uses Veil-framed portraits and a single **Use name** confirmation with the Android keyboard.
 - **Quest log and maps** with side-by-side quest lists and objectives, pinch-to-zoom on maps, and touch confirmation for quest tutorials.
 - **Save and load** with full-screen slots and a touch action for creating or overwriting a save. Overwriting keeps the game's confirmation prompt.
 - **Dialogue** with tap selection, a draggable wheel in conversations that use one, and an on-screen Skip control.
@@ -74,12 +97,13 @@ Veil uses compact lists and a consistent set of buttons, tabs, and prompts acros
 
 ### Graphics and Android integration
 
+- **Resolution** lists the display sizes Android reports, plus the current window size and performance presets. Restart the game after choosing a different resolution.
 - **Android Hardware Scaling** offers Off, 25%, 50%, 75%, and 100%. The setting defaults to 100% and takes effect after a restart. Choose **Native** resolution to match the display’s aspect ratio for gameplay and in-engine cinematics.
 - **Shadow Map Resolution** offers 512, 1024, 1536, and 2048 px.
 - **Shadow Distance** and **Vegetation Draw Distance** each offer 75, 100, 125, and 150 percent.
 - **Ambient Occlusion** offers Off, On, and High. **Depth of Field** offers 0, 50, 100, and 150 percent. The menu identifies settings that take effect after a restart.
 - **Direct startup** opens the title menu when setup is complete.
-- **First-launch import** copies game files from the selected Android folder and applies Veil automatically.
+- **Direct setup** uses the existing Re-Reckoning folder on internal storage or SD card and prepares Veil automatically.
 - **GitHub release status** appears on the main menu and links to the release page when a newer version is available.
 
 ### Screenshots
