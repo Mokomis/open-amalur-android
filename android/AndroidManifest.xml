@@ -1,8 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="org.openamalur.originalengine"
     android:installLocation="preferExternal"
-    android:versionCode="27"
-    android:versionName="0.1.24">
+    android:versionCode="28"
+    android:versionName="0.1.25">
     <uses-sdk android:minSdkVersion="29" android:targetSdkVersion="35" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.INTERNET" />
