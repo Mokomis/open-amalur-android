@@ -20,7 +20,7 @@ Veil draws visual inspiration from other interfaces, including Edge for Skyrim. 
 
 ## Download and install
 
-**Open Amalur for Android v0.1.24** · [Download the latest APK](https://github.com/Mokomis/open-amalur-android/releases/latest) · [v0.1.24 release notes](https://github.com/Mokomis/open-amalur-android/releases/tag/v0.1.24)
+**Open Amalur for Android v0.1.25** · [Download the latest APK](https://github.com/Mokomis/open-amalur-android/releases/latest) · [v0.1.25 release notes](https://github.com/Mokomis/open-amalur-android/releases/tag/v0.1.25)
 
 To update, install the new APK over your existing Open Amalur app to keep your saves, settings, and touch layout. The first launch after an update may show **Verifying Veil** while the app checks the updated menu files.
 
@@ -69,7 +69,7 @@ We built the **native ARM64 engine** by translating the original executable’s 
 
 On the OPPO Pad Mini, testing covered setup, launching to the main menu, menu navigation, and character naming. The full campaign and expansion still need broader playtesting.
 
-[Engine and threading notes](ENGINE.md) · [v0.1.24 source](https://github.com/Mokomis/open-amalur-android/tree/v0.1.24) · [Developer build guide](https://github.com/Mokomis/open-amalur-android/blob/v0.1.24/BUILDING.md#build-from-source)
+[Engine and threading notes](ENGINE.md) · [v0.1.25 source](https://github.com/Mokomis/open-amalur-android/tree/v0.1.25) · [Developer build guide](https://github.com/Mokomis/open-amalur-android/blob/v0.1.25/BUILDING.md#build-from-source)
 
 ## Added features
 
