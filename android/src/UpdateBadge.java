@@ -1,6 +1,7 @@
 package org.openamalur.originalengine;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.graphics.PixelFormat;
@@ -11,7 +12,6 @@ import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.LinearLayout;
-import android.widget.Toast;
 
 import org.json.JSONObject;
 
@@ -36,7 +36,7 @@ final class UpdateBadge {
     private boolean visible;
     private Uri download;
 
-    UpdateBadge(Activity activity, Runnable openGameFiles, Runnable openImportSaves, Runnable openCrashReport) {
+    UpdateBadge(Activity activity, Runnable openGameFiles, Runnable openCrashReport) {
         this.activity = activity;
         actions = new LinearLayout(activity);
         actions.setOrientation(LinearLayout.VERTICAL);
@@ -44,8 +44,7 @@ final class UpdateBadge {
         button = addButton("Checking for updates…", 0);
         button.setOnClickListener(v -> open());
         button.setClickable(false);
-        addButton("Game Files", 6).setOnClickListener(v -> openGameFiles.run());
-        addButton("Import Saves", 6).setOnClickListener(v -> openImportSaves.run());
+        addButton(GameFileActions.TITLE, 6).setOnClickListener(v -> openGameFiles.run());
         addButton("Send Crash Report", 6).setOnClickListener(v -> openCrashReport.run());
     }
 
@@ -173,7 +172,10 @@ final class UpdateBadge {
         try {
             activity.startActivity(new Intent(Intent.ACTION_VIEW, download));
         } catch (ActivityNotFoundException error) {
-            Toast.makeText(activity, "Open " + RELEASES + " in a browser.", Toast.LENGTH_LONG).show();
+            VeilDialogs.show(new AlertDialog.Builder(activity)
+                    .setTitle("Open Amalur updates")
+                    .setMessage("Open " + RELEASES + " in a browser.")
+                    .setPositiveButton("OK", null));
         }
     }
 }

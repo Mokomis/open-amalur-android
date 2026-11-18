@@ -72,6 +72,7 @@ public final class SetupActivity extends Activity {
             }
             internalChoice = new Button(this);
             internalChoice.setText("Set up and play from internal storage");
+            VeilDialogs.styleButton(internalChoice);
             internalChoice.setEnabled(internalStorage != null);
             internalChoice.setOnClickListener(view -> chooseStorage(internalStorage));
             panel.addView(internalChoice);
@@ -83,6 +84,7 @@ public final class SetupActivity extends Activity {
             sdChoice = new Button(this);
             sdChoice.setText(sdStorage == null ? "Set up and play from SD card (no card detected)"
                     : "Set up and play from SD card");
+            VeilDialogs.styleButton(sdChoice);
             sdChoice.setEnabled(sdStorage != null);
             sdChoice.setOnClickListener(view -> chooseStorage(sdStorage));
             panel.addView(sdChoice);
@@ -97,6 +99,7 @@ public final class SetupActivity extends Activity {
         browse = new Button(this);
         browse.setText(installed ? "Play Open Amalur"
                 : missingStorage ? "Retry" : "Choose game folder");
+        VeilDialogs.styleButton(browse);
         if (missingStorage) {
             browse.setOnClickListener(view -> recreate());
         } else if (installed) {

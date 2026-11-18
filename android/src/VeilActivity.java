@@ -28,7 +28,6 @@ import android.view.WindowInsetsController;
 import android.view.WindowManager;
 import android.view.inputmethod.EditorInfo;
 import android.widget.EditText;
-import android.widget.Toast;
 
 import java.io.IOException;
 import java.io.File;
@@ -48,6 +47,8 @@ public final class VeilActivity extends NativeActivity {
     private static native int titleVisible();
     private static native int nameDialogVisible();
     private static native int submitName(String name);
+    private static native int confirmNativeName();
+    private static native int takeSaveImportRequest();
 
     private TouchControls overlay;
     private final SparseArray<Vibrator> activeRumble = new SparseArray<>();
@@ -56,6 +57,7 @@ public final class VeilActivity extends NativeActivity {
     private SaveImportActions saveImportActions;
     private boolean noOverlays;
     private AlertDialog namePrompt;
+    private View nameCover;
     private boolean promptedForName;
     private boolean lastNameDialogState;
     private final Runnable watchNameDialog = new Runnable() {
@@ -69,6 +71,7 @@ public final class VeilActivity extends NativeActivity {
             if (!open) {
                 promptedForName = false;
                 if (namePrompt != null) namePrompt.dismiss();
+                removeNameCover();
             } else if (!promptedForName && hasWindowFocus()) {
                 promptedForName = true;
                 Log.i("OANameInput", "showing keyboard prompt");
@@ -79,40 +82,86 @@ public final class VeilActivity extends NativeActivity {
     };
 
     private void showNamePrompt() {
+        showNamePrompt("", false);
+    }
+
+    private void showNamePrompt(String initialName, boolean retry) {
         EditText field = new EditText(this);
         field.setSingleLine(true);
         field.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
         field.setFilters(new InputFilter[]{new InputFilter.LengthFilter(24)});
         field.setHint("Character name");
+        field.setText(initialName);
+        field.setSelection(field.length());
+        field.setTextColor(0xffece5d3);
+        field.setHintTextColor(0xff908a7b);
+        field.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xffaa9365));
         field.setImeOptions(EditorInfo.IME_ACTION_DONE);
         int padding = (int)(24 * getResources().getDisplayMetrics().density);
         field.setPadding(padding, 0, padding, 0);
-        namePrompt = new AlertDialog.Builder(this)
+        namePrompt = VeilDialogs.show(new AlertDialog.Builder(this)
                 .setTitle("Name your character")
-                .setMessage("Enter a name to use in the game.")
+                .setMessage(retry ? "Could not confirm the name. Try again." : "Enter a name to use in the game.")
                 .setView(field)
                 .setCancelable(false)
-                .setNegativeButton("Keep current", (dialog, button) -> {})
-                .setPositiveButton("Use name", (dialog, button) -> {
-                    String name = field.getText().toString().trim();
-                    // Let the original game window regain focus before posting text.
-                    getWindow().getDecorView().postDelayed(() -> {
-                        if (!name.isEmpty() && submitName(name) != 0) return;
-                        Toast.makeText(this, "Could not enter the name. Try again.", Toast.LENGTH_SHORT).show();
-                        promptedForName = false;
-                    }, 200);
-                }).create();
+                .setNegativeButton("Keep current", null)
+                .setPositiveButton("Use name", null), field);
+        AlertDialog prompt = namePrompt;
+        prompt.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener(view -> confirmName(prompt, ""));
+        prompt.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
+            String name = field.getText().toString().trim();
+            if (name.isEmpty()) {
+                prompt.setMessage("Enter a name, or choose Keep current.");
+            } else {
+                confirmName(prompt, name);
+            }
+        });
         field.setOnEditorActionListener((view, action, event) -> {
             if (action != EditorInfo.IME_ACTION_DONE) return false;
             namePrompt.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
             return true;
         });
-        namePrompt.show();
-        // Hide the game's own edit box while Android's keyboard is on screen.
-        namePrompt.getWindow().addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
-        namePrompt.getWindow().setDimAmount(1f);
-        namePrompt.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE);
-        field.requestFocus();
+    }
+
+    private void confirmName(AlertDialog prompt, String name) {
+        // Dismiss the keyboard window so the engine can receive input. Cover
+        // the native prompt until the game finishes confirming the name.
+        WindowManager.LayoutParams coverParams = new WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.TYPE_APPLICATION_PANEL,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
+                        WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE |
+                        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN, PixelFormat.OPAQUE);
+        coverParams.token = getWindow().getDecorView().getWindowToken();
+        nameCover = new View(this);
+        nameCover.setBackgroundColor(0xff000000);
+        getWindowManager().addView(nameCover, coverParams);
+        prompt.dismiss();
+        getWindow().getDecorView().postDelayed(() -> {
+            if (isFinishing() || isDestroyed() || nameDialogVisible() == 0) return;
+            if (submitName(name) == 0) {
+                retryName(name);
+                return;
+            }
+            getWindow().getDecorView().postDelayed(() -> {
+                if (nameDialogVisible() != 0) confirmNativeName();
+                getWindow().getDecorView().postDelayed(() -> {
+                    if (nameDialogVisible() != 0) retryName(name);
+                }, 1500);
+            }, 150);
+        }, 200);
+    }
+
+    private void retryName(String name) {
+        if (isFinishing() || isDestroyed()) return;
+        showNamePrompt(name, true);
+        removeNameCover();
+    }
+
+    private void removeNameCover() {
+        if (nameCover == null) return;
+        getWindowManager().removeViewImmediate(nameCover);
+        nameCover = null;
     }
 
     @Override public void onCreate(Bundle state) {
@@ -132,7 +181,7 @@ public final class VeilActivity extends NativeActivity {
         overlay = new TouchControls();
         gameFileActions = new GameFileActions(this);
         saveImportActions = new SaveImportActions(this);
-        updateBadge = new UpdateBadge(this, gameFileActions::show, saveImportActions::show, this::openCrashReport);
+        updateBadge = new UpdateBadge(this, gameFileActions::show, this::openCrashReport);
         getWindow().getDecorView().post(() -> {
             if (isFinishing() || isDestroyed() || noOverlays) return;
             WindowManager.LayoutParams controls = new WindowManager.LayoutParams(
@@ -174,6 +223,7 @@ public final class VeilActivity extends NativeActivity {
         startActivity(new Intent(this, CrashReportActivity.class)
                 .putExtra(CrashReportActivity.CREATE_ON_OPEN, true));
     }
+
 
     private void requestDisplayMode() {
         Display display = getWindowManager().getDefaultDisplay();
@@ -247,6 +297,7 @@ public final class VeilActivity extends NativeActivity {
     @Override protected void onDestroy() {
         getWindow().getDecorView().removeCallbacks(watchNameDialog);
         if (namePrompt != null) namePrompt.dismiss();
+        removeNameCover();
         updateBadge.show(false);
         if (overlay.isAttachedToWindow()) getWindowManager().removeViewImmediate(overlay);
         super.onDestroy();
@@ -406,6 +457,9 @@ public final class VeilActivity extends NativeActivity {
         private final Runnable pulse = new Runnable() {
             @Override public void run() {
                 updateBadge.show(!noOverlays && VeilActivity.this.hasWindowFocus() && titleVisible() != 0);
+                if (VeilActivity.this.hasWindowFocus() && takeSaveImportRequest() != 0) {
+                    saveImportActions.show();
+                }
                 int current = mode();
                 if (current == 2) openEditor();
                 boolean next = current == 1 || current == 3;

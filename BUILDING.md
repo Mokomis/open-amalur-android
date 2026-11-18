@@ -82,6 +82,8 @@ The builder adds the prepared Allestar Glade loop as `assets/veil-waterfall.bc3`
 
 `tools/generate_veil_edits.py` takes your original game directory, a locally modded `patch_0.pak`, and output paths for the recipe, properties and a local reference archive. Use the original and modded archives from the same supported game version.
 
+For the Android **Import Saves** row, run `python tools/add_veil_import_row.py <current Veil patch_0.pak> <output folder>`. Pass its `134230570_klua.batch` to `generate_veil_edits.py --replace` with the previous release metadata, then package the recipe with the matching Android engine.
+
 `tools/retarget_veil_fonts.py` renders [Jost](https://github.com/google/fonts/tree/main/ofl/jost) into the existing Veil glyph bounds while retaining the layout metrics. Install Pillow, fonttools, NumPy and SciPy for this step. Extract the `savapro_medium` and `byngve_bold` `.font` files and matching `_p00_00.ntx` atlases from the local Veil and retail archives. Name the extracted files with `current-` and `retail-` prefixes, respectively. Pass the Jost font file, the directory of extracted files and a new output directory to the script.
 
 Pass the resulting menu atlas files to `generate_veil_edits.py --replace` when regenerating the Veil recipe. Pass the prior recipe's properties with `--previous-metadata` so installed copies can upgrade. The APK builder includes [the Jost license](android/licenses/Jost-OFL.txt).

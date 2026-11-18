@@ -28,7 +28,9 @@ static _Atomic unsigned mash_taps;
 static _Atomic unsigned tutorial_mode;
 static _Atomic bool tutorial_tap;
 static _Atomic bool name_dialog;
+static _Atomic bool save_import_request;
 extern int rt_android_replace_name(const uint16_t *, int);
+extern void rt_android_key(uint32_t, uint32_t, int, int);
 static _Atomic uint64_t death_menu_update;
 static _Atomic bool death_menu_tap;
 static _Atomic bool item_radial;
@@ -178,6 +180,10 @@ HIDDEN int veil_tablet_command(const char *section, const char *key, const char 
             __android_log_print(ANDROID_LOG_INFO, "VeilTablet", "Name dialog %d", open);
         return 1;
     }
+    if (!strcasecmp(key, "VeilImportSaves")) {
+        atomic_store(&save_import_request, value[0] == '1');
+        return 1;
+    }
     if (!strcasecmp(key, "VeilDeathMenu")) {
         bool active = value[0] == '1';
         atomic_store(&death_menu_update, active ? now_ms() : 0);
@@ -289,17 +295,37 @@ JNI_API(nameDialogVisible)(JNIEnv *env, jclass type)
     return atomic_load(&name_dialog);
 }
 
+JNI_API(takeSaveImportRequest)(JNIEnv *env, jclass type)
+{
+    (void)env;
+    (void)type;
+    return atomic_exchange(&save_import_request, false);
+}
+
 JNI_API(submitName)(JNIEnv *env, jclass type, jstring name)
 {
     (void)type;
     if (!name || !atomic_load(&name_dialog)) return 0;
     jsize length = (*env)->GetStringLength(env, name);
-    if (length < 1 || length > 24) return 0;
-    const jchar *chars = (*env)->GetStringChars(env, name, NULL);
-    if (!chars) return 0;
-    int accepted = rt_android_replace_name((const uint16_t *)chars, length);
-    (*env)->ReleaseStringChars(env, name, chars);
-    return accepted;
+    if (length > 24) return 0;
+    if (length) {
+        const jchar *chars = (*env)->GetStringChars(env, name, NULL);
+        if (!chars) return 0;
+        int accepted = rt_android_replace_name((const uint16_t *)chars, length);
+        (*env)->ReleaseStringChars(env, name, chars);
+        if (!accepted) return 0;
+    }
+    return 1;
+}
+
+JNI_API(confirmNativeName)(JNIEnv *env, jclass type)
+{
+    (void)env;
+    (void)type;
+    if (!atomic_load(&name_dialog)) return 0;
+    rt_android_key(0x0d, 0x1c, 0, 1);
+    rt_android_key(0x0d, 0x1c, 0, 0);
+    return 1;
 }
 
 JNI_API(finisherPosition)(JNIEnv *env, jclass type)

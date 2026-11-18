@@ -58,6 +58,7 @@ public final class CrashReportActivity extends Activity {
         panel.addView(status);
         share = new Button(this);
         share.setText("Create and share crash report");
+        VeilDialogs.styleButton(share);
         share.setOnClickListener(view -> createReport());
         panel.addView(share);
         setContentView(panel);
