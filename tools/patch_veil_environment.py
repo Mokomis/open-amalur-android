@@ -41,7 +41,7 @@ def append_callbacks(data, key):
     return repack_script(data, parsed, result), len(children)
 
 
-def add_audio_toggle(code, register, key, label, get):
+def add_option_toggle(code, register, key, label, get, category, default):
     call, section, row, value, field, second = range(register, register + 6)
 
     def add_field(name, literal=None):
@@ -63,11 +63,11 @@ def add_audio_toggle(code, register, key, label, get):
     code.op("DATA")
     code.op("DATA")
     code.glob(section, "m_options_list")
-    code.field(section, section, "Audio")
+    code.field(section, section, category)
     code.op("NEWTABLE", row, 0, 7)
     add_field("id", key)
     add_field("display", label)
-    add_field("default", 2)
+    add_field("default", default)
     code.wide("CLOSURE", value, get)
     add_field("get")
     code.wide("CLOSURE", value, get + 1)
@@ -100,7 +100,7 @@ def patch_options(data):
     code.op("SETLIST", base, 2, 1)
     code.wide("SETGLOBAL", base, code.index("m_veil_toggle_labels"))
     for row in callbacks:
-        add_audio_toggle(code, base, *row)
+        add_option_toggle(code, base, *row, "Audio", 2)
     start, end, replacement = insert(data, fn, 2914, code, base + 6)
     return repack_script(data, parsed, data[:start] + replacement + data[end:])
 

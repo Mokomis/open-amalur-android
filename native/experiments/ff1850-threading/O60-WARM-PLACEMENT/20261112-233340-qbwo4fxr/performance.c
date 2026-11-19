@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #include <time.h>
 #include "rt.h"
@@ -109,7 +110,12 @@ static void control_read(void){
  __atomic_store_n(&oa_adpf_mode, access(adpf_60_control,F_OK)==0, __ATOMIC_RELAXED);
  read_engine_cores();
  __atomic_store_n(&oa_fast_handwritten_draw, access(handwritten_draw_enable, F_OK)==0, __ATOMIC_RELAXED);
-read_pass_batch_control();read_draw_control();read_upload_control();int registry=access(registry_control,F_OK)!=0;int prev_registry=__atomic_exchange_n(&oa_fast_map_registry,registry,__ATOMIC_RELAXED);if(prev_registry!=registry)rt_log("PERF active-range map registry %s",registry?"ON":"OFF");int fast=access(mapping_control,F_OK)!=0;int was=__atomic_exchange_n(&oa_fast_mapping,fast,__ATOMIC_RELAXED);if(was!=fast)rt_log("PERF fast mapping %s",fast?"ON":"OFF");int wanted=access(control,F_OK)==0;int old=__atomic_exchange_n(&oa_diagnostics_enabled,wanted,__ATOMIC_RELAXED);if(old!=wanted)rt_log("PERF diagnostic instrumentation %s",wanted?"ON":"OFF");}
+read_pass_batch_control();read_draw_control();read_upload_control();int registry=access(registry_control,F_OK)!=0;int prev_registry=__atomic_exchange_n(&oa_fast_map_registry,registry,__ATOMIC_RELAXED);if(prev_registry!=registry)rt_log("PERF active-range map registry %s",registry?"ON":"OFF");int fast=access(mapping_control,F_OK)!=0;int was=__atomic_exchange_n(&oa_fast_mapping,fast,__ATOMIC_RELAXED);if(was!=fast)rt_log("PERF fast mapping %s",fast?"ON":"OFF");
+ struct stat marker;
+ int wanted = stat(control, &marker) == 0 && S_ISREG(marker.st_mode);
+ int old = __atomic_exchange_n(&oa_diagnostics_enabled, wanted, __ATOMIC_RELAXED);
+ if (old != wanted) rt_log("PERF diagnostic instrumentation %s", wanted ? "ON" : "OFF");
+}
 void oa_perf_start(const char*root){
  snprintf(overlap_control,sizeof overlap_control,"%s/sim-memory-enable",root);
  snprintf(texture_copy_control,sizeof texture_copy_control,"%s/combat-texture-copy",root);
@@ -138,7 +144,9 @@ void oa_perf_start(const char*root){
  snprintf(upload_control, sizeof upload_control, "%s/upload-copy-reference", root);
 
  snprintf(draw_control, sizeof draw_control, "%s/draw-preparation-reference", root);
-snprintf(control,sizeof control,"%s/diagnostics",root);snprintf(mapping_control,sizeof mapping_control,"%s/mapping-compat",root);snprintf(registry_control,sizeof registry_control,"%s/mapping-scan-compat",root);metrics=fopen("performance.jsonl","w");if(metrics)setvbuf(metrics,NULL,_IOFBF,65536);control_read();rt_log("PERF native benchmark mode; original function tracing=%d; build=%s",oa_diagnostics_enabled,
+ /* The crash reporter owns the diagnostics directory. Tracing is opt-in. */
+ snprintf(control, sizeof control, "%s/enable-engine-tracing", root);
+ snprintf(mapping_control,sizeof mapping_control,"%s/mapping-compat",root);snprintf(registry_control,sizeof registry_control,"%s/mapping-scan-compat",root);metrics=fopen("performance.jsonl","w");if(metrics)setvbuf(metrics,NULL,_IOFBF,65536);control_read();rt_log("PERF native benchmark mode; original function tracing=%d; build=%s",oa_diagnostics_enabled,
 #ifdef OA_BUILD_PROFILE
 OA_BUILD_PROFILE
 #else

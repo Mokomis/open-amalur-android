@@ -322,6 +322,29 @@ void rt_android_key(uint32_t vk, uint32_t scan, int extended, int down)
     post_to(windows[0].owner, &windows[0], down ? 0x0100 : 0x0101, vk, lp);
 }
 
+/* Deliver Android's committed UTF-16 text to the original Windows edit field.
+   The name dialog has already claimed modal keyboard focus when this is called. */
+int rt_android_replace_name(const uint16_t *text, int length)
+{
+    if (!windows[0].used || !text || length < 1 || length > 24) return 0;
+    HostWindow *window = &windows[0];
+    pid_t owner = window->owner;
+    /* This edit control ignores Ctrl+A. Move to the end and erase its initial
+       name with ordinary backspaces before delivering Android's committed text. */
+    if (!post_to(owner, window, 0x0100, 0x23, 1u | 0x4fu << 16) ||
+        !post_to(owner, window, 0x0101, 0x23, 1u | 0x4fu << 16 | 0xc0000000u)) return 0;
+    for (int i = 0; i < 12; ++i) {
+        if (!post_to(owner, window, 0x0100, 0x08, 1u | 0x0eu << 16) ||
+            !post_to(owner, window, 0x0102, 0x08, 1u) ||
+            !post_to(owner, window, 0x0101, 0x08, 1u | 0x0eu << 16 | 0xc0000000u)) return 0;
+    }
+    for (int i = 0; i < length; ++i) {
+        if (text[i] < 0x20 || text[i] == 0x7f ||
+            !post_to(owner, window, 0x0102, text[i], 1u)) return 0;
+    }
+    return 1;
+}
+
 /* Pointer in view coordinates; buttons: 0 left, 1 right, 2 middle. */
 static int android_mouse_x, android_mouse_y;
 

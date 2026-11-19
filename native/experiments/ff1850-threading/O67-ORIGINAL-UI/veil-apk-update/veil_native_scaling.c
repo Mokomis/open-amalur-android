@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <pthread.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <string.h>
 #include <strings.h>
@@ -14,6 +15,8 @@ static const char active_key[] = "VeilNativeHardwareScalingActive";
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 static char settings_path[PATH_MAX];
 static char resolution_path[PATH_MAX];
+static char dynamic_path[PATH_MAX];
+static _Atomic int dynamic_resolution;
 static int display_width = 1920;
 static int display_height = 1080;
 typedef struct { int width, height; } Resolution;
@@ -89,12 +92,30 @@ int veil_native_scaling_percent(const char *root)
                 fclose(file);
             }
         }
+        size = snprintf(dynamic_path, sizeof dynamic_path, "%s/veil-dynamic-resolution", root);
+        if (size < 0 || (size_t)size >= sizeof dynamic_path) {
+            dynamic_path[0] = '\0';
+        } else {
+            FILE *file = fopen(dynamic_path, "r");
+            if (file) {
+                int option;
+                char extra;
+                if (fscanf(file, "%d %c", &option, &extra) == 1 && option == 1)
+                    atomic_store(&dynamic_resolution, 1);
+                fclose(file);
+            }
+        }
         active = requested;
         initialized = 1;
     }
     int percent = percentages[active];
     pthread_mutex_unlock(&lock);
     return percent;
+}
+
+int veil_dynamic_resolution_enabled(void)
+{
+    return atomic_load(&dynamic_resolution);
 }
 
 int veil_render_resolution(const char *root, int window_width, int window_height,
@@ -152,6 +173,8 @@ int veil_native_scaling_read(const char *section, const char *key, char *value)
         snprintf(value, 8, "%d", requested);
     else if (!strcasecmp(key, active_key))
         snprintf(value, 8, "%d", active);
+    else if (!strcasecmp(key, "VeilDynamicResolution"))
+        snprintf(value, 8, "%d", veil_dynamic_resolution_enabled());
     else if (!strcasecmp(key, "VeilRenderResolution"))
         snprintf(value, 8, "%d", requested_resolution);
     else if (!strcasecmp(key, "VeilRenderResolutionActive"))
@@ -202,7 +225,8 @@ int veil_native_scaling_write(const char *section, const char *key, const char *
     if (!section || !key || strcasecmp(section, "DEFAULT"))
         return -1;
     int resolution = !strcasecmp(key, "VeilRenderResolution");
-    if (!resolution && strcasecmp(key, setting_key))
+    int dynamic = !strcasecmp(key, "VeilDynamicResolution");
+    if (!resolution && !dynamic && strcasecmp(key, setting_key))
         return -1;
     if (!value || !*value) return 0;
     char *end;
@@ -212,7 +236,8 @@ int veil_native_scaling_write(const char *section, const char *key, const char *
     int preset = (int)parsed;
 
     pthread_mutex_lock(&lock);
-    if (preset >= (resolution ? resolution_count : PRESET_COUNT)) {
+    int count = resolution ? resolution_count : dynamic ? 2 : PRESET_COUNT;
+    if (preset >= count) {
         pthread_mutex_unlock(&lock);
         return 0;
     }
@@ -223,6 +248,10 @@ int veil_native_scaling_write(const char *section, const char *key, const char *
         ok = save_setting(resolution_path, dimensions);
         if (ok)
             requested_resolution = preset;
+    } else if (dynamic) {
+        ok = save_setting(dynamic_path, preset ? "1" : "0");
+        if (ok)
+            atomic_store(&dynamic_resolution, preset);
     } else {
         char percent[4];
         snprintf(percent, sizeof percent, "%d", percentages[preset]);

@@ -10,7 +10,7 @@ Open Amalur is a recompilation of the original *Re-Reckoning* engine. The transl
 
 I substantially reworked the engine’s threading to improve how it schedules simulation, rendering, and background jobs across multiple CPU cores.
 
-Android is the first release. I plan to build Windows and macOS versions next. Some of the work on threading, graphics, and the interface could also carry over to Linux and iOS if someone wants to take it there.
+Android is available now. The Windows version is in testing, and I plan to build a macOS version. Some of the work on threading, graphics, and the interface could also carry over to Linux and iOS if someone wants to take it there.
 
 ## About the UI
 
@@ -20,7 +20,7 @@ Veil draws visual inspiration from other interfaces, including Edge for Skyrim. 
 
 ## Download and install
 
-**Open Amalur for Android v0.1.25** · [Download the latest APK](https://github.com/Mokomis/open-amalur-android/releases/latest) · [v0.1.25 release notes](https://github.com/Mokomis/open-amalur-android/releases/tag/v0.1.25)
+**Open Amalur for Android v0.1.26** · [Download the latest APK](https://github.com/Mokomis/open-amalur-android/releases/latest) · [v0.1.26 release notes](https://github.com/Mokomis/open-amalur-android/releases/tag/v0.1.26)
 
 To update, install the new APK over your existing Open Amalur app to keep your saves, settings, and touch layout. The first launch after an update may show **Verifying Veil** while the app checks the updated menu files.
 
@@ -42,7 +42,7 @@ Existing imports keep working in their original location, including on Android 1
 
 ### Send crash logs
 
-Choose **Send Crash Report** from the main menu. If the game closes before you can reach the menu, open **Send Amalur Crash Logs** from the Android launcher and tap **Create and share crash report**.
+Choose **Send Crash Report** from the main menu. If a crash prevents you from reaching the menu after relaunching, [open an issue](https://github.com/Mokomis/open-amalur-android/issues) with your device model, Android version, and the last screen you saw.
 
 Android's share sheet lets you save or send the ZIP. It contains recent sections of `pc-runtime.log` and `oa-vulkan.log` from up to two runs, device and app details, and available Android crash records. The ZIP excludes saves and game archives.
 
@@ -69,7 +69,7 @@ We built the **native ARM64 engine** by translating the original executable’s 
 
 On the OPPO Pad Mini, testing covered setup, launching to the main menu, menu navigation, and character naming. The full campaign and expansion still need broader playtesting.
 
-[Engine and threading notes](ENGINE.md) · [v0.1.25 source](https://github.com/Mokomis/open-amalur-android/tree/v0.1.25) · [Developer build guide](https://github.com/Mokomis/open-amalur-android/blob/v0.1.25/BUILDING.md#build-from-source)
+[Engine and threading notes](ENGINE.md) · [v0.1.26 source](https://github.com/Mokomis/open-amalur-android/tree/v0.1.26) · [Developer build guide](https://github.com/Mokomis/open-amalur-android/blob/v0.1.26/BUILDING.md#build-from-source)
 
 ## Added features
 
@@ -77,7 +77,7 @@ On the OPPO Pad Mini, testing covered setup, launching to the main menu, menu na
 
 Veil uses compact lists and a consistent set of buttons, tabs, and prompts across the menus. The APK includes the animated Allestar Glade waterfall used in Veil portraits. The menu font is Jost. [Edge UI](https://www.nexusmods.com/skyrimspecialedition/mods/130983) · [Jost license](android/licenses/Jost-OFL.txt)
 
-- **Main and pause menus** with a redesigned options sidebar and dedicated settings lists.
+- **Home and Options** support switching between controller, touch, and mouse on the same screen. Options opens on the category list. Use Up/Down to browse and Right or A to enter a category. Press A on a numerical setting, use Left/Right to adjust it, then press A to finish. B returns to categories. Touch or click the controls beside a setting to change it directly.
 - **Inventory, stash, and equipment** with compact item lists, a separate details pane, equipped-item markers, and appearance controls. Consumables can be mapped to the Item Radial. Weapons use Primary and Secondary slots.
 - **Character and progression screens** for stats, skills, abilities, destinies, and character creation. Character creation uses Veil-framed portraits and a single **Use name** confirmation with the Android keyboard.
 - **Quest log and maps** with side-by-side quest lists and objectives, pinch-to-zoom on maps, and touch confirmation for quest tutorials.
@@ -89,6 +89,7 @@ Veil uses compact lists and a consistent set of buttons, tabs, and prompts acros
 
 - **Transmog** changes the look of equipped armor and same-type weapons, such as a sword taking the appearance of another sword. The equipped item retains its stats. Appearance choices are saved with the character.
 - **Tablet controls** provide separate movement and camera sticks, Run/Leap, attacks, dodge, block, interaction, and shortcuts for the game menu, inventory, world map, quests, and Item Radial.
+- **HUD size** in Options → Gameplay offers Default, Small, and Hidden. Selecting Default or Small restores the gameplay HUD, even if that size is already selected.
 - **Touch layout editor** moves and resizes individual controls and saves the layout.
 - **Ability and Reckoning controls** include a tappable 1–9/0 ability bar, a Cast button for the selected spell, on-screen LT and RT prompts, touch finishers, and Continue buttons on screens that require a controller button or key.
 - **Controller support** covers gameplay, menu navigation and vibration on controllers that expose a vibrator to Android.
@@ -99,16 +100,23 @@ Veil uses compact lists and a consistent set of buttons, tabs, and prompts acros
 
 - **Resolution** lists the display sizes Android reports, plus the current window size and performance presets. Restart the game after choosing a different resolution.
 - **Android Hardware Scaling** offers Off, 25%, 50%, 75%, and 100%. The setting defaults to 100% and takes effect after a restart. Choose **Native** resolution to match the display’s aspect ratio for gameplay and in-engine cinematics.
+- **Dynamic Resolution (60 FPS)** is under Options → Graphics and defaults to Off. Turn it on during SDR gameplay to target 60 FPS. It uses your configured render size, including Android Hardware Scaling, as its ceiling. Under load it can step down to five-sixths or two-thirds of each dimension, then step back up when there is headroom. The switch takes effect during play.
 - **Shadow Map Resolution** offers 512, 1024, 1536, and 2048 px.
 - **Shadow Distance** and **Vegetation Draw Distance** each offer 75, 100, 125, and 150 percent.
 - **Ambient Occlusion** offers Off, On, and High. **Depth of Field** offers 0, 50, 100, and 150 percent. The menu identifies settings that take effect after a restart.
-- **Direct startup** opens the title menu when setup is complete.
+- **Startup** shows the Open Amalur logo and name while the game loads, then opens the main menu.
 - **Direct setup** uses the existing Re-Reckoning folder on internal storage or SD card and prepares Veil automatically.
 - **GitHub release status** appears on the main menu and links to the release page when a newer version is available.
 
 ### Screenshots
 
-Captured in v0.1.5 on the OPPO Pad Mini. Select an image to open it at full size.
+The startup and Graphics screens below show v0.1.26 on the OPPO Pad Mini.
+
+| Startup | Graphics settings |
+| --- | --- |
+| [![Open Amalur loading screen](screenshots/startup-026.jpg)](screenshots/startup-026.jpg) | [![Dynamic Resolution enabled in Options under Graphics](screenshots/graphics-026.png)](screenshots/graphics-026.png) |
+
+The following screenshots are from v0.1.5. Select an image to open it at full size.
 
 | Touch controls | Inventory and equipment details |
 | --- | --- |

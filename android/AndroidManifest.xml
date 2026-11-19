@@ -1,26 +1,33 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="org.openamalur.originalengine"
-    android:versionCode="14"
-    android:versionName="0.1.11">
+    android:installLocation="preferExternal"
+    android:versionCode="29"
+    android:versionName="0.1.26">
     <uses-sdk android:minSdkVersion="29" android:targetSdkVersion="35" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
     <application android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen"
         android:label="Open Amalur" android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher" android:hasCode="true"
-        android:debuggable="false" android:allowBackup="false" android:extractNativeLibs="true">
-        <activity android:name=".VeilActivity"
+        android:debuggable="false" android:allowBackup="false" android:extractNativeLibs="false">
+        <activity android:name=".VeilActivity" android:theme="@style/OpenAmalurLaunch"
             android:exported="false" android:screenOrientation="landscape"
             android:configChanges="keyboardHidden|orientation|screenSize">
             <meta-data android:name="android.app.lib_name" android:value="oaoriginal" />
         </activity>
-        <activity android:name=".SetupActivity" android:exported="true"
+        <activity android:name=".SetupActivity" android:theme="@style/OpenAmalurLaunch" android:exported="true"
             android:screenOrientation="landscape" android:configChanges="keyboardHidden|orientation|screenSize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity android:name=".CrashReportActivity" android:exported="false"
+            android:label="Send Amalur Crash Logs" />
+        <provider android:name=".CrashReportProvider"
+            android:authorities="org.openamalur.originalengine.crashreports"
+            android:exported="false" android:grantUriPermissions="true" />
     </application>
 </manifest>

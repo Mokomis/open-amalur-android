@@ -31,8 +31,16 @@ typedef struct {
 #define OA_BIND_TEXTURE 32
 #define OA_BIND_VS_BASE 64
 
+/* Vulkan push constants used by the fixed-allocation rendering path. */
+typedef struct {
+    float position_to_logical[2];
+    uint32_t pixel_regions[2];
+    uint32_t vertex_regions[2];
+} oa_dxbc_render_regions;
+
 /* Returns 1 and a malloc'd word array on success. On failure returns 0 and describes it in err. */
 const void *oa_dxbc_find_chunk(const void *dxbc, size_t size, const char tag[4], uint32_t *length);
 int oa_dxbc_translate(const void *dxbc, size_t size, oa_shader_info *info, uint32_t **spirv, size_t *words, char *err, size_t err_size);
+int oa_dxbc_translate_regions(const void *dxbc, size_t size, oa_shader_info *info, uint32_t **spirv, size_t *words, char *err, size_t err_size);
 
 #endif

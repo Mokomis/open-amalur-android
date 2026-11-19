@@ -109,6 +109,11 @@ static void overlay_path(const char *g, char *out, size_t n)
 
 static int game_path(const char *g, char *out, size_t n)
 {
+    const char *veil = getenv("OA_VEIL_PATCH_PATH");
+    if (veil && !_stricmp(g, GUEST_ROOT "\\data\\patch_0.pak")) {
+        snprintf(out, n, "%s", veil);
+        return 1;
+    }
     const char *rel = under_root(g);
     static const char fatesworn[] = "C:\\data_1278260";
     size_t depot_length = sizeof fatesworn - 1;
@@ -604,7 +609,7 @@ static void k_CopyFileA(X86Ctx *ctx) { char a[512], b[512]; guest_a(ARG(0), a, s
 static void k_CopyFileW(X86Ctx *ctx) { char a[512], b[512]; guest_w(ARG(0), a, sizeof a); guest_w(ARG(1), b, sizeof b); RET(move_or_copy(a, b, 0, ARG(2) != 0)); }
 
 /* ---- find ---- */
-typedef struct { char dir_game[1024], dir_overlay[1024], pattern[256]; char (*names)[260]; int n, cap, pos; } RtFind;
+typedef struct { char dir_guest[512], dir_game[1024], dir_overlay[1024], pattern[256]; char (*names)[260]; int n, cap, pos; } RtFind;
 
 static int wild(const char *p, const char *s)
 {
@@ -632,12 +637,12 @@ static int fill_find(RtFind *f, uint32_t data, int wide)
 {
     if (f->pos >= f->n) return 0;
     const char *name = f->names[f->pos++];
-    char hp[1200];
-    snprintf(hp, sizeof hp, "%s/%s", f->dir_overlay, name);
+    char guest[1024], hp[1200];
+    snprintf(guest, sizeof guest, "%s\\%s", f->dir_guest, name);
     int64_t size = 0;
     uint64_t ft = 0;
-    int k = host_stat(hp, &size, &ft);
-    if (!k) { snprintf(hp, sizeof hp, "%s/%s", f->dir_game, name); k = host_stat(hp, &size, &ft); }
+    int k = read_path(guest, hp, sizeof hp);
+    if (k) host_stat(hp, &size, &ft);
     memset(rt_ptr(data), 0, wide ? 592 : 320);
     st32(data, k == 2 ? 0x10 : 0x20);
     for (int i = 0; i < 3; i++) { st32(data + 4 + 8 * i, (uint32_t)ft); st32(data + 8 + 8 * i, (uint32_t)(ft >> 32)); }
@@ -657,6 +662,7 @@ static uint32_t find_first(const char *pattern, uint32_t data, int wide)
     snprintf(f->pattern, sizeof f->pattern, "%s", slash + 1);
     *slash = 0;
     if (!strchr(g, '\\')) strcat(g, "\\");
+    snprintf(f->dir_guest, sizeof f->dir_guest, "%s", g);
     overlay_path(g, f->dir_overlay, sizeof f->dir_overlay);
     if (!game_path(g, f->dir_game, sizeof f->dir_game)) f->dir_game[0] = 0;
     host_list_dir(f->dir_overlay, add_name, f);

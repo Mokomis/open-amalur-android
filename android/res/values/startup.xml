@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="startup_surface">#101716</color>
+    <style name="OpenAmalurLaunch" parent="@android:style/Theme.Material.NoActionBar.Fullscreen">
+        <item name="android:windowBackground">@drawable/startup_background</item>
+        <item name="android:windowSplashScreenBackground">@color/startup_surface</item>
+    </style>
+</resources>

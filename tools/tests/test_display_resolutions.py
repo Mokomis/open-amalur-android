@@ -11,8 +11,45 @@ HARNESS = r'''
 #include <stdio.h>
 #include <string.h>
 #include "veil_native_scaling.h"
+#include "oa_dynamic_resolution.h"
 int main(int argc, char **argv) {
     assert(argc == 4);
+    if (!strcmp(argv[3], "dynamic")) {
+        veil_native_scaling_percent(argv[1]);
+        assert(!veil_dynamic_resolution_enabled());
+        assert(!veil_native_scaling_write("DEFAULT", "VeilDynamicResolution", "2"));
+        assert(veil_native_scaling_write("DEFAULT", "VeilDynamicResolution", "1"));
+        assert(veil_dynamic_resolution_enabled());
+        char value[8];
+        assert(veil_native_scaling_read("DEFAULT", "VeilDynamicResolution", value));
+        assert(!strcmp(value, "1"));
+        return 0;
+    }
+    if (!strcmp(argv[3], "dynamic_reload")) {
+        veil_native_scaling_percent(argv[1]);
+        assert(veil_dynamic_resolution_enabled());
+        assert(veil_native_scaling_write("DEFAULT", "VeilDynamicResolution", "0"));
+        assert(!veil_dynamic_resolution_enabled());
+        return 0;
+    }
+    if (!strcmp(argv[3], "budget")) {
+        OaResolutionTiming timing = {0};
+        uint64_t now = 1;
+        unsigned level = OA_RESOLUTION_FULL;
+        for (int i=0; i<110; ++i, now+=20000000)
+            level = oa_resolution_next(&timing, now, level);
+        assert(level == OA_RESOLUTION_LOW);
+        assert(oa_resolution_dimension(1890, level) == 1260);
+        assert(oa_resolution_dimension(1260, level) == 840);
+        now += 3000000000ull;
+        for (int i=0; i<160; ++i, now+=12000000)
+            level = oa_resolution_next(&timing, now, level);
+        assert(level == OA_RESOLUTION_LOW);
+        for (int i=0; i<250; ++i, now+=12000000)
+            level = oa_resolution_next(&timing, now, level);
+        assert(level == OA_RESOLUTION_MEDIUM);
+        return 0;
+    }
     int modes[] = {1680,2520,1680,2520,1920,1080,1280,720,2560,1440,
                    3840,2160,1600,900,2048,1152,2560,1600,2880,1800,
                    3200,1800,1920,1200,0,0};
@@ -75,5 +112,16 @@ class DisplayResolutions(unittest.TestCase):
         selected=(self.path/'render-scale').read_text().strip()
         self.assertEqual(selected,'3200x1800')
         self.assertIn('active=3200x1800',self.run_case(selected,'reverse'))
+
+    def test_dynamic_resolution_preference(self):
+        preference = self.path / 'veil-dynamic-resolution'
+        preference.unlink(missing_ok=True)
+        self.run_case('native', action='dynamic')
+        self.assertEqual(preference.read_text().strip(), '1')
+        self.run_case('native', action='dynamic_reload')
+        self.assertEqual(preference.read_text().strip(), '0')
+
+    def test_dynamic_resolution_hysteresis(self):
+        self.run_case('native', action='budget')
 
 if __name__ == '__main__': unittest.main()

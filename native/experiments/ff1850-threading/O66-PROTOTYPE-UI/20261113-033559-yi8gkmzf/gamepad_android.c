@@ -12,7 +12,7 @@ extern void rt_android_pad(uint32_t index, int connected, uint16_t buttons,
                            uint8_t lt, uint8_t rt, int16_t lx, int16_t ly,
                            int16_t rx, int16_t ry);
 extern void rt_android_pad_rumble(uint32_t index, uint16_t *left, uint16_t *right);
-extern int veil_options_is_visible(void);
+extern int veil_options_uses_legacy_navigation(void);
 
 enum { MAX_PADS = 4, NO_DEVICE = -1 };
 enum {
@@ -64,7 +64,7 @@ static void publish(unsigned slot)
     uint8_t left = pad->trigger_key[0] ? UINT8_MAX : pad->trigger[0];
     uint8_t right = pad->trigger_key[1] ? UINT8_MAX : pad->trigger[1];
     int16_t lx = pad->sticks[0], ly = pad->sticks[1];
-    oa_options_navigation(&options_navigation[slot], veil_options_is_visible(),
+    oa_options_navigation(&options_navigation[slot], veil_options_uses_legacy_navigation(),
                           &buttons, &left, &right, &lx, &ly);
     rt_android_pad(slot, pad->id != NO_DEVICE && focused, buttons, left, right,
                    lx, ly, pad->sticks[2], pad->sticks[3]);

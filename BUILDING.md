@@ -76,11 +76,13 @@ Use a distinct `--application-id` when installing a build signed with your own k
 
 To assemble the offline release APK, keep `--library` and `--offline`, supply the Veil recipe and portrait animation, and use the release application ID and signing key. The APK includes the ARM64 engine. Setup imports the selected game files directly from Android storage.
 
-Extract the build-assets ZIP from the matching [GitHub release](https://github.com/Mokomis/open-amalur-android/releases) and pass `veil-edits.bin` to `--veil-edits`, `veil-edits.properties` to `--veil-properties`, and `veil-waterfall.bc3` to `--waterfall`. The included `engine.sha256` gives the expected hash of the locally built library.
+For v0.1.26, open the signed [release APK](https://github.com/Mokomis/open-amalur-android/releases/tag/v0.1.26) as a ZIP. Pass `assets/local-build/veil-edits.bin` to `--veil-edits`, `assets/local-build/veil-edits.properties` to `--veil-properties`, and `assets/veil-waterfall.bc3` to `--waterfall`. The packaged engine is `lib/arm64-v8a/liboaoriginal.so`.
 
 The builder adds the prepared Allestar Glade loop as `assets/veil-waterfall.bc3`. The portrait renderer plays the five-second loop at 20 frames per second. `tools/make_waterfall_clip.py` can re-encode an existing capture during release preparation.
 
 `tools/generate_veil_edits.py` takes your original game directory, a locally modded `patch_0.pak`, and output paths for the recipe, properties and a local reference archive. Use the original and modded archives from the same supported game version.
+
+For the Android **Import Saves** row, run `python tools/add_veil_import_row.py <current Veil patch_0.pak> <output folder>`. Pass its `134230570_klua.batch` to `generate_veil_edits.py --replace` with the previous release metadata, then package the recipe with the matching Android engine.
 
 `tools/retarget_veil_fonts.py` renders [Jost](https://github.com/google/fonts/tree/main/ofl/jost) into the existing Veil glyph bounds while retaining the layout metrics. Install Pillow, fonttools, NumPy and SciPy for this step. Extract the `savapro_medium` and `byngve_bold` `.font` files and matching `_p00_00.ntx` atlases from the local Veil and retail archives. Name the extracted files with `current-` and `retail-` prefixes, respectively. Pass the Jost font file, the directory of extracted files and a new output directory to the script.
 

@@ -3,6 +3,8 @@ import argparse
 from pathlib import Path
 import struct
 
+from veil_menu_digits import lining_digits
+
 from fontTools.ttLib import TTFont
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
@@ -105,7 +107,8 @@ def build_game(face, cmap, reference, output, slot, slope, max_ink):
             glyph = stock_glyph.point(lambda alpha: 255 if alpha > 128 else 0).crop(fallback_bounds) if fallback_bounds else None
         result.paste(fitted_field(glyph, bounds, original.size, slope, max_ink), cell[:2])
         fill += 1
-    (output / name).write_bytes(previous_data[:44] + result.tobytes() + previous_data[44 + 262144:])
+    atlas = previous_data[:44] + result.tobytes() + previous_data[44 + 262144:]
+    (output / name).write_bytes(lining_digits(metrics, atlas))
     print(f"{slot}: fitted {fill} visible glyphs; existing metrics and advances retained")
 
 

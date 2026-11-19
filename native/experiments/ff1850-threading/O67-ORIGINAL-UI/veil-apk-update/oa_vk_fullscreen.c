@@ -10,6 +10,7 @@
 #include <pthread.h>
 #include <stdarg.h>
 #include <stdint.h>
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -17,6 +18,8 @@
 #define VK_USE_PLATFORM_ANDROID_KHR
 #include <vulkan/vulkan.h>
 #include "oa_present_lifecycle.h"
+#include "oa_dynamic_resolution.h"
+#include "veil_native_scaling.h"
 #include "oa_dxbc.h"
 
 #define COM __stdcall
@@ -53,12 +56,12 @@ static void logf_(const char *fmt, ...) {
     X(vkGetPhysicalDeviceSurfaceCapabilitiesKHR) X(vkGetPhysicalDeviceSurfaceFormatsKHR) X(vkGetPhysicalDeviceSurfacePresentModesKHR) X(vkGetPhysicalDeviceSurfaceSupportKHR) X(vkGetPhysicalDeviceProperties2)
 #define VKD_FUNCS(X) \
     X(vkGetDeviceQueue) X(vkAllocateMemory) X(vkFreeMemory) X(vkMapMemory) X(vkCreateBuffer) X(vkDestroyBuffer) X(vkGetBufferMemoryRequirements) X(vkBindBufferMemory) \
-    X(vkCreateImage) X(vkDestroyImage) X(vkGetImageMemoryRequirements) X(vkBindImageMemory) X(vkCreateImageView) X(vkDestroyImageView) X(vkCreateSampler) X(vkDestroySampler) \
-    X(vkCreateShaderModule) X(vkDestroyShaderModule) X(vkCreateDescriptorSetLayout) X(vkCreatePipelineLayout) X(vkCreateGraphicsPipelines) X(vkCreatePipelineCache) X(vkGetPipelineCacheData) X(vkCreateCommandPool) \
+    X(vkCreateImage) X(vkDestroyImage) X(vkGetImageMemoryRequirements) X(vkGetImageMemoryRequirements2) X(vkBindImageMemory) X(vkCreateImageView) X(vkDestroyImageView) X(vkCreateSampler) X(vkDestroySampler) \
+    X(vkCreateShaderModule) X(vkDestroyShaderModule) X(vkCreateDescriptorSetLayout) X(vkDestroyDescriptorSetLayout) X(vkCreatePipelineLayout) X(vkDestroyPipelineLayout) X(vkCreateGraphicsPipelines) X(vkCreatePipelineCache) X(vkGetPipelineCacheData) X(vkCreateCommandPool) \
     X(vkDestroyCommandPool) X(vkFlushMappedMemoryRanges) X(vkResetCommandPool) X(vkAllocateCommandBuffers) X(vkBeginCommandBuffer) X(vkEndCommandBuffer) X(vkQueueSubmit) X(vkQueueWaitIdle) X(vkCreateFence) X(vkWaitForFences) \
     X(vkResetFences) X(vkGetFenceStatus) X(vkDestroyFence) X(vkCreateSemaphore) X(vkDestroySemaphore) X(vkCreateSwapchainKHR) X(vkDestroySwapchainKHR) X(vkGetSwapchainImagesKHR) X(vkAcquireNextImageKHR) X(vkQueuePresentKHR) \
     X(vkCmdPipelineBarrier) X(vkCmdCopyBufferToImage) X(vkCmdCopyImage) X(vkCmdBlitImage) X(vkCmdClearColorImage) X(vkCmdClearDepthStencilImage) X(vkCmdBeginRendering) \
-    X(vkCmdEndRendering) X(vkCmdBindPipeline) X(vkCmdSetViewport) X(vkCmdSetScissor) X(vkCmdSetStencilReference) X(vkCmdSetBlendConstants) X(vkCmdBindVertexBuffers2) \
+    X(vkCmdEndRendering) X(vkCmdBindPipeline) X(vkCmdSetViewport) X(vkCmdSetScissor) X(vkCmdSetStencilReference) X(vkCmdSetBlendConstants) X(vkCmdBindVertexBuffers2) X(vkCmdWriteTimestamp) \
     X(vkCmdBindIndexBuffer) X(vkCmdDraw) X(vkCmdDrawIndexed) X(vkCreateQueryPool) X(vkGetQueryPoolResults) X(vkCmdResetQueryPool) X(vkCmdBeginQuery) X(vkCmdEndQuery) X(vkCreateDescriptorPool) X(vkDestroyDescriptorPool) X(vkAllocateDescriptorSets) X(vkUpdateDescriptorSets) X(vkCmdBindDescriptorSets) X(vkCmdPushConstants)
 #define X(n) static PFN_##n p##n;
 VK_FUNCS(X)
@@ -290,6 +293,7 @@ typedef struct {
     uint32_t cpu_size;
     int upload_mip;
     int is_backbuffer;
+    unsigned region_level;
     VkImageView hdr_view;
 } oa_tex;
 
@@ -316,6 +320,10 @@ typedef struct {
     obj o;
     VkShaderModule module;
     oa_shader_info info;
+    uint64_t recipe_id;
+    uint64_t recipe_interface_id;
+    uint32_t *recipe_code;
+    uint32_t recipe_bytes;
     uint32_t hash;
     unsigned cart_particle;
     uint32_t af_textures[16];
@@ -348,6 +356,10 @@ typedef struct {
     oa_layout *layout;
     oa_state *blend, *depth, *raster;
     uint32_t stencil_ref;
+    VkExtent2D region_extent;
+    uint64_t region_bindings_epoch, region_material_epoch;
+    oa_dxbc_render_regions region_state, pushed_regions;
+    int regions_pushed;
     float blend_factor[4];
     uint32_t topology;
     oa_buffer *vb[16];
@@ -360,6 +372,7 @@ typedef struct {
     int have_vp, have_scissor;
     /* recording */
     int rendering, pipeline_valid;
+    int rendering_waits_for_vertex;
     oa_pred *q_active, *pred;
     VkPipeline last_pipeline;
     const struct pipe_entry *selected_pipe;
@@ -391,6 +404,10 @@ struct oa_chain {
     obj o;
     HWND hwnd;
     uint32_t w, h, fmt;
+    unsigned displayed_region_level;
+    uint64_t region_ready_after;
+    uint64_t region_step_time;
+    OaResolutionTiming resolution_timing;
     oa_tex *back;
     VkSurfaceKHR surface;
     ANativeWindow *native_window;
@@ -407,6 +424,64 @@ struct oa_chain {
     VkExtent2D extent;
     VkFormat swap_fmt;
 };
+
+static uint32_t region_ceiling_width, region_ceiling_height;
+static unsigned render_region_level;
+static uint64_t render_regions_epoch;
+static unsigned render_scaled_passes;
+static int short_render_waits;
+static int prepare_shader_variants, record_shader_variants;
+static unsigned prepared_recipe_store_full;
+static size_t captured_shader_bytes;
+
+static int keep_shader_code(size_t bytes)
+{
+    if (!record_shader_variants || bytes > 128 * 1024 ||
+        __atomic_load_n(&prepared_recipe_store_full, __ATOMIC_RELAXED))
+        return 0;
+    const size_t limit = 8 * 1024 * 1024;
+    size_t used = __atomic_load_n(&captured_shader_bytes, __ATOMIC_RELAXED);
+    while (bytes <= limit - used) {
+        if (__atomic_compare_exchange_n(&captured_shader_bytes, &used, used + bytes, 1,
+                                       __ATOMIC_RELAXED, __ATOMIC_RELAXED))
+            return 1;
+    }
+    return 0;
+}
+
+static uint64_t shader_recipe_id(const void *bytes, size_t length)
+{
+    const uint8_t *data = bytes;
+    uint64_t id = UINT64_C(14695981039346656037);
+    for (size_t i = 0; i < length; ++i)
+        id = (id ^ data[i]) * UINT64_C(1099511628211);
+    return id;
+}
+
+static FILE *open_renderer_file(const char *name, const char *mode)
+{
+    const char *root = getenv("OA_OFFLINE_ROOT");
+    if (!root || !*root) return NULL;
+    char path[4096];
+    int length = snprintf(path, sizeof(path), "%s/%s", root, name);
+    return length > 0 && length < (int)sizeof(path) ? fopen(path, mode) : NULL;
+}
+
+static int renderer_option(const char *name, int fallback)
+{
+    FILE *file = open_renderer_file(name, "r");
+    if (!file) return fallback;
+    int value = fgetc(file);
+    fclose(file);
+    return value == '1' ? 1 : value == '0' ? 0 : fallback;
+}
+
+static void set_texture_region(oa_tex *texture, unsigned level)
+{
+    if (texture->region_level == level) return;
+    texture->region_level = level;
+    ++render_regions_epoch;
+}
 
 static oa_chain *g_present_chains;
 typedef struct oa_present_orphan {
@@ -1065,6 +1140,14 @@ static void destroy_obj(obj *o) {
             if (s->af_sampler[i]) pvkDestroySampler(g_dev, s->af_sampler[i], NULL);
         break;
     }
+    case K_VS: case K_PS: {
+        oa_shader *shader = (oa_shader *)o;
+        if (shader->recipe_code) {
+            free(shader->recipe_code);
+            __atomic_fetch_sub(&captured_shader_bytes, shader->recipe_bytes, __ATOMIC_RELAXED);
+        }
+        break;
+    }
     case K_CHAIN:
         present_chain_release((oa_chain *)o);
         break;
@@ -1222,11 +1305,16 @@ typedef struct {
     uint64_t frame;
     int submitted;
     VkQueryPool qpool;
+    VkQueryPool timing_queries;
+    uint64_t submit_time_ns;
     uint32_t qused, qreset;
     oa_pred **qlist;
 } oa_frame;
 static oa_frame g_f[FRAMES];
 static oa_frame *g_cur;
+static FILE *gpu_timing_log;
+static double gpu_timestamp_period;
+static uint64_t gpu_timestamp_mask;
 static void texture_upload_collect(void);
 static VkCommandPool g_upload_pool;
 static VkCommandBuffer g_upload_cmd;
@@ -1282,6 +1370,18 @@ static void frame_begin(void) {
     if (f->submitted) {
         VkResult completed=pvkWaitForFences(g_dev, 1, &f->fence, VK_TRUE, UINT64_MAX);
         if(completed!=VK_SUCCESS)rt_fatal("Vulkan frame fence wait failed: %d",completed);
+        if (gpu_timing_log && f->timing_queries) {
+            uint64_t ticks[2];
+            if (pvkGetQueryPoolResults(g_dev, f->timing_queries, 0, 2,
+                                       sizeof(ticks), ticks, sizeof(ticks[0]),
+                                       VK_QUERY_RESULT_64_BIT) == VK_SUCCESS) {
+                double elapsed_us = (double)((ticks[1] - ticks[0]) & gpu_timestamp_mask) *
+                    gpu_timestamp_period / 1000.0;
+                fprintf(gpu_timing_log, "%llu,%llu,%.3f\n", (unsigned long long)f->frame,
+                        (unsigned long long)f->submit_time_ns, elapsed_us);
+                if (!(f->frame % 60)) fflush(gpu_timing_log);
+            }
+        }
         ++g_present_completed;
         present_gc_completed(f->frame);
         if(pvkResetFences(g_dev, 1, &f->fence)!=VK_SUCCESS)rt_fatal("Vulkan frame fence reset failed");
@@ -1300,6 +1400,10 @@ static void frame_begin(void) {
     pvkResetCommandPool(g_dev, f->pool, 0);
     bi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
     pvkBeginCommandBuffer(f->cmd, &bi);
+    if (f->timing_queries) {
+        pvkCmdResetQueryPool(f->cmd, f->timing_queries, 0, 2);
+        pvkCmdWriteTimestamp(f->cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, f->timing_queries, 0);
+    }
     if (f->qreset) {
         pvkCmdResetQueryPool(f->cmd, f->qpool, 0, f->qreset);
         f->qreset = 0;
@@ -1412,7 +1516,8 @@ static VkImageAspectFlags tex_aspect(const oa_tex *t) {
     return t->is_depth ? (VK_IMAGE_ASPECT_DEPTH_BIT | (t->has_stencil ? VK_IMAGE_ASPECT_STENCIL_BIT : 0)) : VK_IMAGE_ASPECT_COLOR_BIT;
 }
 
-static int make_image(oa_tex *t, VkImageUsageFlags usage, VkImageCreateFlags flags, VkImageType type) {
+static int make_texture_image(oa_tex *t, VkImageUsageFlags usage, VkImageCreateFlags flags,
+                              VkImageType type) {
     VkImageCreateInfo ci = {VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
     VkMemoryRequirements r;
     VkMemoryAllocateInfo ai = {VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
@@ -1433,8 +1538,12 @@ static int make_image(oa_tex *t, VkImageUsageFlags usage, VkImageCreateFlags fla
     ai.allocationSize = r.size;
     ai.memoryTypeIndex = mem_type(r.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0);
     if (pvkAllocateMemory(g_dev, &ai, NULL, &t->mem)) return 0;
-    pvkBindImageMemory(g_dev, t->image, t->mem, 0);
-    return 1;
+    return pvkBindImageMemory(g_dev, t->image, t->mem, 0) == VK_SUCCESS;
+}
+
+static int make_image(oa_tex *t, VkImageUsageFlags usage, VkImageCreateFlags flags, VkImageType type)
+{
+    return make_texture_image(t, usage, flags, type);
 }
 
 static uint32_t rows_of(const oa_tex *t, uint32_t h) { return t->block == 4 ? (h + 3) / 4 : h; }
@@ -1541,7 +1650,7 @@ static HRESULT create_texture(const uint32_t *desc, const oa_init *init, oa_tex 
         t->cpu_size = cpu_mip_offset(t, t->mips) * t->layers;
         t->cpu = zalloc16(t->cpu_size);
     }
-    if (usage_d3d != 3 && !make_image(t, usage, flags, is3d ? VK_IMAGE_TYPE_3D : VK_IMAGE_TYPE_2D)) {
+    if (usage_d3d != 3 && !make_texture_image(t, usage, flags, is3d ? VK_IMAGE_TYPE_3D : VK_IMAGE_TYPE_2D)) {
         logf_("image %ux%u fmt %u failed", t->w, t->h, t->fmt);
         goto failed;
     }
@@ -1651,6 +1760,7 @@ static HRESULT COM d_create_srv(obj *d, oa_tex *t, const uint32_t *desc, oa_view
     f = t->is_depth ? t->vkfmt : (fmt ? dx_format(fmt).vk : t->vkfmt);
     if (t->block == 4) f = t->vkfmt == dx_format(fmt).vk ? f : f;
     v->format = f;
+    v->level = base;
     {
         static uint32_t next_uid;
         v->uid = ++next_uid;
@@ -1742,7 +1852,7 @@ static HRESULT create_shader(const void *code, SIZE_T size, oa_shader **out, int
     size_t words = 0;
     char err[200];
     VkShaderModuleCreateInfo ci = {VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO};
-    if (!oa_dxbc_translate(code, size, &s->info, &spv, &words, err, sizeof(err))) {
+    if (!oa_dxbc_translate_regions(code, size, &s->info, &spv, &words, err, sizeof(err))) {
         logf_("shader translate failed: %s", err);
         free(s);
         return E_FAIL_;
@@ -1759,7 +1869,16 @@ static HRESULT create_shader(const void *code, SIZE_T size, oa_shader **out, int
     ci.codeSize = words * 4;
     ci.pCode = spv;
     if (pvkCreateShaderModule(g_dev, &ci, NULL, &s->module)) { logf_("shader module failed"); free(spv); free(s); return E_FAIL_; }
-    free(spv);
+    if (prepare_shader_variants || record_shader_variants) {
+        s->recipe_id = shader_recipe_id(spv, ci.codeSize);
+        s->recipe_interface_id = shader_recipe_id(&s->info, sizeof(s->info));
+    }
+    if (keep_shader_code(ci.codeSize)) {
+        s->recipe_code = spv;
+        s->recipe_bytes = (uint32_t)ci.codeSize;
+    } else {
+        free(spv);
+    }
     *out = s;
     return S_OK_;
 }
@@ -1908,28 +2027,43 @@ static void add_bindings(const oa_shader_info *i, VkDescriptorSetLayoutBinding *
         }
 }
 
-static prog_entry *program_of(oa_shader *vs, oa_shader *ps) {
-    uint32_t h = hash_bytes(&vs, sizeof(vs)) ^ hash_bytes(&ps, sizeof(ps)) * 31u, m = (1u << 13) - 1, i = h & m;
+static int create_program_layout(const oa_shader *vs, const oa_shader *ps,
+                                 VkDescriptorSetLayout *dsl, VkPipelineLayout *layout) {
     VkDescriptorSetLayoutBinding b[128];
     uint32_t n = 0;
     VkDescriptorSetLayoutCreateInfo dci = {VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO};
     VkPipelineLayoutCreateInfo lci = {VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
-    VkDescriptorSetLayout dsl;
-    while (g_progs[i].used) {
-        if (g_progs[i].vs == vs && g_progs[i].ps == ps) return &g_progs[i];
-        i = (i + 1) & m;
-    }
     add_bindings(&vs->info, b, &n, VK_SHADER_STAGE_VERTEX_BIT);
     if (ps) add_bindings(&ps->info, b, &n, VK_SHADER_STAGE_FRAGMENT_BIT);
     dci.bindingCount = n;
     dci.pBindings = b;
-    if (pvkCreateDescriptorSetLayout(g_dev, &dci, NULL, &dsl)) logf_("set layout failed, %u bindings", n);
+    if (pvkCreateDescriptorSetLayout(g_dev, &dci, NULL, dsl) != VK_SUCCESS) return 0;
     lci.setLayoutCount = 1;
-    lci.pSetLayouts = &dsl;
-    pvkCreatePipelineLayout(g_dev, &lci, NULL, &g_progs[i].layout);
+    lci.pSetLayouts = dsl;
+    const VkPushConstantRange regions = {
+        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+        .size = sizeof(oa_dxbc_render_regions),
+    };
+    lci.pushConstantRangeCount = 1;
+    lci.pPushConstantRanges = &regions;
+    if (pvkCreatePipelineLayout(g_dev, &lci, NULL, layout) != VK_SUCCESS) {
+        pvkDestroyDescriptorSetLayout(g_dev, *dsl, NULL);
+        *dsl = VK_NULL_HANDLE;
+        return 0;
+    }
+    return 1;
+}
+
+static prog_entry *program_of(oa_shader *vs, oa_shader *ps) {
+    uint32_t h = hash_bytes(&vs, sizeof(vs)) ^ hash_bytes(&ps, sizeof(ps)) * 31u, m = (1u << 13) - 1, i = h & m;
+    while (g_progs[i].used) {
+        if (g_progs[i].vs == vs && g_progs[i].ps == ps) return &g_progs[i];
+        i = (i + 1) & m;
+    }
+    if (!create_program_layout(vs, ps, &g_progs[i].dsl, &g_progs[i].layout))
+        rt_fatal("Vulkan program layout creation failed");
     g_progs[i].vs = vs;
     g_progs[i].ps = ps;
-    g_progs[i].dsl = dsl;
     g_progs[i].used = 1;
     return &g_progs[i];
 }
@@ -1948,7 +2082,7 @@ static VkStencilOp stencil_op(uint32_t o) {
 
 static void pipeline_cache_note_creation(void);
 
-static VkPipeline build_pipeline(const pipe_key *k, VkPipelineLayout layout) {
+static VkPipeline build_pipeline(const pipe_key *k, VkPipelineLayout layout, VkPipelineCache cache) {
     VkGraphicsPipelineCreateInfo ci = {VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO};
     VkPipelineRenderingCreateInfo ri = {VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO};
     VkPipelineShaderStageCreateInfo st[2];
@@ -2091,10 +2225,11 @@ static VkPipeline build_pipeline(const pipe_key *k, VkPipelineLayout layout) {
     ci.pColorBlendState = &cb;
     ci.pDynamicState = &dy;
     ci.layout = layout;
-    if (pvkCreateGraphicsPipelines(g_dev, g_pcache, 1, &ci, NULL, &p)) logf_("pipeline failed");
-    else pipeline_cache_note_creation();
+    if (pvkCreateGraphicsPipelines(g_dev, cache, 1, &ci, NULL, &p)) logf_("pipeline failed");
     return p;
 }
+
+#include "oa_shader_preparation.inc"
 
 extern int oa_fast_draw_preparation;
 
@@ -2115,7 +2250,7 @@ static VkPipeline get_pipeline(oa_context *c, const pipe_key *k, int fast) {
     if (g_pipes_n + 1 >= g_pipes_cap) { logf_("pipeline table full"); return VK_NULL_HANDLE; }
     g_pipes[i].k = *k;
     g_pipes[i].program = program_of(k->vs, k->ps);
-    g_pipes[i].p = build_pipeline(k, g_pipes[i].program->layout);
+    g_pipes[i].p = get_prepared_pipeline(k, g_pipes[i].program->layout);
     c->selected_pipe = &g_pipes[i];
     g_pipes[i].used = 1;
     g_pipes_n++;
@@ -2130,12 +2265,87 @@ static void end_rendering(oa_context *c) {
     }
 }
 
+static int scalable_attachment(const oa_view *view, uint32_t width, uint32_t height)
+{
+    if (!view) return 1;
+    const oa_tex *texture = view->tex;
+    if (texture->is_backbuffer || texture->mips != 1 || texture->layers != 1 ||
+        texture->type3d || view->w != width || view->h != height ||
+        width < 16 || height < 16 || !region_ceiling_width || !region_ceiling_height)
+        return 0;
+
+    /* Original scene buffers include rounded divisions for bloom and other passes. */
+    for (uint32_t divisor = 1; divisor <= 16; divisor *= 2) {
+        if (width >= region_ceiling_width / divisor &&
+            width <= (region_ceiling_width + divisor - 1) / divisor &&
+            height >= region_ceiling_height / divisor &&
+            height <= (region_ceiling_height + divisor - 1) / divisor)
+            return 1;
+    }
+    return 0;
+}
+
+static void set_render_regions(oa_context *c, uint32_t width, uint32_t height)
+{
+    unsigned level = render_region_level;
+    if (level && !scalable_attachment(c->dsv, width, height))
+        level = OA_RESOLUTION_FULL;
+    for (unsigned i = 0; level && i < 8; ++i)
+        if (!scalable_attachment(c->rtv[i], width, height))
+            level = OA_RESOLUTION_FULL;
+
+    c->region_extent.width = oa_resolution_dimension(width, level);
+    c->region_extent.height = oa_resolution_dimension(height, level);
+    c->region_state.position_to_logical[0] = width ? (float)width / c->region_extent.width : 1.0f;
+    c->region_state.position_to_logical[1] = height ? (float)height / c->region_extent.height : 1.0f;
+    if (!level && !render_regions_epoch) return;
+    for (unsigned i = 0; i < 8; ++i)
+        if (c->rtv[i]) set_texture_region(c->rtv[i]->tex, level);
+    if (c->dsv) set_texture_region(c->dsv->tex, level);
+    if (level) ++render_scaled_passes;
+}
+
+static int vertex_reads_render_target(const oa_context *c)
+{
+    for (uint32_t mask = c->vs->info.texture_mask; mask; mask &= mask - 1) {
+        const oa_view *view = c->vs_srv[__builtin_ctz(mask)];
+        if (view && (view->tex->desc[8] & (D3D11_BIND_RENDER_TARGET | D3D11_BIND_DEPTH_STENCIL)))
+            return 1;
+    }
+    return 0;
+}
+
+static void wait_for_render_targets(oa_context *c)
+{
+    if (!short_render_waits) {
+        barrier_all(g_cur->cmd);
+        return;
+    }
+    /* Render and transfer writes can feed later passes. Their fragment and
+       attachment stages still wait; vertex processing only waits when it
+       samples a resource that an earlier pass could have produced. */
+    VkMemoryBarrier barrier = {
+        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
+        .srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT,
+        .dstAccessMask = VK_ACCESS_SHADER_READ_BIT |
+            VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
+            VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT,
+    };
+    VkPipelineStageFlags destination = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
+        VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT |
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    c->rendering_waits_for_vertex = vertex_reads_render_target(c);
+    if (c->rendering_waits_for_vertex) destination |= VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
+    pvkCmdPipelineBarrier(g_cur->cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, destination,
+                          0, 1, &barrier, 0, NULL, 0, NULL);
+}
+
 static void begin_rendering(oa_context *c) {
     VkRenderingInfo ri = {VK_STRUCTURE_TYPE_RENDERING_INFO};
     VkRenderingAttachmentInfo col[8], dep = {VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
     uint32_t i, n = 0, w = 0, h = 0;
     if (c->rendering) return;
-    barrier_all(g_cur->cmd);
+    wait_for_render_targets(c);
     memset(col, 0, sizeof(col));
     for (i = 0; i < 8; i++) {
         col[i].sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO;
@@ -2150,8 +2360,8 @@ static void begin_rendering(oa_context *c) {
         }
     }
     if (c->dsv) { w = c->dsv->w; h = c->dsv->h; }
-    ri.renderArea.extent.width = w;
-    ri.renderArea.extent.height = h;
+    set_render_regions(c, w, h);
+    ri.renderArea.extent = c->region_extent;
     ri.layerCount = 1;
     ri.colorAttachmentCount = n;
     ri.pColorAttachments = col;
@@ -2416,6 +2626,8 @@ static void upload_region(oa_tex *t, uint32_t sub, const uint8_t *src, uint32_t 
     barrier_all(g_cur->cmd);
     pvkCmdCopyBufferToImage(g_cur->cmd, buf, t->image, VK_IMAGE_LAYOUT_GENERAL, 1, &r);
     barrier_all(g_cur->cmd);
+    if (t->region_level && !sub && !dx && !dy && w == t->w && h == t->h)
+        set_texture_region(t, OA_RESOLUTION_FULL);
 }
 
 static void unmap_i(oa_context *c, obj *res, UINT sub) {
@@ -2471,6 +2683,8 @@ static void COM c_copy_subresource(oa_context *c, obj *dst, UINT dsub, UINT x, U
         barrier_all(g_cur->cmd);
         pvkCmdCopyImage(g_cur->cmd, s->image, VK_IMAGE_LAYOUT_GENERAL, d->image, VK_IMAGE_LAYOUT_GENERAL, 1, &r);
         barrier_all(g_cur->cmd);
+        if (!dsub && !ssub && !x && !y && !box && d->w == s->w && d->h == s->h)
+            set_texture_region(d, s->region_level);
     } else if (!warned++) {
         logf_("CopySubresourceRegion readback to CPU is not implemented");
     }
@@ -2485,6 +2699,7 @@ static void COM c_clear_rtv(oa_context *c, oa_view *v, const float *col) {
     r.baseMipLevel = v->level;
     barrier_all(g_cur->cmd);
     pvkCmdClearColorImage(g_cur->cmd, v->tex->image, VK_IMAGE_LAYOUT_GENERAL, &cv, 1, &r);
+    if (!v->level) set_texture_region(v->tex, OA_RESOLUTION_FULL);
 }
 
 static void COM c_clear_dsv(oa_context *c, oa_view *v, UINT flags, float depth, UINT8 stencil) {
@@ -2500,6 +2715,7 @@ static void COM c_clear_dsv(oa_context *c, oa_view *v, UINT flags, float depth, 
     if (!r.aspectMask) return;
     barrier_all(g_cur->cmd);
     pvkCmdClearDepthStencilImage(g_cur->cmd, v->tex->image, VK_IMAGE_LAYOUT_GENERAL, &cv, 1, &r);
+    if (!v->level) set_texture_region(v->tex, OA_RESOLUTION_FULL);
 }
 
 /* ---- draw ---- */
@@ -2776,6 +2992,36 @@ static VkPipeline draw_pipeline(oa_context *c, int fast) {
     return p;
 }
 
+static void texture_regions(const oa_shader *shader, oa_view *const *views, uint32_t regions[2])
+{
+    regions[0] = regions[1] = 0;
+    if (!shader) return;
+    for (uint32_t mask = shader->info.texture_mask; mask; mask &= mask - 1) {
+        unsigned slot = __builtin_ctz(mask);
+        const oa_view *view = views[slot];
+        if (view && view->view && !view->level && view->tex->region_level &&
+            shader->info.texture_dim[slot] == 3)
+            regions[view->tex->region_level - 1] |= 1u << slot;
+    }
+}
+
+static void push_render_regions(oa_context *c, VkCommandBuffer cmd, VkPipelineLayout layout)
+{
+    if (render_regions_epoch && (c->region_bindings_epoch != render_regions_epoch ||
+                                 c->region_material_epoch != c->material_epoch)) {
+        texture_regions(c->vs, c->vs_srv, c->region_state.vertex_regions);
+        texture_regions(c->ps, c->ps_srv, c->region_state.pixel_regions);
+        c->region_bindings_epoch = render_regions_epoch;
+        c->region_material_epoch = c->material_epoch;
+    }
+    if (!c->regions_pushed || memcmp(&c->pushed_regions, &c->region_state, sizeof(c->region_state))) {
+        pvkCmdPushConstants(cmd, layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                            0, sizeof(c->region_state), &c->region_state);
+        c->pushed_regions = c->region_state;
+        c->regions_pushed = 1;
+    }
+}
+
 static int prepare_draw(oa_context *c) {
     VkCommandBuffer cmd;
     VkPipeline p;
@@ -2785,6 +3031,9 @@ static int prepare_draw(oa_context *c) {
     if (c->q_active) g_n_query_kept++;
     if (!c->vs) { g_n_skip_vs++; return 0; }
     if (!c->rtv[0] && !c->dsv) { g_n_skip_rt++; return 0; }
+    if (short_render_waits && c->rendering && !c->rendering_waits_for_vertex &&
+        c->vs->info.texture_mask && vertex_reads_render_target(c))
+        end_rendering(c);
     begin_rendering(c);
     cmd = g_cur->cmd;
     const int fast = __atomic_load_n(&oa_fast_draw_preparation, __ATOMIC_RELAXED);
@@ -2814,16 +3063,33 @@ static int prepare_draw(oa_context *c) {
         c->set_ib = VK_NULL_HANDLE;
         c->set_layout = VK_NULL_HANDLE;
         c->set_desc = VK_NULL_HANDLE;
+        c->regions_pushed = 0;
         c->cache_valid = 1;
     }
-    if (c->have_vp && memcmp(&c->vp, &c->set_vp, sizeof(c->vp))) { pvkCmdSetViewport(cmd, 0, 1, &c->vp); c->set_vp = c->vp; }
     {
-        VkRect2D r;
-        if (c->raster && c->raster->desc[7] && c->have_scissor) r = c->scissor;
-        else {
-            r.offset.x = r.offset.y = 0;
-            r.extent.width = c->rtv[0] ? c->rtv[0]->w : c->dsv->w;
-            r.extent.height = c->rtv[0] ? c->rtv[0]->h : c->dsv->h;
+        const float sx = 1.0f / c->region_state.position_to_logical[0];
+        const float sy = 1.0f / c->region_state.position_to_logical[1];
+        VkViewport vp = c->vp;
+        if (c->have_vp) {
+            vp.x *= sx;
+            vp.y *= sy;
+            vp.width *= sx;
+            vp.height *= sy;
+            if (memcmp(&vp, &c->set_vp, sizeof(vp))) {
+                pvkCmdSetViewport(cmd, 0, 1, &vp);
+                c->set_vp = vp;
+            }
+        }
+        VkRect2D r = {{0, 0}, c->region_extent};
+        if (c->raster && c->raster->desc[7] && c->have_scissor) {
+            if (sx == 1.0f && sy == 1.0f) {
+                r = c->scissor;
+            } else {
+                r.offset.x = (int32_t)floorf(c->scissor.offset.x * sx);
+                r.offset.y = (int32_t)floorf(c->scissor.offset.y * sy);
+                r.extent.width = (uint32_t)ceilf((c->scissor.offset.x + (float)c->scissor.extent.width) * sx) - r.offset.x;
+                r.extent.height = (uint32_t)ceilf((c->scissor.offset.y + (float)c->scissor.extent.height) * sy) - r.offset.y;
+            }
         }
         if (memcmp(&r, &c->set_scissor, sizeof(r))) { pvkCmdSetScissor(cmd, 0, 1, &r); c->set_scissor = r; }
     }
@@ -2857,6 +3123,7 @@ static int prepare_draw(oa_context *c) {
         }
     }
     const prog_entry *prog = fast ? c->selected_pipe->program : program_of(c->vs, c->ps);
+    push_render_regions(c, cmd, prog->layout);
     VkDescriptorSet set = VK_NULL_HANDLE;
     if (batch && c->cached_material_set && c->cached_program == prog &&
         c->cached_material_epoch == c->material_epoch && c->cached_pool_epoch == g_desc_pool_epoch &&
@@ -3235,6 +3502,9 @@ static HRESULT COM f_create_chain(obj *f, obj *device, const DXGI_SWAP_CHAIN_DES
     extern int oa_present_headroom_mailbox;
     s->mailbox_requested=oa_present_headroom_mailbox;
     s->w=desc->BufferDesc.Width;s->h=desc->BufferDesc.Height;s->fmt=desc->BufferDesc.Format;s->hwnd=desc->OutputWindow;
+    region_ceiling_width = s->w;
+    region_ceiling_height = s->h;
+    render_region_level = OA_RESOLUTION_FULL;
     uint64_t generation;
     ANativeWindow *window=oa_android_present_lock(&generation);
     VkResult attached=present_ensure_window(s,window,generation);
@@ -3264,6 +3534,39 @@ static uint64_t g_frames_shown;
 static int64_t g_t_wait, g_t_acquire, g_t_submit;
 void oa_perf_frame(uint64_t,unsigned,unsigned);
 #include "oa_waterfall.inc"
+
+extern int veil_tablet_gameplay_active(void);
+extern int rt_android_is_foreground(void);
+
+static void update_render_resolution(oa_chain *s, uint64_t now, int presented)
+{
+    if (!presented || !rt_android_is_foreground()) {
+        oa_resolution_reset(&s->resolution_timing);
+        return;
+    }
+
+    int enabled = veil_dynamic_resolution_enabled() && !hdr_active && !hdr_requested;
+    if (!enabled) oa_resolution_reset(&s->resolution_timing);
+    if (enabled && (!veil_tablet_gameplay_active() || now < s->region_ready_after)) {
+        oa_resolution_reset(&s->resolution_timing);
+        return;
+    }
+
+    unsigned level = enabled ? oa_resolution_next(&s->resolution_timing, now, render_region_level)
+                             : OA_RESOLUTION_FULL;
+    if (level == render_region_level) return;
+    unsigned width = oa_resolution_dimension(s->w, level);
+    unsigned height = oa_resolution_dimension(s->h, level);
+    if (level != OA_RESOLUTION_FULL && (width < 640 || height < 360)) return;
+    logf_("DYNAMIC_RESOLUTION region %ux%u -> %ux%u time_ns=%llu",
+          oa_resolution_dimension(s->w, render_region_level),
+          oa_resolution_dimension(s->h, render_region_level),
+          width, height, (unsigned long long)now);
+    render_region_level = level;
+    s->region_step_time = now;
+    s->region_ready_after = now + 1000000000ull;
+    oa_resolution_reset(&s->resolution_timing);
+}
 
 static HRESULT COM s_present(oa_chain *s, UINT sync, UINT flags) {
     LARGE_INTEGER q0, q1, q2;
@@ -3384,6 +3687,8 @@ static HRESULT COM s_present(oa_chain *s, UINT sync, UINT flags) {
         ++g_present_deferred;
         if(window_ready || (g_present_deferred%120)==1)logf_("PRESENT deferred acquire=%d window_ready=%d; offscreen submit only",acquired.result,window_ready);
     }
+    if (f->timing_queries)
+        pvkCmdWriteTimestamp(f->cmd, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, f->timing_queries, 1);
     if(pvkEndCommandBuffer(f->cmd)!=VK_SUCCESS)rt_fatal("Vulkan frame command buffer end failed");
     si.waitSemaphoreCount = acquired.valid?1:0;
     si.pWaitSemaphores = &f->acquired;
@@ -3435,9 +3740,20 @@ static HRESULT COM s_present(oa_chain *s, UINT sync, UINT flags) {
     oa_android_present_unlock();
     if(!window_ready)usleep(16000); /* Avoid an uncapped render loop while the app has no surface. */
     QueryPerformanceCounter(&q2);
+    f->submit_time_ns = q2.QuadPart;
+    int presented = acquired.valid && (r == VK_SUCCESS || r == VK_SUBOPTIMAL_KHR);
+    if (presented && s->displayed_region_level != render_region_level) {
+        logf_("DYNAMIC_RESOLUTION presented %ux%u time_ns=%llu ready=1 scaled_passes=%u frame=%llu step_ns=%llu",
+              oa_resolution_dimension(s->w, render_region_level),
+              oa_resolution_dimension(s->h, render_region_level), (unsigned long long)q2.QuadPart,
+              render_scaled_passes, (unsigned long long)g_frame, (unsigned long long)s->region_step_time);
+        s->displayed_region_level = render_region_level;
+    }
+    render_scaled_passes = 0;
     g_t_submit += q2.QuadPart - q1.QuadPart;
     g_sample = (g_frames_shown & 7) == 0;
     if (g_frames_shown % 120 == 0) {
+        if (pipeline_timing_log) fflush(pipeline_timing_log);
         pipeline_cache_maybe_save(g_frames_shown);
         if (g_frames_shown % 600 == 0) {
             rt_log("TEXTURE_UPLOAD_COUNTS queued=%llu sync=%llu staging_bytes=%llu",
@@ -3488,7 +3804,9 @@ static HRESULT COM s_present(oa_chain *s, UINT sync, UINT flags) {
     }
     c->pipeline_valid = 0;
     c->cache_valid = 0;
-    oa_perf_frame((uint64_t)g_n_draw,s->w,s->h);
+    oa_perf_frame((uint64_t)g_n_draw, oa_resolution_dimension(s->w, render_region_level),
+                  oa_resolution_dimension(s->h, render_region_level));
+    update_render_resolution(s, q2.QuadPart, presented);
     return S_OK_;
 }
 static HRESULT COM s_get_desc(oa_chain*s,DXGI_SWAP_CHAIN_DESC*d){memset(d,0,sizeof(*d));d->BufferDesc.Width=s->w;d->BufferDesc.Height=s->h;d->BufferDesc.Format=s->fmt;d->SampleDesc.Count=1;d->BufferUsage=0x20;d->BufferCount=1;d->OutputWindow=s->hwnd;d->Windowed=TRUE;return S_OK_;}
@@ -3504,6 +3822,11 @@ static HRESULT COM s_resize(oa_chain *s, UINT n, UINT w, UINT h, UINT fmt, UINT 
     end_rendering(g_ctx);
     o_release(&s->back->o);
     make_back(s);
+    region_ceiling_width = s->w;
+    region_ceiling_height = s->h;
+    render_region_level = OA_RESOLUTION_FULL;
+    s->displayed_region_level = OA_RESOLUTION_FULL;
+    oa_resolution_reset(&s->resolution_timing);
     return S_OK_;
 }
 static HRESULT COM s_resize_target(oa_chain *s, const void *d) { (void)s; (void)d; return S_OK_; }
@@ -3645,6 +3968,17 @@ static int init_vulkan(void) {
     pvkGetPhysicalDeviceQueueFamilyProperties(g_phys, &n, qf);
     for (i = 0; i < n; i++)
         if (qf[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) { g_qfam = i; break; }
+    short_render_waits = renderer_option("veil-short-render-waits", 0);
+    prepare_shader_variants = renderer_option("veil-shader-preparation", 1);
+    record_shader_variants = renderer_option("veil-record-shaders", 1);
+    logf_("RENDER_WAITS short=%d", short_render_waits);
+    unsigned timestamp_bits = qf[g_qfam].timestampValidBits;
+    if (timestamp_bits && renderer_option("veil-gpu-timing", 0)) {
+        gpu_timing_log = open_renderer_file(".oa-pacing-benchmark/gpu-timing.csv", "w");
+        gpu_timestamp_period = prop.limits.timestampPeriod;
+        gpu_timestamp_mask = UINT64_MAX >> (64 - timestamp_bits);
+        if (gpu_timing_log) fputs("frame,submit_time_ns,gpu_us\n", gpu_timing_log);
+    }
     pvkGetPhysicalDeviceFormatProperties(g_phys, VK_FORMAT_D24_UNORM_S8_UINT, &fp);
     if (!(fp.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT)) g_d24s8 = VK_FORMAT_D32_SFLOAT_S8_UINT;
     qi.queueFamilyIndex = g_qfam;
@@ -3750,6 +4084,7 @@ static int init_vulkan(void) {
         VkFenceCreateInfo fc = {VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
         VkSemaphoreCreateInfo sc = {VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
         pipeline_cache_init();
+        start_shader_preparation();
         cp.queueFamilyIndex = g_qfam;
         ca.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
         ca.commandBufferCount = 1;
@@ -3766,6 +4101,17 @@ static int init_vulkan(void) {
                 if (pvkCreateQueryPool(g_dev, &qc, NULL, &g_f[i].qpool)) { logf_("query pool failed"); return 0; }
                 g_f[i].qlist = calloc(QUERY_MAX, sizeof(oa_pred *));
                 g_f[i].qreset = QUERY_MAX;
+            }
+            if (gpu_timing_log) {
+                const VkQueryPoolCreateInfo timing = {
+                    .sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
+                    .queryType = VK_QUERY_TYPE_TIMESTAMP,
+                    .queryCount = 2,
+                };
+                if (pvkCreateQueryPool(g_dev, &timing, NULL, &g_f[i].timing_queries) != VK_SUCCESS) {
+                    fclose(gpu_timing_log);
+                    gpu_timing_log = NULL;
+                }
             }
             if (!make_buffer_with_mapping(&g_f[i].rings[0], RING_SIZE,
                     VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 1)) {

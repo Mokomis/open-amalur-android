@@ -13,18 +13,18 @@ enum {
     OpConstantComposite = 44, OpFunction = 54, OpFunctionEnd = 56, OpVariable = 59, OpLoad = 61, OpStore = 62, OpAccessChain = 65,
     OpDecorate = 71, OpMemberDecorate = 72, OpVectorShuffle = 79, OpCompositeConstruct = 80, OpCompositeExtract = 81,
     OpCompositeInsert = 82, OpSampledImage = 86, OpImageSampleImplicitLod = 87, OpImageSampleExplicitLod = 88,
-    OpImageSampleDrefImplicitLod = 89, OpImageFetch = 95, OpConvertFToU = 109, OpConvertFToS = 110, OpConvertSToF = 111,
-    OpConvertUToF = 112, OpBitcast = 124, OpSNegate = 126, OpFNegate = 127, OpIAdd = 128, OpFAdd = 129, OpFMul = 133, OpIMul = 132,
+    OpImageSampleDrefImplicitLod = 89, OpImageFetch = 95, OpImageQuerySizeLod = 103, OpConvertFToU = 109, OpConvertFToS = 110, OpConvertSToF = 111,
+    OpConvertUToF = 112, OpBitcast = 124, OpSNegate = 126, OpFNegate = 127, OpIAdd = 128, OpFAdd = 129, OpFSub = 131, OpFMul = 133, OpIMul = 132, OpSDiv = 135,
     OpFDiv = 136, OpDot = 148, OpAny = 154, OpSelect = 169, OpIEqual = 170, OpINotEqual = 171, OpSGreaterThanEqual = 175,
     OpSLessThan = 177, OpUGreaterThanEqual = 174, OpULessThan = 176, OpFOrdEqual = 180, OpFUnordNotEqual = 183, OpFOrdLessThan = 184,
     OpFOrdGreaterThanEqual = 190, OpShiftRightLogical = 194, OpShiftRightArithmetic = 195, OpShiftLeftLogical = 196, OpBitwiseOr = 197,
-    OpBitwiseXor = 198, OpBitwiseAnd = 199, OpNot = 200, OpDPdx = 207, OpDPdy = 208, OpLoopMerge = 246, OpSelectionMerge = 247,
+    OpBitwiseXor = 198, OpBitwiseAnd = 199, OpNot = 200, OpDPdx = 207, OpDPdy = 208, OpPhi = 245, OpLoopMerge = 246, OpSelectionMerge = 247,
     OpLabel = 248, OpBranch = 249, OpBranchConditional = 250, OpKill = 252, OpReturn = 253
 };
 /* GLSL.std.450 */
 enum { G_RoundEven = 2, G_Trunc = 3, G_FAbs = 4, G_SAbs = 5, G_Floor = 8, G_Ceil = 9, G_Fract = 10, G_Sin = 13, G_Cos = 14, G_Exp2 = 29, G_Log2 = 30, G_Sqrt = 31, G_InverseSqrt = 32, G_FMin = 37, G_UMin = 38, G_SMin = 39, G_FMax = 40, G_UMax = 41, G_SMax = 42, G_FClamp = 43 };
 /* Storage classes, decorations, builtins */
-enum { SC_UniformConstant = 0, SC_Input = 1, SC_Uniform = 2, SC_Output = 3, SC_Function = 7 };
+enum { SC_UniformConstant = 0, SC_Input = 1, SC_Uniform = 2, SC_Output = 3, SC_Function = 7, SC_PushConstant = 9 };
 enum { D_Block = 2, D_ArrayStride = 6, D_BuiltIn = 11, D_NoPerspective = 13, D_Flat = 14, D_Centroid = 16, D_Location = 30, D_Binding = 33, D_DescriptorSet = 34, D_Offset = 35 };
 enum { B_Position = 0, B_FragCoord = 15, B_FragDepth = 22 };
 
@@ -70,6 +70,8 @@ typedef struct {
     uint32_t depth_tex; /* t# used with sample_c */
     struct { uint32_t kind, sd, depth, img, si; } images[16];
     int nimages, has_1d;
+    int render_regions, has_image_query;
+    uint32_t region_constants;
     uint32_t icb_var;
     oa_shader_info *info;
     const uint32_t *t; size_t tn, pc;
@@ -207,6 +209,23 @@ static uint32_t un(ctx *c, uint32_t op, uint32_t t, uint32_t a) {
     return r;
 }
 
+static uint32_t region_constant(ctx *c, uint32_t member, uint32_t type) {
+    if (!c->region_constants) {
+        uint32_t block = id(c);
+        ins(&c->types, OpTypeStruct, 4, block, c->vec2[K_FLOAT], c->vec2[K_UINT], c->vec2[K_UINT]);
+        ins(&c->annot, OpDecorate, 2, block, U(D_Block));
+        ins(&c->annot, OpMemberDecorate, 4, block, U(0), U(D_Offset), U(offsetof(oa_dxbc_render_regions, position_to_logical)));
+        ins(&c->annot, OpMemberDecorate, 4, block, U(1), U(D_Offset), U(offsetof(oa_dxbc_render_regions, pixel_regions)));
+        ins(&c->annot, OpMemberDecorate, 4, block, U(2), U(D_Offset), U(offsetof(oa_dxbc_render_regions, vertex_regions)));
+        c->region_constants = id(c);
+        ins(&c->types, OpVariable, 3, ptr_t(c, SC_PushConstant, block), c->region_constants, U(SC_PushConstant));
+    }
+    uint32_t address = id(c), value = id(c);
+    ins(&c->code, OpAccessChain, 4, ptr_t(c, SC_PushConstant, type), address, c->region_constants, cuint(c, member));
+    ins(&c->code, OpLoad, 3, type, value, address);
+    return value;
+}
+
 static uint32_t next_word(ctx *c) {
     if (c->pc >= c->tn) {
         fail(c, "ran off the end of the shader");
@@ -271,6 +290,13 @@ static uint32_t load_raw(ctx *c, operand *o) {
         ins(&c->code, OpLoad, 3, c->vec4[c->in_kind[i]], r, c->in_vars[i]);
         if (c->in_is_pos[i]) {
             /* D3D gives w, Vulkan gives 1/w. */
+            if (c->render_regions) {
+                uint32_t xy = id(c), pos = id(c);
+                ins(&c->code, OpVectorShuffle, 6, c->vec2[K_FLOAT], xy, r, r, U(0), U(1));
+                xy = bin(c, OpFMul, c->vec2[K_FLOAT], xy, region_constant(c, 0, c->vec2[K_FLOAT]));
+                ins(&c->code, OpVectorShuffle, 8, c->vec4[K_FLOAT], pos, xy, r, U(0), U(1), U(4), U(5));
+                r = pos;
+            }
             uint32_t w = id(c), rw;
             ins(&c->code, OpCompositeExtract, 4, c->scalar[K_FLOAT], w, r, 3);
             rw = bin(c, OpFDiv, c->scalar[K_FLOAT], cfloat(c, 1.0f), w);
@@ -582,14 +608,96 @@ static uint32_t coord_of(ctx *c, uint32_t v, int kind, int n) {
     return r;
 }
 
-static uint32_t combined(ctx *c, uint32_t t, uint32_t s) {
-    uint32_t img = id(c), smp = id(c), r = id(c);
+static uint32_t texture_image(ctx *c, uint32_t t) {
+    uint32_t image = id(c);
+    if (t >= 32 || !c->tex_vars[t]) { fail(c, "t%u not declared", t); return image; }
+    ins(&c->code, OpLoad, 3, c->tex_types[t], image, c->tex_vars[t]);
+    return image;
+}
+
+static uint32_t combined(ctx *c, uint32_t t, uint32_t s, uint32_t img) {
+    uint32_t smp = id(c), r = id(c);
     if (t >= 32 || !c->tex_vars[t]) { fail(c, "t%u not declared", t); return r; }
     if (s >= 16 || !c->sampler_vars[s]) { fail(c, "s%u not declared", s); return r; }
-    ins(&c->code, OpLoad, 3, c->tex_types[t], img, c->tex_vars[t]);
     ins(&c->code, OpLoad, 3, c->sampler_t, smp, c->sampler_vars[s]);
     ins(&c->code, OpSampledImage, 4, c->si_types[t], r, img, smp);
     return r;
+}
+
+static uint32_t coord_constant(ctx *c, int kind, uint32_t x, uint32_t y) {
+    uint32_t r = id(c);
+    ins(&c->types, OpConstantComposite, 4, vec_t(c, kind, 2), r, x, y);
+    return r;
+}
+
+/* The descriptor still exposes the whole allocation. Apply the fragment's
+   logical coordinate to the portion actually written by the texture's producer. */
+static uint32_t render_region_coord(ctx *c, uint32_t slot, uint32_t image, uint32_t coord,
+                                   const int32_t *offset, int fetch) {
+    uint32_t masks = region_constant(c, c->info->is_pixel ? 1 : 2, c->vec2[K_UINT]);
+    uint32_t medium = id(c), low = id(c);
+    ins(&c->code, OpCompositeExtract, 4, c->scalar[K_UINT], medium, masks, U(0));
+    ins(&c->code, OpCompositeExtract, 4, c->scalar[K_UINT], low, masks, U(1));
+    uint32_t bit = cuint(c, 1u << slot);
+    uint32_t scaled = bin(c, OpBitwiseOr, c->scalar[K_UINT], medium, low);
+    scaled = bin(c, OpBitwiseAnd, c->scalar[K_UINT], scaled, bit);
+    scaled = bin(c, OpINotEqual, c->bool_t, scaled, cuint(c, 0));
+    uint32_t adjust = id(c), unchanged = id(c), merge = id(c);
+    ins(&c->code, OpSelectionMerge, 2, merge, U(0));
+    ins(&c->code, OpBranchConditional, 3, scaled, adjust, unchanged);
+    ins(&c->code, OpLabel, 1, adjust);
+
+    if (!c->has_image_query) {
+        ins(&c->head, OpCapability, 1, U(50)); /* ImageQuery */
+        c->has_image_query = 1;
+    }
+    low = bin(c, OpBitwiseAnd, c->scalar[K_UINT], low, bit);
+    low = bin(c, OpINotEqual, c->bool_t, low, cuint(c, 0));
+    uint32_t i4 = const_t(c, c->scalar[K_INT], 4), i5 = const_t(c, c->scalar[K_INT], 5);
+    uint32_t i6 = const_t(c, c->scalar[K_INT], 6), factor = id(c), factor2 = id(c);
+    ins(&c->code, OpSelect, 5, c->scalar[K_INT], factor, low, i4, i5);
+    ins(&c->code, OpCompositeConstruct, 4, c->vec2[K_INT], factor2, factor, factor);
+    uint32_t size = id(c);
+    ins(&c->code, OpImageQuerySizeLod, 4, c->vec2[K_INT], size, image, const_t(c, c->scalar[K_INT], 0));
+    uint32_t active = bin(c, OpIMul, c->vec2[K_INT], size, factor2);
+    active = bin(c, OpSDiv, c->vec2[K_INT], active, coord_constant(c, K_INT, i6, i6));
+    uint32_t sizef = un(c, OpConvertSToF, c->vec2[K_FLOAT], size);
+    uint32_t activef = un(c, OpConvertSToF, c->vec2[K_FLOAT], active);
+    uint32_t fraction = bin(c, OpFDiv, c->vec2[K_FLOAT], activef, sizef);
+    uint32_t half = cfloat(c, 0.5f);
+    uint32_t half2 = coord_constant(c, K_FLOAT, half, half);
+    uint32_t transformed;
+    if (fetch) {
+        uint32_t center = un(c, OpConvertSToF, c->vec2[K_FLOAT], coord);
+        center = bin(c, OpFAdd, c->vec2[K_FLOAT], center, half2);
+        center = bin(c, OpFMul, c->vec2[K_FLOAT], center, fraction);
+        center = ext1(c, c->vec2[K_FLOAT], G_Floor, center);
+        transformed = un(c, OpConvertFToS, c->vec2[K_INT], center);
+        /* Keep logical out-of-bounds accesses out of the padding as well. */
+        uint32_t outside = bin(c, OpSGreaterThanEqual, c->bvec2, coord, size);
+        uint32_t selected = id(c);
+        ins(&c->code, OpSelect, 5, c->vec2[K_INT], selected, outside, size, transformed);
+        transformed = selected;
+    } else {
+        uint32_t edge = bin(c, OpFDiv, c->vec2[K_FLOAT], half2, sizef);
+        uint32_t upper = bin(c, OpFSub, c->vec2[K_FLOAT], fraction, edge);
+        if (offset) {
+            uint32_t shift = coord_constant(c, K_FLOAT, cfloat(c, offset[0]), cfloat(c, offset[1]));
+            shift = bin(c, OpFDiv, c->vec2[K_FLOAT], shift, sizef);
+            edge = bin(c, OpFSub, c->vec2[K_FLOAT], edge, shift);
+            upper = bin(c, OpFSub, c->vec2[K_FLOAT], upper, shift);
+        }
+        uint32_t scaled_coord = bin(c, OpFMul, c->vec2[K_FLOAT], coord, fraction);
+        transformed = id(c);
+        ins(&c->code, OpExtInst, 7, c->vec2[K_FLOAT], transformed, c->glsl, U(G_FClamp), scaled_coord, edge, upper);
+    }
+    ins(&c->code, OpBranch, 1, merge);
+    ins(&c->code, OpLabel, 1, unchanged);
+    ins(&c->code, OpBranch, 1, merge);
+    ins(&c->code, OpLabel, 1, merge);
+    uint32_t result = id(c);
+    ins(&c->code, OpPhi, 6, c->vec2[fetch ? K_INT : K_FLOAT], result, transformed, adjust, coord, unchanged);
+    return result;
 }
 
 static void start_block(ctx *c, uint32_t label) {
@@ -791,7 +899,10 @@ static void instruction(ctx *c) {
         dim = b.index[0] < 32 ? c->info->texture_dim[b.index[0]] : 0;
         n = coord_size(dim);
         coord = coord_of(c, load_src(c, &a, K_FLOAT), K_FLOAT, n);
-        img = combined(c, b.index[0], e.index[0]);
+        uint32_t image = texture_image(c, b.index[0]);
+        if (c->render_regions && dim == 3)
+            coord = render_region_coord(c, b.index[0], image, coord, has_off ? off : NULL, 0);
+        img = combined(c, b.index[0], e.index[0], image);
         r = id(c);
         {
             uint32_t offc = 0, mask = has_off ? 8u : 0u; /* ConstOffset */
@@ -822,7 +933,7 @@ static void instruction(ctx *c) {
         break;
     }
     case S_LD: {
-        uint32_t coord, cv, img, r, lod, dim, st, tv, full;
+        uint32_t coord, cv, img, r, lod, dim, st, full;
         int n;
         parse_operand(c, &d); parse_operand(c, &a); parse_operand(c, &b);
         dim = b.index[0] < 32 ? c->info->texture_dim[b.index[0]] : 0;
@@ -832,9 +943,9 @@ static void instruction(ctx *c) {
         coord = coord_of(c, cv, K_INT, n);
         lod = id(c);
         ins(&c->code, OpCompositeExtract, 4, c->scalar[K_INT], lod, cv, 3);
-        tv = c->tex_vars[b.index[0]];
-        img = id(c);
-        ins(&c->code, OpLoad, 3, c->tex_types[b.index[0]], img, tv);
+        img = texture_image(c, b.index[0]);
+        if (c->render_regions && dim == 3)
+            coord = render_region_coord(c, b.index[0], img, coord, NULL, 1);
         r = id(c);
         st = c->vec4[c->tex_kind[b.index[0]]];
         ins(&c->code, OpImageFetch, 6, st, r, img, coord, U(2), lod);
@@ -924,7 +1035,8 @@ static void append(section *out, const section *s) {
     for (i = 0; i < s->n; i++) put(out, s->w[i]);
 }
 
-int oa_dxbc_translate(const void *dxbc, size_t size, oa_shader_info *info, uint32_t **spirv, size_t *words, char *err, size_t err_size) {
+static int translate(const void *dxbc, size_t size, oa_shader_info *info, uint32_t **spirv, size_t *words,
+                     char *err, size_t err_size, int render_regions) {
     const uint8_t *d = dxbc;
     uint32_t len, shex_len, version, i;
     const char *p;
@@ -954,6 +1066,7 @@ int oa_dxbc_translate(const void *dxbc, size_t size, oa_shader_info *info, uint3
         info->output_count = read_sig(q, q ? len : 0, info->outputs);
     }
     c->next_id = 1;
+    c->render_regions = render_regions;
     ins(&c->head, OpCapability, 1, U(1)); /* Shader */
     c->glsl = id(c);
     c->void_t = id(c);
@@ -978,6 +1091,10 @@ int oa_dxbc_translate(const void *dxbc, size_t size, oa_shader_info *info, uint3
     ins(&c->types, OpTypeBool, 1, c->bool_t);
     c->bvec4 = id(c);
     ins(&c->types, OpTypeVector, 3, c->bvec4, c->bool_t, U(4));
+    if (render_regions) {
+        c->bvec2 = id(c);
+        ins(&c->types, OpTypeVector, 3, c->bvec2, c->bool_t, U(2));
+    }
     c->sampler_t = id(c);
     ins(&c->types, OpTypeSampler, 1, c->sampler_t);
     prepass(c);
@@ -1039,4 +1156,12 @@ done:
     free(c->head.w); free(c->entry.w); free(c->exec.w); free(c->annot.w); free(c->types.w); free(c->vars.w); free(c->code.w);
     free(c);
     return (int)ok;
+}
+
+int oa_dxbc_translate(const void *dxbc, size_t size, oa_shader_info *info, uint32_t **spirv, size_t *words, char *err, size_t err_size) {
+    return translate(dxbc, size, info, spirv, words, err, err_size, 0);
+}
+
+int oa_dxbc_translate_regions(const void *dxbc, size_t size, oa_shader_info *info, uint32_t **spirv, size_t *words, char *err, size_t err_size) {
+    return translate(dxbc, size, info, spirv, words, err, err_size, 1);
 }

@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.util.Locale;
 
 final class GameFileActions {
+    static final String TITLE = "DLC Status";
     static final int SELECT_FATESWORN = 14;
     private final Activity activity;
     private boolean importing;
@@ -20,8 +21,15 @@ final class GameFileActions {
 
     void show() {
         if (importing) return;
-        boolean installed = GameFiles.hasFatesworn(activity, activity.getExternalFilesDir(null));
-        new AlertDialog.Builder(activity).setTitle("Game Files")
+        boolean installed = GameFiles.hasFatesworn(activity, GameStorage.root(activity));
+        if (GameStorage.directConfigured(activity)) {
+            VeilDialogs.show(new AlertDialog.Builder(activity).setTitle(TITLE)
+                    .setMessage(installed ? "Fatesworn is in the original game folder."
+                            : "To add Fatesworn, put its files in the original game folder, then restart Open Amalur.")
+                    .setPositiveButton("OK", null));
+            return;
+        }
+        VeilDialogs.show(new AlertDialog.Builder(activity).setTitle(TITLE)
                 .setMessage(installed ? "Fatesworn is installed."
                         : "Choose your updated Re-Reckoning folder to add Fatesworn.")
                 .setNegativeButton("Back", null)
@@ -29,14 +37,14 @@ final class GameFileActions {
                     Intent picker = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
                     picker.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
                     activity.startActivityForResult(picker, SELECT_FATESWORN);
-                }).show();
+                }));
     }
 
     void importFrom(Uri folder) {
         if (importing || folder == null) return;
         importing = true;
-        AlertDialog progress = new AlertDialog.Builder(activity).setTitle("Adding Fatesworn")
-                .setMessage("Checking game files…").setCancelable(false).show();
+        AlertDialog progress = VeilDialogs.show(new AlertDialog.Builder(activity).setTitle("Adding Fatesworn")
+                .setMessage("Checking game files…").setCancelable(false));
         new Thread(() -> {
             String error = null;
             try {
@@ -54,8 +62,8 @@ final class GameFileActions {
                 if (activity.isFinishing() || activity.isDestroyed()) return;
                 progress.dismiss();
                 if (message != null) {
-                    new AlertDialog.Builder(activity).setTitle("Could not add Fatesworn").setMessage(message)
-                            .setPositiveButton("OK", null).show();
+                    VeilDialogs.show(new AlertDialog.Builder(activity).setTitle("Could not add Fatesworn")
+                            .setMessage(message).setPositiveButton("OK", null));
                     return;
                 }
                 restartDialog("Fatesworn added", "Close and reopen Open Amalur to load the expansion.");
@@ -64,11 +72,11 @@ final class GameFileActions {
     }
 
     private void restartDialog(String title, String message) {
-        new AlertDialog.Builder(activity).setTitle(title).setMessage(message)
+        VeilDialogs.show(new AlertDialog.Builder(activity).setTitle(title).setMessage(message)
                 .setNegativeButton("Later", null)
                 .setPositiveButton("Close game", (dialog, button) -> {
                     activity.finishAndRemoveTask();
                     Process.killProcess(Process.myPid());
-                }).show();
+                }));
     }
 }

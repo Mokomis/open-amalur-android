@@ -1,6 +1,7 @@
 package org.openamalur.originalengine;
 
 import android.app.NativeActivity;
+import android.app.AlertDialog;
 import android.content.SharedPreferences;
 import android.content.Intent;
 import android.graphics.Canvas;
@@ -12,9 +13,12 @@ import android.graphics.RectF;
 import android.graphics.Typeface;
 import android.os.Build;
 import android.os.Bundle;
+import android.text.InputFilter;
+import android.text.InputType;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.util.SparseArray;
+import android.util.Log;
 import android.view.Display;
 import android.view.InputDevice;
 import android.view.MotionEvent;
@@ -22,8 +26,11 @@ import android.view.View;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.view.WindowManager;
+import android.view.inputmethod.EditorInfo;
+import android.widget.EditText;
 
 import java.io.IOException;
+import java.io.File;
 
 public final class VeilActivity extends NativeActivity {
     private static final Typeface CONTROL_LABEL_FONT = Typeface.create("sans-serif-medium", Typeface.NORMAL);
@@ -38,11 +45,192 @@ public final class VeilActivity extends NativeActivity {
     private static native int finisherPosition();
     private static native int finisher();
     private static native int titleVisible();
+    private static native int nameDialogVisible();
+    private static native int submitName(String name);
+    private static native int confirmNativeName();
+    private static native int takeSaveImportRequest();
 
     private TouchControls overlay;
     private final SparseArray<Vibrator> activeRumble = new SparseArray<>();
     private UpdateBadge updateBadge;
     private GameFileActions gameFileActions;
+    private SaveImportActions saveImportActions;
+    private boolean noOverlays;
+    private View launchCover;
+    private android.graphics.Bitmap launchSample;
+    private boolean samplingLaunch;
+    private long titleReadyAt;
+
+    private void addLaunchCover() {
+        if (isFinishing() || isDestroyed() || titleVisible() != 0) return;
+        WindowManager.LayoutParams params = new WindowManager.LayoutParams(
+                -1, -1, WindowManager.LayoutParams.TYPE_APPLICATION_PANEL,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE |
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN, PixelFormat.OPAQUE);
+        params.token = getWindow().getDecorView().getWindowToken();
+        if (Build.VERSION.SDK_INT >= 30) params.setFitInsetsTypes(0);
+        params.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+        params.setTitle("Open Amalur startup");
+        launchCover = new View(this);
+        // Both activities use the same themed window background.
+        android.util.TypedValue background = new android.util.TypedValue();
+        getTheme().resolveAttribute(android.R.attr.windowBackground, background, true);
+        launchCover.setBackgroundResource(background.resourceId);
+        launchCover.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        getWindowManager().addView(launchCover, params);
+    }
+
+    private void checkLaunchCover() {
+        if (launchCover == null || samplingLaunch) return;
+        if (titleReadyAt == 0) {
+            if (titleVisible() == 0) return;
+            titleReadyAt = android.os.SystemClock.uptimeMillis();
+        }
+        // The title script runs before Vulkan displays the menu. Sample the
+        // underlying game window, which excludes our separate startup panel.
+        // If the compositor cannot copy the surface, still hand control back.
+        if (android.os.SystemClock.uptimeMillis() - titleReadyAt >= 2000) {
+            removeLaunchCover();
+            return;
+        }
+        if (launchSample == null) launchSample = android.graphics.Bitmap.createBitmap(
+                32, 20, android.graphics.Bitmap.Config.ARGB_8888);
+        samplingLaunch = true;
+        try {
+            android.view.PixelCopy.request(getWindow(), launchSample, result -> {
+                samplingLaunch = false;
+                if (launchCover == null || result != android.view.PixelCopy.SUCCESS) return;
+                int lit = 0;
+                for (int y = 0; y < launchSample.getHeight(); y++) {
+                    for (int x = 0; x < launchSample.getWidth(); x++) {
+                        int color = launchSample.getPixel(x, y);
+                        if (android.graphics.Color.red(color) > 32 ||
+                                android.graphics.Color.green(color) > 32) lit++;
+                    }
+                }
+                if (lit >= 50) removeLaunchCover();
+            }, new android.os.Handler(getMainLooper()));
+        } catch (IllegalArgumentException surfaceNotReady) {
+            samplingLaunch = false;
+        }
+    }
+
+    private void removeLaunchCover() {
+        if (launchCover == null) return;
+        getWindowManager().removeViewImmediate(launchCover);
+        launchCover = null;
+        launchSample = null;
+    }
+    private AlertDialog namePrompt;
+    private View nameCover;
+    private boolean promptedForName;
+    private boolean lastNameDialogState;
+    private final Runnable watchMenuRequests = new Runnable() {
+        @Override public void run() {
+            if (isFinishing() || isDestroyed()) return;
+            checkLaunchCover();
+            if (hasWindowFocus() && takeSaveImportRequest() != 0) saveImportActions.show();
+            boolean open = nameDialogVisible() != 0;
+            if (open != lastNameDialogState) {
+                Log.i("OANameInput", "name dialog=" + open + " focus=" + hasWindowFocus());
+                lastNameDialogState = open;
+            }
+            if (!open) {
+                promptedForName = false;
+                if (namePrompt != null) namePrompt.dismiss();
+                removeNameCover();
+            } else if (!promptedForName && hasWindowFocus()) {
+                promptedForName = true;
+                Log.i("OANameInput", "showing keyboard prompt");
+                showNamePrompt();
+            }
+            getWindow().getDecorView().postDelayed(this, 100);
+        }
+    };
+
+    private void showNamePrompt() {
+        showNamePrompt("", false);
+    }
+
+    private void showNamePrompt(String initialName, boolean retry) {
+        EditText field = new EditText(this);
+        field.setSingleLine(true);
+        field.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+        field.setFilters(new InputFilter[]{new InputFilter.LengthFilter(24)});
+        field.setHint("Character name");
+        field.setText(initialName);
+        field.setSelection(field.length());
+        field.setTextColor(0xffece5d3);
+        field.setHintTextColor(0xff908a7b);
+        field.setBackgroundTintList(android.content.res.ColorStateList.valueOf(0xffaa9365));
+        field.setImeOptions(EditorInfo.IME_ACTION_DONE);
+        int padding = (int)(24 * getResources().getDisplayMetrics().density);
+        field.setPadding(padding, 0, padding, 0);
+        namePrompt = VeilDialogs.show(new AlertDialog.Builder(this)
+                .setTitle("Name your character")
+                .setMessage(retry ? "Could not confirm the name. Try again." : "Enter a name to use in the game.")
+                .setView(field)
+                .setCancelable(false)
+                .setNegativeButton("Keep current", null)
+                .setPositiveButton("Use name", null), field);
+        AlertDialog prompt = namePrompt;
+        prompt.getButton(AlertDialog.BUTTON_NEGATIVE).setOnClickListener(view -> confirmName(prompt, ""));
+        prompt.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
+            String name = field.getText().toString().trim();
+            if (name.isEmpty()) {
+                prompt.setMessage("Enter a name, or choose Keep current.");
+            } else {
+                confirmName(prompt, name);
+            }
+        });
+        field.setOnEditorActionListener((view, action, event) -> {
+            if (action != EditorInfo.IME_ACTION_DONE) return false;
+            namePrompt.getButton(AlertDialog.BUTTON_POSITIVE).performClick();
+            return true;
+        });
+    }
+
+    private void confirmName(AlertDialog prompt, String name) {
+        // Dismiss the keyboard window so the engine can receive input. Cover
+        // the native prompt until the game finishes confirming the name.
+        WindowManager.LayoutParams coverParams = new WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.TYPE_APPLICATION_PANEL,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE |
+                        WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE |
+                        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN, PixelFormat.OPAQUE);
+        coverParams.token = getWindow().getDecorView().getWindowToken();
+        nameCover = new View(this);
+        nameCover.setBackgroundColor(0xff000000);
+        getWindowManager().addView(nameCover, coverParams);
+        prompt.dismiss();
+        getWindow().getDecorView().postDelayed(() -> {
+            if (isFinishing() || isDestroyed() || nameDialogVisible() == 0) return;
+            if (submitName(name) == 0) {
+                retryName(name);
+                return;
+            }
+            getWindow().getDecorView().postDelayed(() -> {
+                if (nameDialogVisible() != 0) confirmNativeName();
+                getWindow().getDecorView().postDelayed(() -> {
+                    if (nameDialogVisible() != 0) retryName(name);
+                }, 1500);
+            }, 150);
+        }, 200);
+    }
+
+    private void retryName(String name) {
+        if (isFinishing() || isDestroyed()) return;
+        showNamePrompt(name, true);
+        removeNameCover();
+    }
+
+    private void removeNameCover() {
+        if (nameCover == null) return;
+        getWindowManager().removeViewImmediate(nameCover);
+        nameCover = null;
+    }
 
     @Override public void onCreate(Bundle state) {
         try {
@@ -51,12 +239,20 @@ public final class VeilActivity extends NativeActivity {
             throw new IllegalStateException(error);
         }
         super.onCreate(state);
+        noOverlays = getIntent().getBooleanExtra("oa_no_overlays", false);
+        if (GameStorage.root(this) == null || !GameFiles.ready(this, GameStorage.root(this))) {
+            startActivity(new Intent(this, SetupActivity.class));
+            finish();
+            return;
+        }
+        getWindow().getDecorView().post(this::addLaunchCover);
         requestDisplayMode();
         overlay = new TouchControls();
         gameFileActions = new GameFileActions(this);
-        updateBadge = new UpdateBadge(this, gameFileActions::show);
+        saveImportActions = new SaveImportActions(this);
+        updateBadge = new UpdateBadge(this, gameFileActions::show, this::openCrashReport);
         getWindow().getDecorView().post(() -> {
-            if (isFinishing() || isDestroyed()) return;
+            if (isFinishing() || isDestroyed() || noOverlays) return;
             WindowManager.LayoutParams controls = new WindowManager.LayoutParams(
                     WindowManager.LayoutParams.MATCH_PARENT,
                     WindowManager.LayoutParams.MATCH_PARENT,
@@ -80,6 +276,23 @@ public final class VeilActivity extends NativeActivity {
             overlay.resume();
         });
     }
+
+    /** NativeActivity's built-in externalDataPath always names the primary volume. */
+    public String gameStoragePath() {
+        File root = GameStorage.root(this);
+        return root == null ? null : root.getAbsolutePath();
+    }
+
+    public String gameSourcePath() {
+        File source = GameStorage.sourceRoot(this);
+        return source == null ? null : source.getAbsolutePath();
+    }
+
+    private void openCrashReport() {
+        startActivity(new Intent(this, CrashReportActivity.class)
+                .putExtra(CrashReportActivity.CREATE_ON_OPEN, true));
+    }
+
 
     private void requestDisplayMode() {
         Display display = getWindowManager().getDefaultDisplay();
@@ -130,12 +343,16 @@ public final class VeilActivity extends NativeActivity {
         super.onActivityResult(request, result, data);
         if (request == GameFileActions.SELECT_FATESWORN && result == RESULT_OK && data != null) {
             gameFileActions.importFrom(data.getData());
+        } else if (request == SaveImportActions.SELECT_SAVES && result == RESULT_OK && data != null) {
+            saveImportActions.importFrom(data);
         }
     }
 
     @Override protected void onResume() {
         super.onResume();
+        Log.i("OANameInput", "onResume");
         overlay.resume();
+        getWindow().getDecorView().post(watchMenuRequests);
     }
 
     @Override public void onBackPressed() {
@@ -147,12 +364,17 @@ public final class VeilActivity extends NativeActivity {
     }
 
     @Override protected void onDestroy() {
+        getWindow().getDecorView().removeCallbacks(watchMenuRequests);
+        removeLaunchCover();
+        if (namePrompt != null) namePrompt.dismiss();
+        removeNameCover();
         updateBadge.show(false);
         if (overlay.isAttachedToWindow()) getWindowManager().removeViewImmediate(overlay);
         super.onDestroy();
     }
 
     @Override protected void onPause() {
+        getWindow().getDecorView().removeCallbacks(watchMenuRequests);
         updateBadge.show(false);
         overlay.suspend();
         super.onPause();
@@ -304,7 +526,7 @@ public final class VeilActivity extends NativeActivity {
         private boolean hasGesture;
         private final Runnable pulse = new Runnable() {
             @Override public void run() {
-                updateBadge.show(VeilActivity.this.hasWindowFocus() && titleVisible() != 0);
+                updateBadge.show(!noOverlays && VeilActivity.this.hasWindowFocus() && titleVisible() != 0);
                 int current = mode();
                 if (current == 2) openEditor();
                 boolean next = current == 1 || current == 3;

@@ -27,6 +27,8 @@ import java.util.Map;
 
 final class GameFiles {
     static final String IMPORTED = "imported-install";
+    static final String DIRECT_PATCH = "veil-patch_0.pak";
+    private static final String DIRECT_READY = "sd-direct.ready";
     private static final String BINK_HASH = "36810b3318acd07a5b4e78fe72db163ed63880ab2eb2d9b5bda0331ded32a9c3";
     private static final String EXE_HASH = "16a400f6e8fc10dbe446a9e57717de9fbe975ef17c004f4ca405e2e4e09cb314";
     private static final long PATCH_DIRECTORY = 0x42b93653L;
@@ -76,11 +78,14 @@ final class GameFiles {
     }
 
     static boolean ready(Context context, File directory) {
+        if (GameStorage.directConfigured(context) && !directReady(context, directory)) return false;
+        if (directReady(context, directory)) return hasDirectTitleVideo(GameStorage.sourceRoot(context));
         File installed = installedGame(context, directory);
         return installed != null && hasTitleVideo(installed);
     }
 
     static boolean needsTitleRepair(Context context, File directory) {
+        if (GameStorage.directConfigured(context)) return false;
         File installed = installedGame(context, directory);
         return installed != null && !hasTitleVideo(installed);
     }
@@ -90,7 +95,16 @@ final class GameFiles {
         return video.isFile() && video.length() == TITLE_VIDEO_BYTES;
     }
 
+    private static boolean hasDirectTitleVideo(File source) {
+        File video = new File(source, "data/videos/" + TITLE_VIDEO);
+        return video.isFile() && video.length() == TITLE_VIDEO_BYTES;
+    }
+
     static boolean hasFatesworn(Context context, File storage) {
+        if (directReady(context, storage)) {
+            File archive = fateswornArchive(GameStorage.sourceRoot(context));
+            return archive.isFile() && archive.length() == FATESWORN_BYTES;
+        }
         File installed = installedGame(context, storage);
         if (installed == null) return false;
         File archive = fateswornArchive(new File(installed, "game"));
@@ -106,6 +120,24 @@ final class GameFiles {
         File imported = new File(directory, IMPORTED);
         File installed = new File(imported, ".ready").isFile() ? imported : directory;
         return valid(installed, !hasNativeReflection(context)) ? installed : null;
+    }
+
+    private static boolean directReady(Context context, File storage) {
+        File source = GameStorage.sourceRoot(context);
+        return storage != null && source != null
+                && new File(storage, DIRECT_READY).isFile()
+                && new File(storage, DIRECT_PATCH).isFile()
+                && validDirect(context, source);
+    }
+
+    private static boolean validDirect(Context context, File source) {
+        if (!new File(source, "koa.exe").isFile()
+                || !new File(source, "binkw32.dll").isFile()) return false;
+        for (int i = 0; i < BASE_ARCHIVES.length; ++i) {
+            File archive = new File(source, "data/" + BASE_ARCHIVES[i]);
+            if (!archive.isFile() || archive.length() != BASE_ARCHIVE_BYTES[i]) return false;
+        }
+        return hasNativeReflection(context) || new File(source, "d3dcompiler_43.dll").isFile();
     }
 
     private static boolean hasNativeReflection(Context context) {
@@ -190,13 +222,49 @@ final class GameFiles {
 
     void install(Uri shaderCompiler) throws IOException {
         synchronized (GameFiles.class) {
-            importGame(shaderCompiler);
+            importDirect();
+        }
+    }
+
+    private void importDirect() throws IOException {
+        File storage = GameStorage.requireRoot(context);
+        File source = GameStorage.resolveSource(context, tree);
+        if (android.os.Build.VERSION.SDK_INT < 30
+                || !android.os.Environment.isExternalStorageManager(source))
+            throw new IOException("Direct play requires Android 11 or newer and All files access.");
+        if (!validDirect(context, source) || !hasDirectTitleVideo(source))
+            throw new IOException("The selected folder needs the supported koa.exe, binkw32.dll, data archives, and title video.");
+        if (storage.getUsableSpace() < PATCH_BYTES + 400_000_000L)
+            throw new IOException("The selected volume needs about 1.5 GB free for Open Amalur's patched archive.");
+        File stage = new File(storage, DIRECT_PATCH + ".partial");
+        File patch = new File(storage, DIRECT_PATCH);
+        try {
+            Files.deleteIfExists(stage.toPath());
+            progress.report("Verifying SD game archive", 0, PATCH_BYTES);
+            File retail = new File(source, "data/patch_0.pak");
+            try (InputStream input = Files.newInputStream(retail.toPath())) {
+                copyStream(input, stage, "patch_0.pak", PATCH_HASH, PATCH_BYTES);
+            }
+            if (hasVeilRecipe(context)) new VeilPatch(context.getAssets(), PATCH_BYTES,
+                    PATCH_DIRECTORY, PATCH_HASH).applyToRetail(stage,
+                    new File(source, "data/initial_0.pak"), progress);
+            try {
+                android.system.Os.rename(stage.getPath(), patch.getPath());
+            } catch (ErrnoException error) {
+                throw new IOException("Android could not finish the patched archive on this volume.", error);
+            }
+            GameStorage.saveSource(context, source);
+            Files.write(new File(storage, DIRECT_READY).toPath(), new byte[]{'1'});
+        } finally {
+            Files.deleteIfExists(stage.toPath());
         }
     }
 
     void addFatesworn() throws IOException {
         synchronized (GameFiles.class) {
-            File installed = installedGame(context, context.getExternalFilesDir(null));
+            if (GameStorage.directConfigured(context))
+                throw new IOException("Add Fatesworn to the original game folder, then restart Open Amalur.");
+            File installed = installedGame(context, GameStorage.requireRoot(context));
             if (installed == null) throw new IOException("Open Amalur could not find the installed game.");
             Map<String, Entry> files = list(DocumentsContract.getTreeDocumentId(tree));
             Entry depot = files.get(FATESWORN_DIR);
@@ -221,8 +289,7 @@ final class GameFiles {
     }
 
     private void importGame(Uri shaderCompiler) throws IOException {
-        File storage = context.getExternalFilesDir(null);
-        if (storage == null) throw new IOException("Android game storage is unavailable.");
+        File storage = GameStorage.requireRoot(context);
         Map<String, Entry> root = list(DocumentsContract.getTreeDocumentId(tree));
         Map<String, Entry> data = list(require(root, "data", true).id);
         Map<String, Entry> videos = list(require(data, "videos", true).id);
@@ -254,10 +321,24 @@ final class GameFiles {
         Entry depot = root.get(FATESWORN_DIR);
         Entry fatesworn = depot == null ? null
                 : require(list(require(root, FATESWORN_DIR, true).id), FATESWORN_ARCHIVE, false);
+        long required = 23741952L + 198144L + TITLE_VIDEO_BYTES + 1_000_000_000L;
+        for (long size : BASE_ARCHIVE_BYTES) required += size;
+        for (Entry video : videos.values()) {
+            String name = video.name.toLowerCase(Locale.ROOT);
+            if (!video.directory && name.endsWith(".bik") && !name.equals(TITLE_VIDEO)
+                    && video.size > 0) required += video.size;
+        }
+        if (fatesworn != null) required += FATESWORN_BYTES;
         File destination = new File(storage, IMPORTED);
         if (destination.exists()) throw new IOException("An imported game already exists.");
         File stage = new File(storage, IMPORTED + "-partial");
         removePartial(stage);
+        if (storage.getUsableSpace() < required) {
+            throw new IOException(String.format(Locale.ROOT,
+                    "Not enough free space at the selected install location. "
+                            + "About %.1f GB is needed. Choose an SD card with enough room or free space and retry.",
+                    required / 1_000_000_000.0));
+        }
         makeDirectory(stage);
         try {
             copy(executable, new File(stage, "koa.exe"), EXE_HASH, 23741952L);
@@ -302,6 +383,7 @@ final class GameFiles {
             }
             Files.createFile(new File(stage, ".ready").toPath());
             android.system.Os.rename(stage.getPath(), destination.getPath());
+            GameStorage.clearSource(context);
         } catch (ErrnoException error) {
             throw new IOException("Android could not finish the import.", error);
         } finally {
@@ -311,6 +393,14 @@ final class GameFiles {
 
     static synchronized void updateInstalledVeil(Context context, File storage, Progress progress)
             throws IOException {
+        if (GameStorage.directConfigured(context)) {
+            if (!directReady(context, storage))
+                throw new IOException("The game folder is unavailable. Check the storage volume and All files access.");
+            if (hasVeilRecipe(context)) new VeilPatch(context.getAssets(), PATCH_BYTES,
+                    PATCH_DIRECTORY, PATCH_HASH).update(new File(storage, DIRECT_PATCH),
+                    new File(GameStorage.sourceRoot(context), "data/initial_0.pak"), progress);
+            return;
+        }
         File installed = installedGame(context, storage);
         if (installed == null) throw new IOException("Open Amalur could not find the installed game.");
         if (!hasVeilRecipe(context)) return;
@@ -362,6 +452,25 @@ final class GameFiles {
         if (hash != null && !expectedHash.equals(hex(hash.digest()))) {
             throw new IOException(entry.name + " does not match the supported Re-Reckoning version.");
         }
+    }
+
+    private void copyStream(InputStream input, File target, String name,
+                            String expectedHash, long expectedSize) throws IOException {
+        long copied = 0;
+        MessageDigest hash = sha256();
+        try (FileOutputStream output = new FileOutputStream(target)) {
+            int count;
+            while ((count = input.read(buffer)) != -1) {
+                output.write(buffer, 0, count);
+                hash.update(buffer, 0, count);
+                copied += count;
+                if (copied > expectedSize) throw new IOException(name + " is too large.");
+                if (copied % (16L * buffer.length) < count)
+                    progress.report(name, copied, expectedSize);
+            }
+        }
+        if (copied != expectedSize || !expectedHash.equals(hex(hash.digest())))
+            throw new IOException(name + " does not match the supported Re-Reckoning version.");
     }
 
     private void prepareCompiler(Uri uri, File target) throws IOException {
