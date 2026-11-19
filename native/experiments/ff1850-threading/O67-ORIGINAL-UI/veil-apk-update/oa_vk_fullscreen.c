@@ -1,3 +1,9 @@
+#ifdef OA_RETROID_TURNIP
+#define _GNU_SOURCE
+#include <adrenotools/driver.h>
+#include <sys/system_properties.h>
+#endif
+
 #include "title_cover.h"
 #include "display_android.h"
 /* oa_vk.c: the subset of Direct3D 11 and DXGI that koa.exe uses, implemented on Vulkan 1.3.
@@ -3895,8 +3901,47 @@ static void init_vtables(void) {
 
 #include "oa_pipeline_cache.h"
 
+#ifdef OA_RETROID_TURNIP
+static HMODULE open_retroid_vulkan(int *turnip) {
+    char model[PROP_VALUE_MAX] = "";
+    __system_property_get("ro.product.model", model);
+    *turnip = !strcasecmp(model, "Retroid Pocket 5");
+    logf_("VULKAN_LOADER model=%s selected=%s", model, *turnip ? "DD-Turnip-v0.8.0" : "system");
+    if (!*turnip) return LoadLibraryA("vulkan-1.dll");
+
+    void *loader = dlopen("libadrenotools.so", RTLD_NOW | RTLD_LOCAL);
+    if (!loader) {
+        logf_("VULKAN_LOADER AdrenoTools load failed: %s", dlerror());
+        return NULL;
+    }
+    __typeof__(&adrenotools_open_libvulkan) open_driver =
+        dlsym(loader, "adrenotools_open_libvulkan");
+    Dl_info engine;
+    if (!open_driver || !dladdr((void *)open_retroid_vulkan, &engine)) {
+        logf_("VULKAN_LOADER AdrenoTools entry point or engine library location unavailable");
+        return NULL;
+    }
+    const char *basename = strrchr(engine.dli_fname, '/');
+    char directory[4096];
+    if (!basename || (size_t)(basename - engine.dli_fname) + 1 >= sizeof(directory)) {
+        logf_("VULKAN_LOADER engine library directory unavailable");
+        return NULL;
+    }
+    size_t length = basename - engine.dli_fname + 1;
+    memcpy(directory, engine.dli_fname, length);
+    directory[length] = 0;
+    return open_driver(RTLD_NOW | RTLD_LOCAL, ADRENOTOOLS_DRIVER_CUSTOM, NULL,
+                       directory, directory, "libvulkan_freedreno.so", NULL, NULL);
+}
+#endif
+
 static int init_vulkan(void) {
+#ifdef OA_RETROID_TURNIP
+    int turnip = 0;
+    HMODULE lib = open_retroid_vulkan(&turnip);
+#else
     HMODULE lib = LoadLibraryA("vulkan-1.dll");
+#endif
     PFN_vkGetInstanceProcAddr gipa;
     PFN_vkCreateInstance create;
     VkApplicationInfo app = {VK_STRUCTURE_TYPE_APPLICATION_INFO};
@@ -3920,9 +3965,11 @@ static int init_vulkan(void) {
     VkPhysicalDeviceProperties prop;
     VkQueueFamilyProperties qf[16];
     VkFormatProperties fp;
-    if (!lib) { logf_("vulkan-1.dll not found"); return 0; }
+    if (!lib) { logf_("Vulkan loader could not be opened"); return 0; }
     gipa = (PFN_vkGetInstanceProcAddr)GetProcAddress(lib, "vkGetInstanceProcAddr");
+    if (!gipa) { logf_("Vulkan loader has no vkGetInstanceProcAddr"); return 0; }
     create = (PFN_vkCreateInstance)gipa(NULL, "vkCreateInstance");
+    if (!create) { logf_("Vulkan loader has no vkCreateInstance"); return 0; }
     app.apiVersion = VK_API_VERSION_1_3;
     app.pApplicationName = "Opem Amalur";
     ici.pApplicationInfo = &app;
@@ -3952,7 +3999,11 @@ static int init_vulkan(void) {
 #define X(f) p##f = (PFN_##f)gipa(g_instance, #f);
     VK_FUNCS(X)
 #undef X
-    pvkEnumeratePhysicalDevices(g_instance, &n, devs);
+    VkResult enumerate_result = pvkEnumeratePhysicalDevices(g_instance, &n, devs);
+    if ((enumerate_result != VK_SUCCESS && enumerate_result != VK_INCOMPLETE) || !n) {
+        logf_("VULKAN_LOADER no physical device returned, result=%d count=%u", enumerate_result, n);
+        return 0;
+    }
     g_phys = devs[0];
     for (i = 0; i < n; i++) {
         pvkGetPhysicalDeviceProperties(devs[i], &prop);
@@ -3960,6 +4011,27 @@ static int init_vulkan(void) {
     }
     pvkGetPhysicalDeviceProperties(g_phys, &prop);
     logf_("GPU %s api %u.%u", prop.deviceName, VK_API_VERSION_MAJOR(prop.apiVersion), VK_API_VERSION_MINOR(prop.apiVersion));
+#ifdef OA_RETROID_TURNIP
+    if (turnip) {
+        if (prop.apiVersion < VK_API_VERSION_1_3) {
+            logf_("VULKAN_LOADER fallback driver reported Vulkan below 1.3");
+            return 0;
+        }
+        VkPhysicalDeviceDriverProperties driver = {
+            .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES
+        };
+        VkPhysicalDeviceProperties2 identified = {
+            .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2, .pNext = &driver
+        };
+        pvkGetPhysicalDeviceProperties2(g_phys, &identified);
+        logf_("VULKAN_LOADER active=%s info=%s id=%u version=%u",
+              driver.driverName, driver.driverInfo, (unsigned)driver.driverID, prop.driverVersion);
+        if (driver.driverID != VK_DRIVER_ID_MESA_TURNIP) {
+            logf_("VULKAN_LOADER Turnip was requested but a different driver loaded");
+            return 0;
+        }
+    }
+#endif
     g_ubo_align = prop.limits.minUniformBufferOffsetAlignment;
     af_device_limit = prop.limits.maxSamplerAnisotropy;
     logf_("AF device sampler limit=%.0f", (double)af_device_limit);
@@ -3995,6 +4067,24 @@ static int init_vulkan(void) {
     f2.features.dualSrcBlend = VK_TRUE;
     f2.features.fillModeNonSolid = VK_TRUE;
     f2.features.robustBufferAccess = VK_TRUE;
+#ifdef OA_RETROID_TURNIP
+    if (turnip) {
+        VkPhysicalDeviceVulkan13Features available13 = {
+            .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES
+        };
+        VkPhysicalDeviceFeatures2 available = {
+            .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2, .pNext = &available13
+        };
+        pvkGetPhysicalDeviceFeatures2(g_phys, &available);
+        logf_("VULKAN_FEATURES dynamicRendering=%u BC=%u anisotropy=%u depthClamp=%u "
+              "depthBiasClamp=%u independentBlend=%u dualSrcBlend=%u fillModeNonSolid=%u robustBufferAccess=%u",
+              available13.dynamicRendering, available.features.textureCompressionBC,
+              available.features.samplerAnisotropy, available.features.depthClamp,
+              available.features.depthBiasClamp, available.features.independentBlend,
+              available.features.dualSrcBlend, available.features.fillModeNonSolid,
+              available.features.robustBufferAccess);
+    }
+#endif
     dci.pNext = &f2;
     dci.queueCreateInfoCount = 1;
     dci.pQueueCreateInfos = &qi;

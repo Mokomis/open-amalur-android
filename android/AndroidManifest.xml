@@ -25,7 +25,16 @@
             </intent-filter>
         </activity>
         <activity android:name=".CrashReportActivity" android:exported="false"
-            android:label="Send Amalur Crash Logs" />
+            android:label="Send Amalur Crash Logs"
+            android:taskAffinity="org.openamalur.originalengine.crashlogs" />
+        <activity-alias android:name=".CrashLogsLauncher"
+            android:targetActivity=".CrashReportActivity"
+            android:exported="true" android:label="Send Amalur Crash Logs">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
         <provider android:name=".CrashReportProvider"
             android:authorities="org.openamalur.originalengine.crashreports"
             android:exported="false" android:grantUriPermissions="true" />

@@ -16,10 +16,7 @@ public final class CrashReportProvider extends ContentProvider {
     static final String NAME = "open-amalur-crash-report.zip";
 
     static File reportFile(android.content.Context context) {
-        File root = GameStorage.root(context);
-        if (root == null) root = context.getExternalFilesDir(null);
-        if (root == null) root = context.getCacheDir();
-        return new File(new File(root, "diagnostics"), NAME);
+        return new File(new File(context.getCacheDir(), "diagnostics"), NAME);
     }
 
     private boolean valid(Uri uri) {

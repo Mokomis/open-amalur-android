@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.app.ActivityManager;
 import android.app.ApplicationExitInfo;
 import android.content.ClipData;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageInfo;
@@ -62,7 +63,9 @@ public final class CrashReportActivity extends Activity {
         share.setOnClickListener(view -> createReport());
         panel.addView(share);
         setContentView(panel);
-        if (state == null && getIntent().getBooleanExtra(CREATE_ON_OPEN, false))
+        ComponentName privateEntry = new ComponentName(this, CrashReportActivity.class);
+        if (state == null && privateEntry.equals(getIntent().getComponent())
+                && getIntent().getBooleanExtra(CREATE_ON_OPEN, false))
             createReport();
     }
 
@@ -112,7 +115,12 @@ public final class CrashReportActivity extends Activity {
                 .append(GameStorage.sourceRoot(this) != null).append('\n');
 
         try (ZipOutputStream zip = new ZipOutputStream(Files.newOutputStream(output.toPath()))) {
-            addRecentRuns(zip, summary, root);
+            try {
+                addRecentRuns(zip, summary, root);
+            } catch (IOException | SecurityException unavailable) {
+                summary.append("Some game logs were inaccessible: ")
+                        .append(unavailable.getMessage()).append('\n');
+            }
             addExitInfo(zip, summary);
             zip.putNextEntry(new ZipEntry("report.txt"));
             zip.write(summary.toString().getBytes(StandardCharsets.UTF_8));

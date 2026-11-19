@@ -101,3 +101,18 @@ The launcher reads shared game files directly. It checks the game version and va
 A fresh Windows checkout regenerated the game, Bink and DirectX compiler translations from local files, compiled the 362 native objects, and linked the Android library. The stock-menu development APK built with that library imported a copied game folder on an OPPO Pad Mini (OPD2515) with Android Internet permission omitted. The engine mounted Fatesworn `cs:13757` when the matching archive was present and reached the base-game menu after the archive was removed from the test installation.
 
 Two independent Windows builds of the Veil 0.1.3 engine produced identical libraries. On the OPPO Pad Mini, the release launcher imported the full game offline, rejected a mismatched engine file, and launched Veil with the locally built engine and Fatesworn. The generated waterfall played in the Patron portrait. An in-place offline upgrade over the prior Veil build reused its game files and preserved the saves, graphics settings and touch layout.
+
+
+## Retroid Pocket 5 test build
+
+Build [AdrenoTools at 8fae8ce](https://github.com/bylaws/libadrenotools/tree/8fae8ce254dfc1344527e05301e43f37dea2df80) with its submodule
+and Android NDK r30 using CMake. Set the Android ABI to arm64-v8a, the platform
+to 29, the STL to `c++_static`, and `BUILD_SHARED_LIBS` to `ON`.
+
+Pass `--retroid-turnip-adrenotools <checkout>` to `tools/build_native.py`.
+With that engine and the v0.1.26 Veil files, pass `--retroid-turnip
+DD-Turnip-v0.8.0.zip --adrenotools-build <cmake-build> --adrenotools-source
+<checkout>` to `tools/build_apk.py`. Get the bundle and matching driver
+source from the [DD-Turnip release](https://github.com/Droid-Deck/Drivers-CI/releases/tag/DD-Turnip-v0.8.0).
+The APK loads Turnip on the Retroid Pocket 5 and uses Android's system driver
+on other models.
