@@ -30,6 +30,19 @@ For a new setup on Android 11 or newer:
 2. Open Open Amalur and choose **Set up and play from internal storage** or **Set up and play from SD card**. Select the folder containing `koa.exe` and `data` on that same volume.
 3. When Android asks, grant **All files access** so the game can open the original archives. Setup prepares Veil and opens the main menu. Once the APK and game files are on the device, setup and play work offline.
 
+### Android hardware compatibility
+
+The regular APK runs on 64-bit Arm Android devices and uses the device's Vulkan driver. New setup requires Android 11 or newer. Compatibility depends on the GPU and driver, so use these device results as a guide.
+
+| Device | GPU | Open Amalur status |
+| --- | --- | --- |
+| OPPO Pad Mini (OPD2515) | Adreno 829 | Tested on v0.1.26 with the system driver. Verified setup, the main menu, menu navigation, and character naming. |
+| AYN Thor Max (16 GB) | Adreno 740 | [A player reported it working](https://github.com/Mokomis/open-amalur-android/issues/1#issuecomment-6949032454) after the character creation fixes on an earlier release. |
+| Retroid Pocket 5 | Adreno 650 | Startup failure reported. The [Retroid Turnip test APK](https://github.com/Mokomis/open-amalur-android/releases/tag/v0.1.26-retroid-turnip) is available for testing. |
+| POCO X7 Pro | Mali-G720 | Startup failure reported. Compatibility is under investigation. |
+
+For compatibility reports, include your exact device model, Android version, Open Amalur version, and the last screen you saw. Add a crash report ZIP if available.
+
 ### Game files
 
 Copy your complete **Kingdoms of Amalur: Re-Reckoning** game folder to shared storage on your Android device or SD card, or select it where it already lives. Choose the folder that contains `koa.exe`, `binkw32.dll`, and `data/`. Leave the original archives and videos in that folder structure, including `data/videos/well.bik`. The tested PC files are from game version `cs:15032` (Steam build `10619381`).
