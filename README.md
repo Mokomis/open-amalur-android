@@ -22,9 +22,19 @@ Veil draws visual inspiration from other interfaces, including Edge for Skyrim. 
 
 **Open Amalur for Android v0.1.26** · [Download the latest APK](https://github.com/Mokomis/open-amalur-android/releases/latest) · [v0.1.26 release notes](https://github.com/Mokomis/open-amalur-android/releases/tag/v0.1.26)
 
+### Minimum Android requirements
+
+- **64-bit Arm and Android 13 or newer** for gameplay with the system Vulkan driver. The APK targets `arm64-v8a`. The setup screen itself requires Android 11 or newer. [Android Vulkan support](https://developer.android.com/games/develop/vulkan/native-engine-support#determine-the-available-vulkan-api-version)
+- **Vulkan 1.3 or newer** with dynamic rendering (`dynamicRendering`) and BC texture compression (`textureCompressionBC`). The regular APK uses the system graphics driver. It also requires Android surface and swapchain support, sampler anisotropy, depth clamp and depth bias clamp, independent and dual-source blending, non-solid fill modes, and robust buffer access. [Renderer requirements](https://github.com/Mokomis/open-amalur-android/blob/v0.1.26/native/experiments/ff1850-threading/O67-ORIGINAL-UI/veil-apk-update/oa_vk_fullscreen.c#L3926) · [Required Vulkan features](https://github.com/Mokomis/open-amalur-android/blob/v0.1.26/native/experiments/ff1850-threading/O67-ORIGINAL-UI/veil-apk-update/oa_vk_fullscreen.c#L3987-L3997)
+- **Game files and free storage.** A complete copy of *Kingdoms of Amalur: Re-Reckoning*, plus about **1.5 GB of additional free space** on the selected volume for Veil and app data. Android may also need internal storage to install the APK. The tested PC release is `cs:15032` (Steam build `10619381`). [Game files](#game-files)
+
+Minimum RAM and chipset requirements are still unverified. See the device results below.
+
+### Install or update
+
 To update, install the new APK over your existing Open Amalur app to keep your saves, settings, and touch layout. The first launch after an update may show **Verifying Veil** while the app checks the updated menu files.
 
-For a new setup on Android 11 or newer:
+For a new setup on a device that meets the requirements above:
 
 1. Install the APK on your Android device. Put your Re-Reckoning game folder in shared storage on the device or SD card.
 2. Open Open Amalur and choose **Set up and play from internal storage** or **Set up and play from SD card**. Select the folder containing `koa.exe` and `data` on that same volume.
@@ -32,14 +42,12 @@ For a new setup on Android 11 or newer:
 
 ### Android hardware compatibility
 
-The regular APK runs on 64-bit Arm Android devices and uses the device's Vulkan driver. New setup requires Android 11 or newer. Compatibility depends on the GPU and driver, so use these device results as a guide.
-
 | Device | GPU | Open Amalur status |
 | --- | --- | --- |
 | OPPO Pad Mini (OPD2515) | Adreno 829 | Tested on v0.1.26 with the system driver. Verified setup, the main menu, menu navigation, and character naming. |
 | AYN Thor Max (16 GB) | Adreno 740 | [A player reported it working](https://github.com/Mokomis/open-amalur-android/issues/1#issuecomment-6949032454) after the character creation fixes on an earlier release. |
-| Retroid Pocket 5 | Adreno 650 | Startup failure reported. The [Retroid Turnip test APK](https://github.com/Mokomis/open-amalur-android/releases/tag/v0.1.26-retroid-turnip) is available for testing. |
-| POCO X7 Pro | Mali-G720 | Startup failure reported. Compatibility is under investigation. |
+| Retroid Pocket 5 | Adreno 650 | The tester’s system driver exposed Vulkan 1.1. DD-Turnip reached gameplay with Vulkan 1.3. A later GPU crash is under investigation. [Latest Retroid test APK](https://github.com/Mokomis/open-amalur-android/releases/tag/v0.1.26-retroid-turnip-tutorial) |
+| POCO X7 Pro | Mali-G720 | Startup failure reported with the regular APK. The [PanVK test APK](https://github.com/Mokomis/open-amalur-android/releases/tag/v0.1.26-poco-panvk) reached the tutorial. [Rendering problems are under investigation](https://github.com/Mokomis/open-amalur-android/issues/3). |
 
 For compatibility reports, include your exact device model, Android version, Open Amalur version, and the last screen you saw. Add a crash report ZIP if available.
 
@@ -51,7 +59,7 @@ For files stored inside another app's private folder, first copy the game folder
 
 Setup uses the existing game folder and needs about **1.5 GB of additional free space on that volume** for Veil and app data. With SD card setup, the game files, Veil archive, and saves live on the card. Android may still need space on internal storage to install the APK. Keep the card inserted while playing. Removable SD card setup still needs device testing.
 
-Existing imports keep working in their original location, including on Android 10. New setup requires Android 11 or newer. Back up saves before uninstalling Open Amalur because Android removes its app data.
+Existing imports retain their original location, including imports created on Android 10. Back up saves before uninstalling Open Amalur because Android removes its app data.
 
 ### Send crash logs
 
