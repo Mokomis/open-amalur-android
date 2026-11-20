@@ -2,7 +2,7 @@
     package="org.openamalur.originalengine"
     android:installLocation="preferExternal"
     android:versionCode="29"
-    android:versionName="0.1.26">
+    android:versionName="0.1.26-retroid-turnip-tutorial">
     <uses-sdk android:minSdkVersion="29" android:targetSdkVersion="35" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.INTERNET" />
