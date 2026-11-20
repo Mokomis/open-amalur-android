@@ -220,6 +220,9 @@ def add_hud_shortcut(data):
 
 
 def fix_tutorial_text(data):
+    # The two Weapons lessons already provide localized text with no
+    # formatting arguments. Use the plain renderer for both entry paths.
+    plain_weapons_lessons = (117454954, 67489711)
     lessons = (
         (35926227, "Some reagents are harder to harvest than others. "
                    "Improve your Alchemy skill to harvest them more reliably."),
@@ -240,6 +243,9 @@ def fix_tutorial_text(data):
         register = fn["maximum_stack_size"]
         code = Code(fn)
         code.glob(register, "m_curr_tutorial")
+        for lesson in plain_weapons_lessons:
+            code.op("EQ", 1, register, code.index(lesson) + 256)
+            code.jump("plain")
         for lesson, _ in lessons:
             code.op("EQ", 1, register, code.index(lesson) + 256)
             code.jump(lesson)
