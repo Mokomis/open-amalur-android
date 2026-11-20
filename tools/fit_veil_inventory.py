@@ -239,13 +239,25 @@ def fix_tutorial_text(data):
         (79090488, "Review your crafted item, then choose Continue to return to the forge."),
     )
 
-    def edit(fn):
-        register = fn["maximum_stack_size"]
-        code = Code(fn)
+    def log_weapons_stage(code, register, stage, destination):
         code.glob(register, "m_curr_tutorial")
         for lesson in plain_weapons_lessons:
             code.op("EQ", 1, register, code.index(lesson) + 256)
-            code.jump("plain")
+            code.jump((stage, lesson))
+        code.jump("after_" + stage)
+        for lesson in plain_weapons_lessons:
+            code.mark((stage, lesson))
+            code.glob(register, "WARN_LUA")
+            code.load(register + 1, f"VEIL_TUTORIAL lesson={lesson} stage={stage}")
+            code.op("CALL_I", register, 2, 1)
+            code.jump(destination)
+        code.mark("after_" + stage)
+
+    def edit(fn):
+        register = fn["maximum_stack_size"]
+        code = Code(fn)
+        log_weapons_stage(code, register, "start", "plain")
+        code.glob(register, "m_curr_tutorial")
         for lesson, _ in lessons:
             code.op("EQ", 1, register, code.index(lesson) + 256)
             code.jump(lesson)
@@ -258,13 +270,14 @@ def fix_tutorial_text(data):
         # Preserve the original formatted path for the other lessons.
         code.mark("formatted")
         code.labels["plain"] = len(code.words) + (238 - 226)
-        return code, register + 1
+        return code, register + 2
 
     # Delay showing the timed gameplay panel until it contains text. If text
     # rendering throws, the player no longer sees an empty backdrop.
     def reveal_timed_panel(fn):
         register = fn["maximum_stack_size"]
         code = Code(fn)
+        log_weapons_stage(code, register, "text_returned", "after_text_returned")
         code.glob(register, "m_timed_tutorial")
         code.op("TEST", register)
         code.jump("done")

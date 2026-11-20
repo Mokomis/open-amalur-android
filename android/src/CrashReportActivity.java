@@ -26,6 +26,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -100,7 +101,8 @@ public final class CrashReportActivity extends Activity {
         summary.append("Open Amalur diagnostic report\n");
         summary.append("Device: ").append(Build.MANUFACTURER).append(' ')
                 .append(Build.MODEL).append("\nAndroid: ").append(Build.VERSION.RELEASE)
-                .append(" (API ").append(Build.VERSION.SDK_INT).append(")\n");
+                .append(" (API ").append(Build.VERSION.SDK_INT).append(")\n")
+                .append("Android build: ").append(Build.VERSION.INCREMENTAL).append('\n');
         try {
             PackageInfo info = getPackageManager().getPackageInfo(getPackageName(), 0);
             summary.append("App version: ").append(info.versionName).append("\n");
@@ -122,6 +124,7 @@ public final class CrashReportActivity extends Activity {
                         .append(unavailable.getMessage()).append('\n');
             }
             addExitInfo(zip, summary);
+            addDriverMessages(zip, summary);
             zip.putNextEntry(new ZipEntry("report.txt"));
             zip.write(summary.toString().getBytes(StandardCharsets.UTF_8));
             zip.closeEntry();
@@ -178,6 +181,36 @@ public final class CrashReportActivity extends Activity {
             }
         }
         zip.closeEntry();
+    }
+
+    private void addDriverMessages(ZipOutputStream zip, StringBuilder summary) throws IOException {
+        File log = null;
+        Process logcat = null;
+        try {
+            try {
+                log = File.createTempFile("driver-report-", ".log", getCacheDir());
+                logcat = new ProcessBuilder("/system/bin/logcat",
+                        "--uid=" + android.os.Process.myUid(), "-b", "main", "-v", "threadtime",
+                        "-t", "160", "-s", "MESA:W", "Mesa:W", "mesa:W", "Vulkan:W", "vulkan:W",
+                        "Turnip:W", "freedreno:W", "kgsl:W", "Adreno:W", "Adreno-GSL:W")
+                        .redirectErrorStream(true).redirectOutput(log).start();
+                if (!logcat.waitFor(3, TimeUnit.SECONDS) || logcat.exitValue() != 0) {
+                    summary.append("Android graphics messages unavailable.\n");
+                    return;
+                }
+            } catch (IOException | SecurityException unavailable) {
+                summary.append("Android graphics messages unavailable.\n");
+                return;
+            } catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                summary.append("Android graphics message collection interrupted.\n");
+                return;
+            }
+            if (log.length() > 0) addLog(zip, log, "android-graphics.log");
+        } finally {
+            if (logcat != null && logcat.isAlive()) logcat.destroyForcibly();
+            if (log != null) log.delete();
+        }
     }
 
     private void addExitInfo(ZipOutputStream zip, StringBuilder summary) throws IOException {
