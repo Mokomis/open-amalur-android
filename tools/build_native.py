@@ -95,8 +95,11 @@ def compile_and_link(args, plan):
             if name == "rcpc_copy_runtime.o":
                 flags += ["-I", args.output / "guest-helpers"]
         flags += ["-I", args.output / "generated/include-amalur", "-I", shader_headers]
-        if args.retroid_turnip_adrenotools and name == "oa_vk_android_pass_batch.o":
-            flags += ["-DOA_RETROID_TURNIP", "-I", args.retroid_turnip_adrenotools / "include"]
+        if name == "oa_vk_android_pass_batch.o":
+            if args.poco_panvk_adrenotools:
+                flags += ["-DOA_POCO_PANVK", "-I", args.poco_panvk_adrenotools / "include"]
+            elif args.retroid_turnip_adrenotools:
+                flags += ["-DOA_RETROID_TURNIP", "-I", args.retroid_turnip_adrenotools / "include"]
         raw = output.with_suffix(".before-rename.o") if "rename" in job else output
         log_path = logs / (name + ".log")
         with log_path.open("w", encoding="utf-8") as log:
@@ -130,8 +133,11 @@ def main():
     cli.add_argument("--game-dir", type=Path, help="folder containing koa.exe and binkw32.dll")
     cli.add_argument("--llvm-bin", type=Path, help="directory containing the LLVM-mingw libLLVM-23.dll")
     cli.add_argument("--ndk", type=Path)
-    cli.add_argument("--retroid-turnip-adrenotools", type=Path,
-                     help="libadrenotools checkout for the Retroid Pocket 5 test renderer")
+    driver = cli.add_mutually_exclusive_group()
+    driver.add_argument("--retroid-turnip-adrenotools", type=Path,
+                        help="libadrenotools checkout for the Retroid Pocket 5 test renderer")
+    driver.add_argument("--poco-panvk-adrenotools", type=Path,
+                        help="libadrenotools checkout for the Poco X7 Pro test renderer")
     cli.add_argument("--output", type=Path, required=True, help="new local build directory")
     cli.add_argument("--jobs", type=int, default=min(6, os.cpu_count() or 1))
     phase = cli.add_mutually_exclusive_group()

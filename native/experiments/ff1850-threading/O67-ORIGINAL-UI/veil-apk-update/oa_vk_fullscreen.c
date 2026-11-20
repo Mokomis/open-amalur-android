@@ -1,4 +1,4 @@
-#ifdef OA_RETROID_TURNIP
+#if defined(OA_RETROID_TURNIP) || defined(OA_POCO_PANVK)
 #define _GNU_SOURCE
 #include <adrenotools/driver.h>
 #include <sys/system_properties.h>
@@ -3901,13 +3901,28 @@ static void init_vtables(void) {
 
 #include "oa_pipeline_cache.h"
 
-#ifdef OA_RETROID_TURNIP
-static HMODULE open_retroid_vulkan(int *turnip) {
+#if defined(OA_RETROID_TURNIP) || defined(OA_POCO_PANVK)
+#ifdef OA_POCO_PANVK
+#define OA_TEST_DRIVER_NAME "PanVK-Mali-r10"
+#define OA_TEST_DRIVER_FILE "libvulkan_panfrost.so"
+#define OA_TEST_DRIVER_ID VK_DRIVER_ID_MESA_PANVK
+#else
+#define OA_TEST_DRIVER_NAME "DD-Turnip-v0.8.0"
+#define OA_TEST_DRIVER_FILE "libvulkan_freedreno.so"
+#define OA_TEST_DRIVER_ID VK_DRIVER_ID_MESA_TURNIP
+#endif
+
+static HMODULE open_test_vulkan(int *custom) {
     char model[PROP_VALUE_MAX] = "";
     __system_property_get("ro.product.model", model);
-    *turnip = !strcasecmp(model, "Retroid Pocket 5");
-    logf_("VULKAN_LOADER model=%s selected=%s", model, *turnip ? "DD-Turnip-v0.8.0" : "system");
-    if (!*turnip) return LoadLibraryA("vulkan-1.dll");
+#ifdef OA_POCO_PANVK
+    *custom = !strcasecmp(model, "POCO X7 Pro") || !strcmp(model, "2412DPC0AG") ||
+              !strcmp(model, "2412DPC0AI");
+#else
+    *custom = !strcasecmp(model, "Retroid Pocket 5");
+#endif
+    logf_("VULKAN_LOADER model=%s selected=%s", model, *custom ? OA_TEST_DRIVER_NAME : "system");
+    if (!*custom) return LoadLibraryA("vulkan-1.dll");
 
     void *loader = dlopen("libadrenotools.so", RTLD_NOW | RTLD_LOCAL);
     if (!loader) {
@@ -3917,7 +3932,7 @@ static HMODULE open_retroid_vulkan(int *turnip) {
     __typeof__(&adrenotools_open_libvulkan) open_driver =
         dlsym(loader, "adrenotools_open_libvulkan");
     Dl_info engine;
-    if (!open_driver || !dladdr((void *)open_retroid_vulkan, &engine)) {
+    if (!open_driver || !dladdr((void *)open_test_vulkan, &engine)) {
         logf_("VULKAN_LOADER AdrenoTools entry point or engine library location unavailable");
         return NULL;
     }
@@ -3930,15 +3945,18 @@ static HMODULE open_retroid_vulkan(int *turnip) {
     size_t length = basename - engine.dli_fname + 1;
     memcpy(directory, engine.dli_fname, length);
     directory[length] = 0;
-    return open_driver(RTLD_NOW | RTLD_LOCAL, ADRENOTOOLS_DRIVER_CUSTOM, NULL,
-                       directory, directory, "libvulkan_freedreno.so", NULL, NULL);
+    HMODULE custom_loader = open_driver(RTLD_NOW | RTLD_LOCAL, ADRENOTOOLS_DRIVER_CUSTOM, NULL,
+                                        directory, directory, OA_TEST_DRIVER_FILE, NULL, NULL);
+    if (!custom_loader)
+        logf_("VULKAN_LOADER could not load %s: %s", OA_TEST_DRIVER_FILE, dlerror());
+    return custom_loader;
 }
 #endif
 
 static int init_vulkan(void) {
-#ifdef OA_RETROID_TURNIP
-    int turnip = 0;
-    HMODULE lib = open_retroid_vulkan(&turnip);
+#if defined(OA_RETROID_TURNIP) || defined(OA_POCO_PANVK)
+    int custom = 0;
+    HMODULE lib = open_test_vulkan(&custom);
 #else
     HMODULE lib = LoadLibraryA("vulkan-1.dll");
 #endif
@@ -4011,10 +4029,10 @@ static int init_vulkan(void) {
     }
     pvkGetPhysicalDeviceProperties(g_phys, &prop);
     logf_("GPU %s api %u.%u", prop.deviceName, VK_API_VERSION_MAJOR(prop.apiVersion), VK_API_VERSION_MINOR(prop.apiVersion));
-#ifdef OA_RETROID_TURNIP
-    if (turnip) {
+#if defined(OA_RETROID_TURNIP) || defined(OA_POCO_PANVK)
+    if (custom) {
         if (prop.apiVersion < VK_API_VERSION_1_3) {
-            logf_("VULKAN_LOADER fallback driver reported Vulkan below 1.3");
+            logf_("VULKAN_LOADER selected driver reported Vulkan below 1.3");
             return 0;
         }
         VkPhysicalDeviceDriverProperties driver = {
@@ -4026,8 +4044,8 @@ static int init_vulkan(void) {
         pvkGetPhysicalDeviceProperties2(g_phys, &identified);
         logf_("VULKAN_LOADER active=%s info=%s id=%u version=%u",
               driver.driverName, driver.driverInfo, (unsigned)driver.driverID, prop.driverVersion);
-        if (driver.driverID != VK_DRIVER_ID_MESA_TURNIP) {
-            logf_("VULKAN_LOADER Turnip was requested but a different driver loaded");
+        if (driver.driverID != OA_TEST_DRIVER_ID) {
+            logf_("VULKAN_LOADER %s was requested but a different driver loaded", OA_TEST_DRIVER_NAME);
             return 0;
         }
     }
@@ -4067,8 +4085,8 @@ static int init_vulkan(void) {
     f2.features.dualSrcBlend = VK_TRUE;
     f2.features.fillModeNonSolid = VK_TRUE;
     f2.features.robustBufferAccess = VK_TRUE;
-#ifdef OA_RETROID_TURNIP
-    if (turnip) {
+#if defined(OA_RETROID_TURNIP) || defined(OA_POCO_PANVK)
+    if (custom) {
         VkPhysicalDeviceVulkan13Features available13 = {
             .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES
         };

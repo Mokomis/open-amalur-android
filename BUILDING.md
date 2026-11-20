@@ -116,3 +116,15 @@ DD-Turnip-v0.8.0.zip --adrenotools-build <cmake-build> --adrenotools-source
 source from the [DD-Turnip release](https://github.com/Droid-Deck/Drivers-CI/releases/tag/DD-Turnip-v0.8.0).
 The APK loads Turnip on the Retroid Pocket 5 and uses Android's system driver
 on other models.
+
+## POCO X7 Pro PanVK test build
+
+Build AdrenoTools as for the Retroid test. Compile the Android engine with
+`--poco-panvk-adrenotools <checkout>`, then package it with
+`--poco-panvk mali-panvk-27.0.0-devel-r10.zip --adrenotools-build <cmake-build> --adrenotools-source <checkout>`.
+Use the driver ZIP from [JimVulkan's PanVK r10 release](https://github.com/JimVulkan/mali-panvk/releases/tag/v1.6.0).
+The packaging step checks the archive hash and includes its notices.
+
+This build selects PanVK on the POCO X7 Pro and uses the system driver on other models.
+The renderer records the Vulkan driver and key device features for the startup crash report.
+The **Send Amalur Crash Logs** launcher shortcut can collect the report before the game reaches Home.

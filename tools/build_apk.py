@@ -15,6 +15,8 @@ PACKAGE = "org.openamalur.originalengine"
 ENGINE_RELEASES = "https://github.com/Mokomis/open-amalur-android/releases/download"
 WATERFALL_BYTES = 256 * 320 * 100
 RETROID_DRIVER = "DD-Turnip-v0.8.0"
+POCO_DRIVER_LIBRARY = "libvulkan_panfrost.so"
+POCO_DRIVER_ZIP_SHA256 = "7e97db4d79d81ec9461d1e0676b62a865561cb56e21c151693aa25ffbe749f1c"
 RETROID_DRIVER_SHA256 = "e2bf336c2a10c47bd15ed581ee4ad99f2ad6b21c3b1f05af98d414faa0fdc043"
 
 
@@ -22,7 +24,7 @@ def run(*argv):
     subprocess.run([str(value) for value in argv], check=True)
 
 
-def add_retroid_driver(apk, bundle, loader_build, loader_source):
+def add_retroid_driver(apk, bundle):
     with ZipFile(bundle) as release:
         manifest = json.loads(release.read("manifest.json"))
         android = manifest["drivers"]["android"]
@@ -34,6 +36,22 @@ def add_retroid_driver(apk, bundle, loader_build, loader_source):
         for item in release.namelist():
             if item == "NOTICE" or item.startswith("LICENSES/"):
                 apk.writestr("assets/licenses/DD-Turnip/" + item, release.read(item))
+
+
+def add_poco_driver(apk, bundle):
+    with bundle.open("rb") as source:
+        if file_digest(source, "sha256").hexdigest() != POCO_DRIVER_ZIP_SHA256:
+            raise ValueError("Use mali-panvk-27.0.0-devel-r10.zip from JimVulkan/mali-panvk v1.6.0")
+    with ZipFile(bundle) as release:
+        apk.writestr("lib/arm64-v8a/" + POCO_DRIVER_LIBRARY, release.read(POCO_DRIVER_LIBRARY),
+                     compress_type=ZIP_STORED)
+        for name in ("NOTICE.txt", "meta.json"):
+            apk.writestr("assets/licenses/PanVK/" + name, release.read(name))
+        apk.writestr("assets/licenses/PanVK/SOURCE.txt",
+                     "https://github.com/JimVulkan/mali-panvk/tree/v1.6.0\n")
+
+
+def add_driver_loader(apk, loader_build, loader_source):
     for name in ("libadrenotools.so", "src/hook/libmain_hook.so", "src/hook/libhook_impl.so"):
         library = loader_build / name
         apk.write(library, "lib/arm64-v8a/" + library.name, compress_type=ZIP_STORED)
@@ -52,9 +70,10 @@ def build(args):
     with TemporaryDirectory() as temporary:
         work = Path(temporary)
         manifest = (ROOT / "android/AndroidManifest.xml").read_text(encoding="utf-8")
-        if args.retroid_turnip:
+        if args.retroid_turnip or args.poco_panvk:
+            variant = "poco-panvk" if args.poco_panvk else "retroid-turnip"
             manifest = manifest.replace('android:extractNativeLibs="false"', 'android:extractNativeLibs="true"')
-            manifest = manifest.replace('android:versionName="0.1.26"', 'android:versionName="0.1.26-retroid-turnip"')
+            manifest = manifest.replace('android:versionName="0.1.26"', f'android:versionName="0.1.26-{variant}"')
         manifest = manifest.replace(f'package="{PACKAGE}"', f'package="{args.application_id}"')
         for activity in ("VeilActivity", "SetupActivity", "CrashReportActivity"):
             manifest = manifest.replace(f'android:name=".{activity}"', f'android:name="{PACKAGE}.{activity}"')
@@ -99,7 +118,11 @@ def build(args):
             library_name = "liboabootstrap.so" if engine_pin is not None else "liboaoriginal.so"
             apk.write(library, "lib/arm64-v8a/" + library_name, compress_type=ZIP_STORED)
             if args.retroid_turnip:
-                add_retroid_driver(apk, args.retroid_turnip, args.adrenotools_build, args.adrenotools_source)
+                add_retroid_driver(apk, args.retroid_turnip)
+            elif args.poco_panvk:
+                add_poco_driver(apk, args.poco_panvk)
+            if args.retroid_turnip or args.poco_panvk:
+                add_driver_loader(apk, args.adrenotools_build, args.adrenotools_source)
             if args.offline:
                 apk.writestr("assets/local-build/native-reflection", "1\n")
             if engine_pin is not None:
@@ -153,7 +176,9 @@ def main():
     parser.add_argument("--application-id", default=PACKAGE)
     parser.add_argument("--waterfall", type=Path, help="package the prepared Veil portrait loop")
     parser.add_argument("--prototype-ui", type=Path)
-    parser.add_argument("--retroid-turnip", type=Path, help="DD-Turnip v0.8.0 release ZIP")
+    driver = parser.add_mutually_exclusive_group()
+    driver.add_argument("--retroid-turnip", type=Path, help="DD-Turnip v0.8.0 release ZIP")
+    driver.add_argument("--poco-panvk", type=Path, help="JimVulkan PanVK r10 release ZIP")
     parser.add_argument("--adrenotools-build", type=Path)
     parser.add_argument("--adrenotools-source", type=Path)
     args = parser.parse_args()
@@ -165,8 +190,10 @@ def main():
         parser.error("--local-engine requires --ndk")
     if args.download_engine and args.local_engine is None:
         parser.error("--download-engine requires --local-engine")
-    if args.retroid_turnip and not (args.library and args.adrenotools_build and args.adrenotools_source):
-        parser.error("--retroid-turnip requires --library, --adrenotools-build and --adrenotools-source")
+    if (args.retroid_turnip or args.poco_panvk) and not (
+        args.library and args.adrenotools_build and args.adrenotools_source
+    ):
+        parser.error("A bundled driver requires --library, --adrenotools-build and --adrenotools-source")
     if args.offline and args.library is None:
         parser.error("--offline requires --library")
     if args.waterfall is not None and (
