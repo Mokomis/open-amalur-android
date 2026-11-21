@@ -3103,7 +3103,7 @@ static int prepare_draw(oa_context *c) {
     if (memcmp(c->blend_factor, c->set_blend, 16)) { pvkCmdSetBlendConstants(cmd, c->blend_factor); memcpy(c->set_blend, c->blend_factor, 16); }
     {
         VkBuffer bufs[4];
-        VkDeviceSize offs[4], strides[4], sizes[4];
+        VkDeviceSize offs[4], strides[4];
         int changed = 0;
         for (i = 0; i < 4; i++) {
             oa_buffer *b = c->vb[i];
@@ -3117,11 +3117,10 @@ static int prepare_draw(oa_context *c) {
                 offs[i] = 0;
                 strides[i] = 0;
             }
-            sizes[i] = VK_WHOLE_SIZE;
             if (bufs[i] != c->set_vb[i] || offs[i] != c->set_off[i] || strides[i] != c->set_stride[i]) changed = 1;
         }
         if (changed) {
-            pvkCmdBindVertexBuffers2(cmd, 0, 4, bufs, offs, sizes, strides);
+            pvkCmdBindVertexBuffers2(cmd, 0, 4, bufs, offs, NULL, strides);
             g_c_vb++;
             memcpy(c->set_vb, bufs, sizeof(bufs));
             memcpy(c->set_off, offs, sizeof(offs));
