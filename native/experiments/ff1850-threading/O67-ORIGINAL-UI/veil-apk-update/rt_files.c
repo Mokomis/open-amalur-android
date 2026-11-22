@@ -191,7 +191,8 @@ static void ini_first_write(const char *path)
     fclose(f);
     b[n] = 0;
     char *copy = strdup(set);
-    for (char *item = strtok(copy, ";"); item; item = strtok(NULL, ";")) {
+    char *cursor = NULL;
+    for (char *item = strtok_r(copy, ";", &cursor); item; item = strtok_r(NULL, ";", &cursor)) {
         char *bar = strchr(item, '|'), *eq = bar ? strchr(bar, '=') : NULL;
         if (!eq) continue;
         char head[128], key[128];

@@ -135,7 +135,6 @@ static void swap_get_buffer(X86Ctx *ctx){
 static void swap_get_desc(X86Ctx *ctx){DXGI_SWAP_CHAIN_DESC d;HRESULT hr=IDXGISwapChain_GetDesc((IDXGISwapChain*)self(ctx)->host,&d);if(SUCCEEDED(hr))swap_desc_to_guest(A(0),&d);RET(hr);}
 static void swap_resize(X86Ctx *ctx){RET(IDXGISwapChain_ResizeBuffers((IDXGISwapChain*)self(ctx)->host,A(0),A(1),A(2),A(3),A(4)));}
 /* Wine include/xaudio2fx.idl, XAUDIO2_VER=7; matches original PE at 01767EF4. */
-static const GUID oa_audio_reverb27={0x6a93130e,0x1d53,0x41d1,{0xa9,0xcf,0xe7,0x58,0x80,0x0b,0xb1,0x79}};
 static void swap_fullscreen(X86Ctx*ctx){BOOL b=FALSE;IDXGIOutput*out=NULL;HRESULT hr=IDXGISwapChain_GetFullscreenState((IDXGISwapChain*)self(ctx)->host,A(0)?&b:NULL,A(1)?&out:NULL);if(SUCCEEDED(hr)){if(A(0))st32(A(0),b);if(A(1))st32(A(1),wrap(out,OUTPUT));}RET(hr);}
 static void swap_output(X86Ctx*ctx){IDXGIOutput*out=NULL;HRESULT hr=IDXGISwapChain_GetContainingOutput((IDXGISwapChain*)self(ctx)->host,&out);st32(A(0),SUCCEEDED(hr)?wrap(out,OUTPUT):0);RET(hr);}
 static void swap_set_fullscreen(X86Ctx*ctx){if(A(0))rt_fatal("fullscreen mode outside windowed diagnostic scope");RET(IDXGISwapChain_SetFullscreenState((IDXGISwapChain*)self(ctx)->host,FALSE,(IDXGIOutput*)host_object(A(1))));}

@@ -35,7 +35,6 @@
 
 /* ---- logging ---- */
 static FILE *g_log;
-static char g_game_log[MAX_PATH];
 static CRITICAL_SECTION g_lock;
 static void logf_(const char *fmt, ...) {
     va_list a;
@@ -509,13 +508,7 @@ static const uint8_t CONTEXT_ARGS[115] = {3,1,1,2,4,4,3,4,4,4,4,4,4,3,6,3,4,2,6,
 
 typedef struct { char label[48]; } stub_info;
 static stub_info g_stubs[512];
-static volatile LONG g_stub_seen[512];
 static int g_nstubs;
-static uint8_t *g_stub_code;
-
-static void __cdecl stub_hit(int i) {
-    if (InterlockedExchange(&g_stub_seen[i], 1) == 0) logf_("NOT IMPLEMENTED %s", g_stubs[i].label);
-}
 
 static uintptr_t oa_missing_0(void*self,...){(void)self;rt_fatal("native Vulkan backend missing %s",g_stubs[0].label);}
 static uintptr_t oa_missing_1(void*self,...){(void)self;rt_fatal("native Vulkan backend missing %s",g_stubs[1].label);}
@@ -2969,7 +2962,7 @@ static void write_stage(desc_build *d, const oa_shader_info *i, oa_buffer **cbs,
     }
 }
 
-static long g_n_draw, g_n_skip_vs, g_n_skip_rt, g_n_skip_pipe, g_n_clear, g_n_skip_ib, g_n_skip_query, g_n_query_kept;
+static long g_n_draw, g_n_skip_vs, g_n_skip_rt, g_n_skip_pipe, g_n_skip_ib, g_n_skip_query, g_n_query_kept;
 
 static void draw_descriptors(oa_context *c, desc_build *d, int eager, int uniforms_only) {
     d->nw = d->nimg = d->nbuf = d->nkey = 0;
