@@ -78,6 +78,16 @@ To assemble the offline release APK, keep `--library` and `--offline`, supply th
 
 For v0.1.26, open the signed [release APK](https://github.com/Mokomis/open-amalur-android/releases/tag/v0.1.26) as a ZIP. Pass `assets/local-build/veil-edits.bin` to `--veil-edits`, `assets/local-build/veil-edits.properties` to `--veil-properties`, and `assets/veil-waterfall.bc3` to `--waterfall`. The packaged engine is `lib/arm64-v8a/liboaoriginal.so`.
 
+### Release builds
+
+`tools/release.py` repeats the release steps:
+
+1. `python tools/release.py bump 0.1.28` raises `versionName` and `versionCode` in the manifest and updates the README download line. Review and commit the change.
+2. On the Windows build machine, `python tools/release.py build --config release.json` runs `build_apk.py` with the release inputs, then verifies the APK. The script's docstring lists the `release.json` fields. The file stores local paths, including the keystore and a file containing its password, so keep it out of the repository. The password is passed to the build through the environment and never printed.
+3. `python tools/release.py verify --apk <apk> --sdk <android-sdk> --signer <sha256>` checks the APK's version against the manifest, its signing certificate and its 16 KB alignment. Run it again on any copy you upload.
+
+Reuse the previous release's engine and Veil inputs (step above) unless the native code or Veil recipe changed.
+
 The builder adds the prepared Allestar Glade loop as `assets/veil-waterfall.bc3`. The portrait renderer plays the five-second loop at 20 frames per second. `tools/make_waterfall_clip.py` can re-encode an existing capture during release preparation.
 
 `tools/generate_veil_edits.py` takes your original game directory, a locally modded `patch_0.pak`, and output paths for the recipe, properties and a local reference archive. Use the original and modded archives from the same supported game version.
