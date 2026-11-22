@@ -72,3 +72,17 @@ jobs:
 
       - name: Run tests
         run: python -m unittest discover -s tools/tests -v
+
+  native:
+    name: Hand-written native sources (NDK syntax check)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # Uses the build-plan flags; translated guest code needs the game files and is skipped.
+      - name: Syntax-check with the Android NDK
+        run: python tools/check_native.py --ndk "$ANDROID_NDK_LATEST_HOME"
