@@ -6,6 +6,7 @@ import android.content.ClipData;
 import android.content.Intent;
 import android.database.Cursor;
 import android.net.Uri;
+import android.os.Bundle;
 import android.provider.DocumentsContract;
 import android.provider.OpenableColumns;
 
@@ -27,6 +28,7 @@ final class SaveImportActions {
     private final Activity activity;
     private boolean importing;
     private boolean droidDeckSource;
+    private static final String STATE_DROIDDECK = "save-import-droiddeck";
 
     SaveImportActions(Activity activity) {
         this.activity = activity;
@@ -77,6 +79,16 @@ final class SaveImportActions {
         }
         droidDeckSource = fromDroidDeck;
         activity.startActivityForResult(picker, SELECT_SAVES);
+    }
+
+    // Android may recreate the activity while the file picker is open; keep the
+    // chosen source so the DroidDeck-only check still applies to the result.
+    void saveState(Bundle out) {
+        out.putBoolean(STATE_DROIDDECK, droidDeckSource);
+    }
+
+    void restoreState(Bundle state) {
+        if (state != null) droidDeckSource = state.getBoolean(STATE_DROIDDECK, false);
     }
 
     void importFrom(Intent result) {

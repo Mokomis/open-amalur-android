@@ -77,6 +77,10 @@ public final class SetupActivity extends Activity {
         panel.addView(status);
         if (!installed) {
             selectedStorage = GameStorage.recommended(this, storageChoices);
+            String savedChoice = saved == null ? null : saved.getString("selectedStorage");
+            for (File choice : storageChoices) {
+                if (choice.getAbsolutePath().equals(savedChoice)) selectedStorage = choice;
+            }
             for (File choice : storageChoices) {
                 if (GameStorage.removable(choice)) sdStorage = choice;
                 else if (internalStorage == null) internalStorage = choice;
@@ -179,6 +183,7 @@ public final class SetupActivity extends Activity {
     @Override protected void onSaveInstanceState(Bundle out) {
         super.onSaveInstanceState(out);
         out.putParcelable("gameFolder", gameFolder);
+        if (selectedStorage != null) out.putString("selectedStorage", selectedStorage.getAbsolutePath());
     }
 
     private void selectFolder() {

@@ -22,8 +22,11 @@ release.json names the local inputs, none of which belong in the repository:
       "veil_properties": "C:/.../veil-edits.properties",
       "waterfall": "C:/.../veil-waterfall.bc3",
       "output_dir": "C:/.../oa-android-release",
-      "signer_sha256": "26bb9dbf..."
+      "signer_sha256": "26bb9dbf...",
+      "bundled_vulkan": false
     }
+
+Set bundled_vulkan for test builds that ship their own Vulkan driver.
 
 The keystore password is read from password_file into the build's environment
 and is never printed or passed on the command line.
@@ -139,6 +142,8 @@ def build(config_path):
                       ("waterfall", "--waterfall")):
         if config.get(key):
             command += [flag, config[key]]
+    if config.get("bundled_vulkan"):
+        command.append("--bundled-vulkan")
     subprocess.run(command, cwd=REPO, env=env, check=True)
     verify(apk, Path(config["sdk"]), config.get("signer_sha256"))
 
