@@ -65,5 +65,13 @@ static inline unsigned oa_thermal_poll(OaThermal *t, uint64_t now_ns)
     t->floor = oa_thermal_floor(t->last_headroom, t->last_status, t->floor);
     return t->floor;
 }
+#else
+/* Other platforms have no thermal API wired up yet: never raise the floor. */
+typedef struct { unsigned floor; int last_status; float last_headroom; } OaThermal;
+static inline unsigned oa_thermal_poll(OaThermal *t, uint64_t now_ns)
+{
+    (void)now_ns;
+    return t->floor;
+}
 #endif
 #endif
