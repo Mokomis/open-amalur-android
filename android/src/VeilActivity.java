@@ -233,14 +233,23 @@ public final class VeilActivity extends NativeActivity {
     }
 
     @Override public void onCreate(Bundle state) {
+        // Android can restore this activity straight from Recents after killing the
+        // process, skipping SetupActivity. Send the player back to setup instead of
+        // crashing when the engine or game files are no longer available. With a
+        // local engine build, the bootstrap library finishes cleanly when the engine
+        // is not loaded, so calling super.onCreate below remains safe.
+        boolean engineLoaded;
         try {
             LocalEngine.load(this);
+            engineLoaded = true;
         } catch (IOException error) {
-            throw new IllegalStateException(error);
+            Log.w("VeilSetup", "Engine unavailable on launch; returning to setup", error);
+            engineLoaded = false;
         }
         super.onCreate(state);
         noOverlays = getIntent().getBooleanExtra("oa_no_overlays", false);
-        if (GameStorage.root(this) == null || !GameFiles.ready(this, GameStorage.root(this))) {
+        if (!engineLoaded || GameStorage.root(this) == null
+                || !GameFiles.ready(this, GameStorage.root(this))) {
             startActivity(new Intent(this, SetupActivity.class));
             finish();
             return;
@@ -350,6 +359,7 @@ public final class VeilActivity extends NativeActivity {
 
     @Override protected void onResume() {
         super.onResume();
+        if (overlay == null) return; // onCreate redirected to setup.
         Log.i("OANameInput", "onResume");
         overlay.resume();
         getWindow().getDecorView().post(watchMenuRequests);
@@ -368,16 +378,26 @@ public final class VeilActivity extends NativeActivity {
         removeLaunchCover();
         if (namePrompt != null) namePrompt.dismiss();
         removeNameCover();
-        updateBadge.show(false);
-        if (overlay.isAttachedToWindow()) getWindowManager().removeViewImmediate(overlay);
+        stopAllRumble();
+        // These are null when onCreate redirected to setup before creating them.
+        if (updateBadge != null) updateBadge.show(false);
+        if (overlay != null && overlay.isAttachedToWindow()) getWindowManager().removeViewImmediate(overlay);
         super.onDestroy();
     }
 
     @Override protected void onPause() {
         getWindow().getDecorView().removeCallbacks(watchMenuRequests);
-        updateBadge.show(false);
-        overlay.suspend();
+        stopAllRumble();
+        if (updateBadge != null) updateBadge.show(false);
+        if (overlay != null) overlay.suspend();
         super.onPause();
+    }
+
+    // Rumble effects repeat until cancelled, so stop them whenever the game leaves
+    // the foreground. The engine starts them again on its next rumble change.
+    private synchronized void stopAllRumble() {
+        for (int i = 0; i < activeRumble.size(); i++) activeRumble.valueAt(i).cancel();
+        activeRumble.clear();
     }
 
     private synchronized void rumbleController(int deviceId, int left, int right) {
