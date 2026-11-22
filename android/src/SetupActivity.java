@@ -35,6 +35,15 @@ public final class SetupActivity extends Activity {
 
     @Override protected void onCreate(Bundle saved) {
         super.onCreate(saved);
+        // Tapping the launcher icon while the game runs in the background starts a new
+        // SetupActivity on top of the existing task, because this root activity already
+        // finished. Return to the running game instead of starting a second VeilActivity.
+        Intent launch = getIntent();
+        if (!isTaskRoot() && launch != null && Intent.ACTION_MAIN.equals(launch.getAction())
+                && launch.hasCategory(Intent.CATEGORY_LAUNCHER)) {
+            finish();
+            return;
+        }
         File storage = GameStorage.root(this);
         File[] storageChoices = GameStorage.available(this);
         boolean missingStorage = GameStorage.selectedVolumeMissing(this);
