@@ -1,7 +1,13 @@
 /* Rebuild locally observed pipeline variants before the first draw that uses them. */
 #include <dirent.h>
 #include <errno.h>
+#ifdef _WIN32
+#include <direct.h>
+#include <windows.h>
+#define mkdir(path, mode) _mkdir(path)
+#else
 #include <sys/resource.h>
+#endif
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -307,7 +313,12 @@ static void save_prepared_job(OaPreparedJob *job)
     if (!file) return;
     job->header.checksum = preparation_checksum(job);
     int written = fwrite(job, sizeof(*job) + prepared_shader_bytes(&job->header), 1, file) == 1;
+#ifdef _WIN32
+    /* rename() on Windows fails when the target exists; replace it like POSIX. */
+    if (fclose(file) || !written || !MoveFileExA(temporary, path, MOVEFILE_REPLACE_EXISTING)) {
+#else
     if (fclose(file) || !written || rename(temporary, path)) {
+#endif
         unlink(temporary);
         return;
     }
@@ -318,7 +329,11 @@ static void save_prepared_job(OaPreparedJob *job)
 static void *shader_preparation_worker(void *context)
 {
     (void)context;
+#ifdef _WIN32
+    SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
+#else
     setpriority(PRIO_PROCESS, 0, 10);
+#endif
     prepare_recorded_pipelines();
     if (!record_shader_variants) return NULL;
     for (;;) {
