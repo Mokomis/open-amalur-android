@@ -75,6 +75,9 @@ def build(args):
             apk.write(library, "lib/arm64-v8a/" + library_name, compress_type=ZIP_STORED)
             if args.offline:
                 apk.writestr("assets/local-build/native-reflection", "1\n")
+            if args.bundled_vulkan:
+                # Skips the system Vulkan version warning in VulkanSupport.java.
+                apk.writestr("assets/local-build/bundled-vulkan", "1\n")
             if engine_pin is not None:
                 apk.writestr("assets/local-build/engine.sha256", engine_pin)
                 if args.download_engine:
@@ -126,6 +129,9 @@ def main():
     parser.add_argument("--application-id", default=PACKAGE)
     parser.add_argument("--waterfall", type=Path, help="package the prepared Veil portrait loop")
     parser.add_argument("--prototype-ui", type=Path)
+    parser.add_argument("--bundled-vulkan", action="store_true",
+                        help="mark a test build that ships its own Vulkan driver, so setup skips "
+                             "the system driver version warning")
     args = parser.parse_args()
     if not re.fullmatch(r"[A-Za-z][\w]*(?:\.[A-Za-z][\w]*)+", args.application_id, re.ASCII):
         parser.error("invalid Android application ID")

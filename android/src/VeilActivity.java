@@ -259,6 +259,7 @@ public final class VeilActivity extends NativeActivity {
         overlay = new TouchControls();
         gameFileActions = new GameFileActions(this);
         saveImportActions = new SaveImportActions(this);
+        saveImportActions.restoreState(state);
         updateBadge = new UpdateBadge(this, gameFileActions::show, this::openCrashReport);
         getWindow().getDecorView().post(() -> {
             if (isFinishing() || isDestroyed() || noOverlays) return;
@@ -355,6 +356,11 @@ public final class VeilActivity extends NativeActivity {
         } else if (request == SaveImportActions.SELECT_SAVES && result == RESULT_OK && data != null) {
             saveImportActions.importFrom(data);
         }
+    }
+
+    @Override protected void onSaveInstanceState(Bundle out) {
+        super.onSaveInstanceState(out);
+        if (saveImportActions != null) saveImportActions.saveState(out);
     }
 
     @Override protected void onResume() {
