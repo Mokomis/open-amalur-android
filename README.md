@@ -27,8 +27,9 @@ Veil draws visual inspiration from other interfaces, including Edge for Skyrim. 
 - **64-bit Arm and Android 13 or newer** for gameplay with the system Vulkan driver. The APK targets `arm64-v8a`. The setup screen itself requires Android 11 or newer. [Android Vulkan support](https://developer.android.com/games/develop/vulkan/native-engine-support#determine-the-available-vulkan-api-version)
 - **Vulkan 1.3 or newer** with dynamic rendering (`dynamicRendering`) and BC texture compression (`textureCompressionBC`). The regular APK uses the system graphics driver. It also requires Android surface and swapchain support, sampler anisotropy, depth clamp and depth bias clamp, independent and dual-source blending, non-solid fill modes, and robust buffer access. [Renderer requirements](https://github.com/Mokomis/open-amalur-android/blob/v0.1.26/native/experiments/ff1850-threading/O67-ORIGINAL-UI/veil-apk-update/oa_vk_fullscreen.c#L3926) · [Required Vulkan features](https://github.com/Mokomis/open-amalur-android/blob/v0.1.26/native/experiments/ff1850-threading/O67-ORIGINAL-UI/veil-apk-update/oa_vk_fullscreen.c#L3987-L3997)
 - **Game files and free storage.** A complete copy of *Kingdoms of Amalur: Re-Reckoning*, plus about **1.5 GB of additional free space** on the selected volume for Veil and app data. Android may also need internal storage to install the APK. The tested PC release is `cs:15032` (Steam build `10619381`). [Game files](#game-files)
+- **Memory.** During gameplay on the OPPO Pad Mini, Open Amalur used about **1.7 GB**: 0.86 GB of app memory and 0.82 GB of GPU memory, in the opening dungeon at 50% Hardware Scaling. Larger areas and higher render resolutions use more. **6 GB of RAM or more is recommended.** 4 GB devices are untested and may close the game when Android runs short of memory.
 
-Minimum RAM and chipset requirements are still unverified. See the device results below.
+Minimum chipset requirements are still unverified. See the device results below.
 
 ### Install or update
 
