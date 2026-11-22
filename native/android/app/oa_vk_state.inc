@@ -107,13 +107,19 @@ static void begin_rendering(oa_context *c) {
     ri.layerCount = 1;
     ri.colorAttachmentCount = n;
     ri.pColorAttachments = col;
+    VkRenderingAttachmentInfo sten;
     if (c->dsv) {
+        /* A read-only depth-stencil view lets shaders sample the same image in
+           this pass. Don't write it back, or the store races those reads. */
+        const uint32_t ro = c->dsv->dsv_flags;
         dep.imageView = c->dsv->view;
         dep.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
         dep.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-        dep.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        sten = dep;
+        dep.storeOp = (ro & DSV_READ_ONLY_DEPTH) ? VK_ATTACHMENT_STORE_OP_NONE : VK_ATTACHMENT_STORE_OP_STORE;
+        sten.storeOp = (ro & DSV_READ_ONLY_STENCIL) ? VK_ATTACHMENT_STORE_OP_NONE : VK_ATTACHMENT_STORE_OP_STORE;
         ri.pDepthAttachment = &dep;
-        if (c->dsv->tex->has_stencil) ri.pStencilAttachment = &dep;
+        if (c->dsv->tex->has_stencil) ri.pStencilAttachment = &sten;
     }
     pass_begin_render(c, w, h);
     pvkCmdBeginRendering(g_cur->cmd, &ri);

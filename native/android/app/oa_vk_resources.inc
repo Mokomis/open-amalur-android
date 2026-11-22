@@ -340,6 +340,8 @@ static HRESULT COM d_create_dsv(obj *d, oa_tex *t, const uint32_t *desc, oa_view
     o_addref(&t->o);
     v->format = t->vkfmt;
     v->level = level;
+    /* D3D11_DEPTH_STENCIL_VIEW_DESC: Format, ViewDimension, Flags, MipSlice. */
+    v->dsv_flags = desc ? desc[2] & (DSV_READ_ONLY_DEPTH | DSV_READ_ONLY_STENCIL) : 0;
     v->w = mip_dim(t->w, level);
     v->h = mip_dim(t->h, level);
     v->view = make_view(t, VK_IMAGE_VIEW_TYPE_2D, t->vkfmt, tex_aspect(t), level, 1, 0, 1, 0);
