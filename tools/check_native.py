@@ -3,7 +3,8 @@
 Uses the compile flags from native/build-plan.json, so include paths and
 macros match a real engine build. Translated guest sources and generated
 shader headers come from the game files and are not checked; shader headers
-are replaced with stubs. Needs only the NDK, so it runs on any host.
+are replaced with stubs. First-party sources are also held to -Wall -Wextra
+(see WARNINGS). Needs only the NDK, so it runs on any host.
 
     python tools/check_native.py --ndk <android-ndk> [name.c ...]
 """
@@ -19,6 +20,10 @@ import tempfile
 from shaders import SHADERS
 
 REPO = Path(__file__).resolve().parents[1]
+# First-party code must build without these warnings. Unused parameters and
+# partially initialized structs are common in the Win32/D3D shims, so they stay off.
+WARNINGS = ["-Wall", "-Wextra", "-Wno-unused-parameter", "-Wno-missing-field-initializers", "-Werror"]
+THIRD_PARTY = ("/faudio/", "/third-party/", "/dependencies/")
 
 
 def clang_path(ndk):
@@ -60,6 +65,8 @@ def main():
                     flags[index + 1] = str(args.ndk / path.split("/", 1)[1]) if path.startswith("@ndk/") \
                         else str(REPO / path)
             source = REPO / job["source"]
+            if not any(part in job["source"] for part in THIRD_PARTY):
+                flags += WARNINGS
             result = subprocess.run([str(clang), *flags, "-I", str(stubs), "-fsyntax-only", str(source)],
                                     capture_output=True, text=True)
             if result.returncode:

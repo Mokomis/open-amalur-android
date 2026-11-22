@@ -17,7 +17,6 @@ typedef struct {
 } Proxy;
 static Proxy proxies[64];
 static unsigned nproxies;
-static HMODULE library;
 static int initialized;
 uint32_t rt_self_last_target(void);
 const char *rt_thunk_name(uint32_t);
