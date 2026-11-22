@@ -186,7 +186,9 @@ int veil_native_scaling_read(const char *section, const char *key, char *value)
         // title content left. Match the inset of the cropped widescreen title.
         if (active_resolution == native_resolution && menu_width < 1280)
             left -= (1280 - menu_width) * 3 / 8;
-        snprintf(value, 8, "%d", left > 60 ? left : 60);
+        // left only moves down from 178; the upper bound keeps the value within
+        // the 8-byte buffer even for out-of-range display sizes.
+        snprintf(value, 8, "%d", left < 60 ? 60 : left > 178 ? 178 : left);
     } else if (!strcasecmp(key, "VeilOptionsWidth")) {
         int width = 720 * display_width / display_height;
         snprintf(value, 8, "%d", width >= 1080 && width < 1280 ? width : 1280);
