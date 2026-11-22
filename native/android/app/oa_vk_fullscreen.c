@@ -143,6 +143,11 @@ static void destroy_obj(obj *o) {
         if (v->tex) o_release(&v->tex->o);
         break;
     }
+    case K_DEPTH: {
+        oa_state *s = (oa_state *)o;
+        for (unsigned i = 0; i < 3; ++i) free(s->read_only[i]);
+        break;
+    }
     case K_SAMPLER: {
         oa_state *s = (oa_state *)o;
         for (unsigned i = 0; i < 2; ++i)

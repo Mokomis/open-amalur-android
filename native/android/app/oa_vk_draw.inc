@@ -261,10 +261,37 @@ static void draw_descriptors(oa_context *c, desc_build *d, int eager, int unifor
     write_stage(d, &c->vs->info, c->vs_cb, c->vs_srv, c->vs_smp, eager, uniforms_only, c->vs, 0);
 }
 
+/* D3D11 discards depth (and stencil) writes through a read-only depth-stencil
+   view. Mirror that with a twin of the depth state whose writes are disabled,
+   so the pipeline never writes an image the pass may also be sampling. The twin
+   is a distinct state, so it gets its own pipeline and prepared recipe. */
+static oa_state *pipeline_depth_state(oa_context *c)
+{
+    static oa_state default_state[3];
+    const uint32_t ro = c->dsv ? c->dsv->dsv_flags & (DSV_READ_ONLY_DEPTH | DSV_READ_ONLY_STENCIL) : 0;
+    if (!ro) return c->depth;
+    oa_state *twin = c->depth ? c->depth->read_only[ro - 1] : &default_state[ro - 1];
+    if (twin && twin->o.kind == K_DEPTH) return twin; /* already built */
+    if (c->depth && !twin) {
+        twin = calloc(1, sizeof(*twin));
+        if (!twin) return c->depth;
+        c->depth->read_only[ro - 1] = twin;
+    }
+    if (c->depth) memcpy(twin->desc, c->depth->desc, sizeof(twin->desc));
+    else {
+        twin->desc[0] = 1; /* D3D11 default: depth test on, LESS, stencil off */
+        twin->desc[2] = 2;
+    }
+    if (ro & DSV_READ_ONLY_DEPTH) twin->desc[1] = 0;            /* DepthWriteMask */
+    if (ro & DSV_READ_ONLY_STENCIL) twin->desc[4] &= ~0xff00u;  /* StencilWriteMask */
+    twin->o.kind = K_DEPTH;
+    return twin;
+}
+
 static VkPipeline draw_pipeline(oa_context *c, int fast) {
     pipe_key k = {0};
     k.vs = c->vs; k.ps = c->ps; k.layout = c->layout;
-    k.blend = c->blend; k.depth = c->depth; k.raster = c->raster; k.topology = c->topology;
+    k.blend = c->blend; k.depth = pipeline_depth_state(c); k.raster = c->raster; k.topology = c->topology;
     for (uint32_t i = 0; i < 8; ++i)
         k.rt[i] = c->rtv[i] ? c->rtv[i]->format : VK_FORMAT_UNDEFINED;
     k.ds = c->dsv ? c->dsv->format : VK_FORMAT_UNDEFINED;
@@ -378,7 +405,7 @@ static int prepare_draw(oa_context *c) {
     if (memcmp(c->blend_factor, c->set_blend, 16)) { pvkCmdSetBlendConstants(cmd, c->blend_factor); memcpy(c->set_blend, c->blend_factor, 16); }
     {
         VkBuffer bufs[4];
-        VkDeviceSize offs[4], strides[4], sizes[4];
+        VkDeviceSize offs[4], strides[4];
         int changed = 0;
         for (i = 0; i < 4; i++) {
             oa_buffer *b = c->vb[i];
@@ -392,11 +419,12 @@ static int prepare_draw(oa_context *c) {
                 offs[i] = 0;
                 strides[i] = 0;
             }
-            sizes[i] = VK_WHOLE_SIZE;
             if (bufs[i] != c->set_vb[i] || offs[i] != c->set_off[i] || strides[i] != c->set_stride[i]) changed = 1;
         }
         if (changed) {
-            pvkCmdBindVertexBuffers2(cmd, 0, 4, bufs, offs, sizes, strides);
+            /* No sizes: VK_WHOLE_SIZE in pSizes needs maintenance5, which isn't enabled.
+               Mesa drivers can treat it as a literal size and read past the buffer. */
+            pvkCmdBindVertexBuffers2(cmd, 0, 4, bufs, offs, NULL, strides);
             g_c_vb++;
             memcpy(c->set_vb, bufs, sizeof(bufs));
             memcpy(c->set_off, offs, sizeof(offs));

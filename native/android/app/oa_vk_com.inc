@@ -57,7 +57,9 @@ typedef struct {
     VkImageView view;
     VkFormat format;
     uint32_t desc[12], w, h, level, uid;
+    uint32_t dsv_flags; /* D3D11_DSV_READ_ONLY_DEPTH / _STENCIL for depth-stencil views */
 } oa_view;
+enum { DSV_READ_ONLY_DEPTH = 0x1, DSV_READ_ONLY_STENCIL = 0x2 };
 
 typedef struct {
     uint32_t name_hash;
@@ -83,11 +85,14 @@ typedef struct {
     uint32_t af_textures[16];
 } oa_shader;
 
-typedef struct {
+typedef struct oa_state {
     obj o;
     uint32_t desc[20];
     VkSampler sampler;
     VkSampler af_sampler[2];
+    /* Depth states only: the same state with depth and/or stencil writes
+       disabled, built on first use with a read-only depth-stencil view. */
+    struct oa_state *read_only[3];
 } oa_state;
 
 /* An occlusion predicate. The result is read back on the CPU from a finished frame, so a hidden object costs no Vulkan work at all. */
