@@ -1,6 +1,6 @@
 /* FAudio platform services for an Android NativeActivity. */
 #include "FAudio_internal.h"
-#include "experiments/ff1850-threading/O67-ORIGINAL-UI/veil-apk-update/veil_environment.h"
+#include "android/app/veil_environment.h"
 #include <aaudio/AAudio.h>
 #include <android/log.h>
 #include <errno.h>

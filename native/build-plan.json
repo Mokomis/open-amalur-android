@@ -2476,7 +2476,7 @@
         "-I",
         "native/.",
         "-I",
-        "native/experiments/ff1850-threading/O57-SIMULATION-PASS-AUDIT"
+        "native/threading/pass-audit"
       ],
       "inline": false
     },
@@ -2991,7 +2991,7 @@
         "-I",
         "native/dependencies/vulkan/include/.",
         "-I",
-        "native/experiments/ff1850-threading/O3R-RCPC/integration",
+        "native/threading/rcpc/integration",
         "-Wformat",
         "-Werror=format",
         "-DFAUDIO_ANDROID_PLATFORM",
@@ -2999,17 +2999,15 @@
         "-I",
         "native/third-party/FAudio-0c423758/include",
         "-I",
-        "native/experiments/ff1850-threading/O4B-DRAW-RCPC/build/20261111-231137-349380/objects/faudio",
+        "native/threading/draw-rcpc/integration",
         "-I",
-        "native/experiments/ff1850-threading/O4B-DRAW-RCPC/integration",
+        "native/threading/draw-rcpc",
         "-I",
-        "native/experiments/ff1850-threading/O4B-DRAW-RCPC",
+        "native/threading/rcpc-loop/integration",
         "-I",
-        "native/experiments/ff1850-threading/O3T-RCPC-LOOP/integration",
+        "native/threading/worker-budget",
         "-I",
-        "native/experiments/ff1850-threading/O3V-WORKER-BUDGET",
-        "-I",
-        "native/experiments/ff1850-threading/O4A-MATH-RCPC/integration"
+        "native/threading/math-rcpc/integration"
       ],
       "inline": false
     },
@@ -3041,7 +3039,7 @@
         "-I",
         "native/dependencies/vulkan/include/.",
         "-I",
-        "native/experiments/ff1850-threading/O3R-RCPC/integration",
+        "native/threading/rcpc/integration",
         "-Wformat",
         "-Werror=format",
         "-DFAUDIO_ANDROID_PLATFORM",
@@ -3049,13 +3047,11 @@
         "-I",
         "native/third-party/FAudio-0c423758/include",
         "-I",
-        "native/obj-O4A-MATH-RCPC/faudio",
+        "native/threading/math-rcpc",
         "-I",
-        "native/experiments/ff1850-threading/O4A-MATH-RCPC",
+        "native/threading/rcpc-loop/integration",
         "-I",
-        "native/experiments/ff1850-threading/O3T-RCPC-LOOP/integration",
-        "-I",
-        "native/experiments/ff1850-threading/O3V-WORKER-BUDGET"
+        "native/threading/worker-budget"
       ],
       "inline": false
     },
@@ -3129,7 +3125,7 @@
         "-I",
         "native/dependencies/vulkan/include/.",
         "-I",
-        "native/experiments/ff1850-threading/O3R-RCPC/integration",
+        "native/threading/rcpc/integration",
         "-Wformat",
         "-Werror=format",
         "-DFAUDIO_ANDROID_PLATFORM",
@@ -3137,11 +3133,9 @@
         "-I",
         "native/third-party/FAudio-0c423758/include",
         "-I",
-        "native/obj-O3U-VIS-PREPASS/faudio",
+        "native/threading/vis-prepass",
         "-I",
-        "native/experiments/ff1850-threading/O3U-VIS-PREPASS",
-        "-I",
-        "native/experiments/ff1850-threading/O3T-RCPC-LOOP/integration"
+        "native/threading/rcpc-loop/integration"
       ],
       "inline": false
     },
@@ -3185,7 +3179,7 @@
         "-I",
         "native/.",
         "-I",
-        "native/experiments/ff1850-threading/O57-SIMULATION-PASS-AUDIT"
+        "native/threading/pass-audit"
       ],
       "inline": false
     },
@@ -3292,7 +3286,7 @@
         "-I",
         "native/.",
         "-I",
-        "native/experiments/ff1850-threading/O57-SIMULATION-PASS-AUDIT"
+        "native/threading/pass-audit"
       ],
       "inline": false
     },
@@ -4407,7 +4401,7 @@
         "-I",
         "native/.",
         "-I",
-        "native/experiments/ff1850-threading/O4T-PAK-BIT-TOKENS/integration"
+        "native/threading/pak-tokens/integration"
       ],
       "inline": false
     },
@@ -4472,7 +4466,7 @@
         "-I",
         "native/.",
         "-I",
-        "native/experiments/ff1850-threading/O57-SIMULATION-PASS-AUDIT"
+        "native/threading/pass-audit"
       ],
       "inline": false
     },
@@ -4949,8 +4943,6 @@
         "-DFAUDIO_DISABLE_DEBUGCONFIGURATION",
         "-I",
         "native/third-party/FAudio-0c423758/include",
-        "-I",
-        "native/obj-O3R-RCPC/faudio",
         "-march=armv8-a"
       ],
       "inline": false
@@ -5457,7 +5449,7 @@
         "-I",
         "native/.",
         "-I",
-        "native/experiments/ff1850-threading/O4K-LOAD-VIDEO-AUDIO/integration"
+        "native/threading/load-video-audio/integration"
       ],
       "inline": false
     },
@@ -5706,7 +5698,7 @@
     },
     {
       "output": "steam_android.o",
-      "source": "native/experiments/ff1850-threading/O67-ORIGINAL-UI/veil-apk-update/steam_android.c",
+      "source": "native/android/app/steam_android.c",
       "flags": [
         "--target=aarch64-linux-android29",
         "-march=armv8-a",
@@ -5741,7 +5733,7 @@
     },
     {
       "output": "oa_vk_android_pass_batch.o",
-      "source": "native/experiments/ff1850-threading/O67-ORIGINAL-UI/veil-apk-update/oa_vk_fullscreen.c",
+      "source": "native/android/app/oa_vk_fullscreen.c",
       "flags": [
         "--target=aarch64-linux-android29",
         "-march=armv8-a",
@@ -5772,17 +5764,15 @@
         "-DFAUDIO_DISABLE_DEBUGCONFIGURATION",
         "-I",
         "native/third-party/FAudio-0c423758/include",
-        "-I",
-        "native/obj-O3P-SURFACE/faudio",
         "-DOA_STREAM_COMPARE",
         "-I",
-        "native/experiments/ff1850-threading/O66-PROTOTYPE-UI/20261113-033559-yi8gkmzf",
+        "native/ui/pause-prototype/present",
         "-I",
-        "native/experiments/ff1850-threading/O66-PROTOTYPE-UI",
+        "native/ui/pause-prototype",
         "-I",
-        "native/experiments/ff1850-threading/O50-STREAM-UPLOAD/integration",
+        "native/threading/stream-upload/integration",
         "-I",
-        "native/experiments/ff1850-threading/O3P-SURFACE",
+        "native/threading/surface",
         "-I",
         "native/.",
         "-I",
@@ -5790,9 +5780,9 @@
         "-I",
         "native/shared/work/v19-host",
         "-I",
-        "native/experiments/ff1850-threading/O67-ORIGINAL-UI/veil-apk-update",
+        "native/android/app",
         "-I",
-        "native/experiments/ff1850-threading/O67-ORIGINAL-UI/veil-waterfall"
+        "native/android/veil-waterfall"
       ]
     },
     {
@@ -5902,7 +5892,7 @@
     },
     {
       "output": "rt_files.o",
-      "source": "native/experiments/ff1850-threading/O67-ORIGINAL-UI/veil-apk-update/rt_files.c",
+      "source": "native/android/app/rt_files.c",
       "flags": [
         "--target=aarch64-linux-android29",
         "-march=armv8-a",
@@ -5937,7 +5927,7 @@
     },
     {
       "output": "rt_user32.o",
-      "source": "native/experiments/ff1850-threading/O67-ORIGINAL-UI/rt_user32.c",
+      "source": "native/android/rt_user32.c",
       "flags": [
         "--target=aarch64-linux-android29",
         "-march=armv8-a",
@@ -6115,7 +6105,7 @@
     },
     {
       "output": "engine_core_affinity.o",
-      "source": "native/experiments/ff1850-threading/O60-WARM-PLACEMENT/engine_core_affinity.c",
+      "source": "native/threading/warm-placement/engine_core_affinity.c",
       "flags": [
         "--target=aarch64-linux-android29",
         "-march=armv8-a",
@@ -6132,7 +6122,7 @@
         "-I",
         "native/.",
         "-I",
-        "native/experiments/ff1850-threading/O60-WARM-PLACEMENT"
+        "native/threading/warm-placement"
       ]
     },
     {
@@ -6207,7 +6197,7 @@
     },
     {
       "output": "gamepad_android.o",
-      "source": "native/experiments/ff1850-threading/O66-PROTOTYPE-UI/20261113-033559-yi8gkmzf/gamepad_android.c",
+      "source": "native/ui/pause-prototype/present/gamepad_android.c",
       "flags": [
         "--target=aarch64-linux-android29",
         "-march=armv8-a",
@@ -6238,17 +6228,15 @@
         "-DFAUDIO_DISABLE_DEBUGCONFIGURATION",
         "-I",
         "native/third-party/FAudio-0c423758/include",
-        "-I",
-        "native/obj-O3P-SURFACE/faudio",
         "-DOA_STREAM_COMPARE",
         "-I",
-        "native/experiments/ff1850-threading/O66-PROTOTYPE-UI/20261113-033559-yi8gkmzf",
+        "native/ui/pause-prototype/present",
         "-I",
-        "native/experiments/ff1850-threading/O66-PROTOTYPE-UI",
+        "native/ui/pause-prototype",
         "-I",
-        "native/experiments/ff1850-threading/O50-STREAM-UPLOAD/integration",
+        "native/threading/stream-upload/integration",
         "-I",
-        "native/experiments/ff1850-threading/O3P-SURFACE",
+        "native/threading/surface",
         "-I",
         "native/.",
         "-I",
@@ -6539,7 +6527,7 @@
     },
     {
       "output": "native_app.o",
-      "source": "native/experiments/ff1850-threading/O67-ORIGINAL-UI/veil-apk-update/native_app.c",
+      "source": "native/android/app/native_app.c",
       "flags": [
         "--target=aarch64-linux-android29",
         "-march=armv8-a",
@@ -6570,17 +6558,15 @@
         "-DFAUDIO_DISABLE_DEBUGCONFIGURATION",
         "-I",
         "native/third-party/FAudio-0c423758/include",
-        "-I",
-        "native/obj-O3P-SURFACE/faudio",
         "-DOA_STREAM_COMPARE",
         "-I",
-        "native/experiments/ff1850-threading/O66-PROTOTYPE-UI/20261113-033559-yi8gkmzf",
+        "native/ui/pause-prototype/present",
         "-I",
-        "native/experiments/ff1850-threading/O66-PROTOTYPE-UI",
+        "native/ui/pause-prototype",
         "-I",
-        "native/experiments/ff1850-threading/O50-STREAM-UPLOAD/integration",
+        "native/threading/stream-upload/integration",
         "-I",
-        "native/experiments/ff1850-threading/O3P-SURFACE",
+        "native/threading/surface",
         "-I",
         "native/.",
         "-I",
@@ -6588,14 +6574,14 @@
         "-I",
         "native/shared/work/v19-host",
         "-I",
-        "native/experiments/ff1850-threading/O67-ORIGINAL-UI/veil-waterfall",
+        "native/android/veil-waterfall",
         "-I",
-        "native/experiments/ff1850-threading/O67-ORIGINAL-UI/veil-dialogue-circle"
+        "native/android/veil-dialogue-circle"
       ]
     },
     {
       "output": "rt_sync.o",
-      "source": "native/experiments/ff1850-threading/O3O-WAKEONE/rt_sync.c",
+      "source": "native/threading/wake-one/rt_sync.c",
       "flags": [
         "--target=aarch64-linux-android29",
         "-march=armv8-a",
@@ -6625,14 +6611,12 @@
         "-DFAUDIO_ANDROID_PLATFORM",
         "-DFAUDIO_DISABLE_DEBUGCONFIGURATION",
         "-I",
-        "native/third-party/FAudio-0c423758/include",
-        "-I",
-        "native/obj-O3O-WAKEONE/faudio"
+        "native/third-party/FAudio-0c423758/include"
       ]
     },
     {
       "output": "performance.o",
-      "source": "native/experiments/ff1850-threading/O60-WARM-PLACEMENT/20261112-233340-qbwo4fxr/performance.c",
+      "source": "native/threading/warm-placement/performance/performance.c",
       "flags": [
         "--target=aarch64-linux-android29",
         "-march=armv8-a",
@@ -6649,7 +6633,7 @@
         "-I",
         "native/.",
         "-I",
-        "native/experiments/ff1850-threading/O60-WARM-PLACEMENT",
+        "native/threading/warm-placement",
         "-DOA_BUILD_PROFILE=\"O4B-DRAW-RCPC\"",
         "-I",
         "native/dxvk/include/native/windows",
@@ -6660,7 +6644,7 @@
         "-I",
         "native/dependencies/vulkan/include/.",
         "-I",
-        "native/experiments/ff1850-threading/O3R-RCPC/integration",
+        "native/threading/rcpc/integration",
         "-Wformat",
         "-Werror=format",
         "-DFAUDIO_ANDROID_PLATFORM",
@@ -6668,24 +6652,22 @@
         "-I",
         "native/third-party/FAudio-0c423758/include",
         "-I",
-        "native/experiments/ff1850-threading/O4B-DRAW-RCPC/integration",
+        "native/threading/draw-rcpc/integration",
         "-I",
-        "native/experiments/ff1850-threading/O4B-DRAW-RCPC",
+        "native/threading/draw-rcpc",
         "-I",
-        "native/experiments/ff1850-threading/O3T-RCPC-LOOP/integration",
+        "native/threading/rcpc-loop/integration",
         "-I",
-        "native/experiments/ff1850-threading/O3V-WORKER-BUDGET",
+        "native/threading/worker-budget",
         "-I",
-        "native/experiments/ff1850-threading/O4A-MATH-RCPC/integration",
+        "native/threading/math-rcpc/integration",
         "-I",
-        "native/experiments/ff1850-threading/O57-SIMULATION-PASS-AUDIT/20261112-174548-5bw0i0r6",
-        "-I",
-        "native/experiments/ff1850-threading/O57-SIMULATION-PASS-AUDIT"
+        "native/threading/pass-audit"
       ]
     },
     {
       "output": "rcpc_copy_runtime.o",
-      "source": "native/experiments/ff1850-threading/O51-COMBAT-SIMULATION/texture-copy/clean/rcpc_copy_runtime.c",
+      "source": "native/threading/combat-simulation/texture-copy/clean/rcpc_copy_runtime.c",
       "flags": [
         "--target=aarch64-linux-android29",
         "-march=armv8-a",
@@ -6702,12 +6684,12 @@
         "-I",
         "native/.",
         "-I",
-        "native/experiments/ff1850-threading/O3R-RCPC/integration"
+        "native/threading/rcpc/integration"
       ]
     },
     {
       "output": "rcpc_copy_capture.o",
-      "source": "native/experiments/ff1850-threading/O3R-RCPC/integration/rcpc_copy_capture.c",
+      "source": "native/threading/rcpc/integration/rcpc_copy_capture.c",
       "flags": [
         "--target=aarch64-linux-android29",
         "-fPIC",
@@ -6737,14 +6719,12 @@
         "-DFAUDIO_DISABLE_DEBUGCONFIGURATION",
         "-I",
         "native/third-party/FAudio-0c423758/include",
-        "-I",
-        "native/obj-O3R-RCPC/faudio",
         "-march=armv8-a"
       ]
     },
     {
       "output": "rcpc_rep.o",
-      "source": "native/experiments/ff1850-threading/O3T-RCPC-LOOP/integration/rcpc_loop_control.c",
+      "source": "native/threading/rcpc-loop/integration/rcpc_loop_control.c",
       "flags": [
         "--target=aarch64-linux-android29",
         "-march=armv8-a",
@@ -6770,20 +6750,18 @@
         "-I",
         "native/dependencies/vulkan/include/.",
         "-I",
-        "native/experiments/ff1850-threading/O3R-RCPC/integration",
+        "native/threading/rcpc/integration",
         "-Wformat",
         "-Werror=format",
         "-DFAUDIO_ANDROID_PLATFORM",
         "-DFAUDIO_DISABLE_DEBUGCONFIGURATION",
         "-I",
-        "native/third-party/FAudio-0c423758/include",
-        "-I",
-        "native/obj-O3T-RCPC-LOOP/faudio"
+        "native/third-party/FAudio-0c423758/include"
       ]
     },
     {
       "output": "rcpc_rep_R.o",
-      "source": "native/experiments/ff1850-threading/O3R-RCPC/integration/rcpc_rep.c",
+      "source": "native/threading/rcpc/integration/rcpc_rep.c",
       "flags": [
         "--target=aarch64-linux-android29",
         "-fPIC",
@@ -6813,8 +6791,6 @@
         "-DFAUDIO_DISABLE_DEBUGCONFIGURATION",
         "-I",
         "native/third-party/FAudio-0c423758/include",
-        "-I",
-        "native/obj-O3R-RCPC/faudio",
         "-march=armv8-a+rcpc"
       ],
       "rename": [
@@ -6824,7 +6800,7 @@
     },
     {
       "output": "rcpc_rep_T.o",
-      "source": "native/experiments/ff1850-threading/O3T-RCPC-LOOP/rcpc_rep.c",
+      "source": "native/threading/rcpc-loop/rcpc_rep.c",
       "flags": [
         "--target=aarch64-linux-android29",
         "-fPIC",
@@ -6849,22 +6825,20 @@
         "-I",
         "native/dependencies/vulkan/include/.",
         "-I",
-        "native/experiments/ff1850-threading/O3R-RCPC/integration",
+        "native/threading/rcpc/integration",
         "-Wformat",
         "-Werror=format",
         "-DFAUDIO_ANDROID_PLATFORM",
         "-DFAUDIO_DISABLE_DEBUGCONFIGURATION",
         "-I",
         "native/third-party/FAudio-0c423758/include",
-        "-I",
-        "native/obj-O3T-RCPC-LOOP/faudio",
         "-march=armv8-a+rcpc",
         "-Doa_rcpc_rep_words=oa_rcpc_rep_words_T"
       ]
     },
     {
       "output": "oa_vis_prepass.o",
-      "source": "native/experiments/ff1850-threading/O3V-WORKER-BUDGET/oa_vis_prepass.c",
+      "source": "native/threading/worker-budget/oa_vis_prepass.c",
       "flags": [
         "--target=aarch64-linux-android29",
         "-march=armv8-a",
@@ -6890,7 +6864,7 @@
         "-I",
         "native/dependencies/vulkan/include/.",
         "-I",
-        "native/experiments/ff1850-threading/O3R-RCPC/integration",
+        "native/threading/rcpc/integration",
         "-Wformat",
         "-Werror=format",
         "-DFAUDIO_ANDROID_PLATFORM",
@@ -6898,16 +6872,14 @@
         "-I",
         "native/third-party/FAudio-0c423758/include",
         "-I",
-        "native/obj-O3V-WORKER-BUDGET/faudio",
+        "native/threading/worker-budget",
         "-I",
-        "native/experiments/ff1850-threading/O3V-WORKER-BUDGET",
-        "-I",
-        "native/experiments/ff1850-threading/O3T-RCPC-LOOP/integration"
+        "native/threading/rcpc-loop/integration"
       ]
     },
     {
       "output": "oa_vis_predicate.o",
-      "source": "native/experiments/ff1850-threading/O4S-CACHE-VIS/integration/oa_vis_predicate.c",
+      "source": "native/threading/cache-vis/integration/oa_vis_predicate.c",
       "flags": [
         "--target=aarch64-linux-android29",
         "-march=armv8-a",
@@ -6933,7 +6905,7 @@
         "-I",
         "native/dependencies/vulkan/include/.",
         "-I",
-        "native/experiments/ff1850-threading/O3R-RCPC/integration",
+        "native/threading/rcpc/integration",
         "-Wformat",
         "-Werror=format",
         "-DFAUDIO_ANDROID_PLATFORM",
@@ -6941,16 +6913,14 @@
         "-I",
         "native/third-party/FAudio-0c423758/include",
         "-I",
-        "native/obj-O3U-VIS-PREPASS/faudio",
+        "native/threading/vis-prepass",
         "-I",
-        "native/experiments/ff1850-threading/O3U-VIS-PREPASS",
-        "-I",
-        "native/experiments/ff1850-threading/O3T-RCPC-LOOP/integration"
+        "native/threading/rcpc-loop/integration"
       ]
     },
     {
       "output": "oa_math_rcpc.o",
-      "source": "native/experiments/ff1850-threading/O4A-MATH-RCPC/integration/oa_math_rcpc.c",
+      "source": "native/threading/math-rcpc/integration/oa_math_rcpc.c",
       "flags": [
         "--target=aarch64-linux-android29",
         "-march=armv8-a+rcpc",
@@ -6976,7 +6946,7 @@
         "-I",
         "native/dependencies/vulkan/include/.",
         "-I",
-        "native/experiments/ff1850-threading/O3R-RCPC/integration",
+        "native/threading/rcpc/integration",
         "-Wformat",
         "-Werror=format",
         "-DFAUDIO_ANDROID_PLATFORM",
@@ -6984,18 +6954,16 @@
         "-I",
         "native/third-party/FAudio-0c423758/include",
         "-I",
-        "native/obj-O4A-MATH-RCPC/faudio",
+        "native/threading/math-rcpc",
         "-I",
-        "native/experiments/ff1850-threading/O4A-MATH-RCPC",
+        "native/threading/rcpc-loop/integration",
         "-I",
-        "native/experiments/ff1850-threading/O3T-RCPC-LOOP/integration",
-        "-I",
-        "native/experiments/ff1850-threading/O3V-WORKER-BUDGET"
+        "native/threading/worker-budget"
       ]
     },
     {
       "output": "oa_math_rcpc_runtime.o",
-      "source": "native/experiments/ff1850-threading/O4A-MATH-RCPC/integration/oa_math_rcpc_runtime.c",
+      "source": "native/threading/math-rcpc/integration/oa_math_rcpc_runtime.c",
       "flags": [
         "--target=aarch64-linux-android29",
         "-march=armv8-a",
@@ -7021,7 +6989,7 @@
         "-I",
         "native/dependencies/vulkan/include/.",
         "-I",
-        "native/experiments/ff1850-threading/O3R-RCPC/integration",
+        "native/threading/rcpc/integration",
         "-Wformat",
         "-Werror=format",
         "-DFAUDIO_ANDROID_PLATFORM",
@@ -7029,18 +6997,16 @@
         "-I",
         "native/third-party/FAudio-0c423758/include",
         "-I",
-        "native/obj-O4A-MATH-RCPC/faudio",
+        "native/threading/math-rcpc",
         "-I",
-        "native/experiments/ff1850-threading/O4A-MATH-RCPC",
+        "native/threading/rcpc-loop/integration",
         "-I",
-        "native/experiments/ff1850-threading/O3T-RCPC-LOOP/integration",
-        "-I",
-        "native/experiments/ff1850-threading/O3V-WORKER-BUDGET"
+        "native/threading/worker-budget"
       ]
     },
     {
       "output": "oa_draw_rcpc.o",
-      "source": "native/experiments/ff1850-threading/O4B-DRAW-RCPC/integration/oa_draw_rcpc.c",
+      "source": "native/threading/draw-rcpc/integration/oa_draw_rcpc.c",
       "flags": [
         "--target=aarch64-linux-android29",
         "-march=armv8-a+rcpc",
@@ -7066,7 +7032,7 @@
         "-I",
         "native/dependencies/vulkan/include/.",
         "-I",
-        "native/experiments/ff1850-threading/O3R-RCPC/integration",
+        "native/threading/rcpc/integration",
         "-Wformat",
         "-Werror=format",
         "-DFAUDIO_ANDROID_PLATFORM",
@@ -7074,22 +7040,20 @@
         "-I",
         "native/third-party/FAudio-0c423758/include",
         "-I",
-        "native/experiments/ff1850-threading/O4B-DRAW-RCPC/build/20261111-231137-349380/objects/faudio",
+        "native/threading/draw-rcpc/integration",
         "-I",
-        "native/experiments/ff1850-threading/O4B-DRAW-RCPC/integration",
+        "native/threading/draw-rcpc",
         "-I",
-        "native/experiments/ff1850-threading/O4B-DRAW-RCPC",
+        "native/threading/rcpc-loop/integration",
         "-I",
-        "native/experiments/ff1850-threading/O3T-RCPC-LOOP/integration",
+        "native/threading/worker-budget",
         "-I",
-        "native/experiments/ff1850-threading/O3V-WORKER-BUDGET",
-        "-I",
-        "native/experiments/ff1850-threading/O4A-MATH-RCPC/integration"
+        "native/threading/math-rcpc/integration"
       ]
     },
     {
       "output": "oa_draw_rcpc_runtime.o",
-      "source": "native/experiments/ff1850-threading/O4B-DRAW-RCPC/integration/oa_draw_rcpc_runtime.c",
+      "source": "native/threading/draw-rcpc/integration/oa_draw_rcpc_runtime.c",
       "flags": [
         "--target=aarch64-linux-android29",
         "-march=armv8-a",
@@ -7115,7 +7079,7 @@
         "-I",
         "native/dependencies/vulkan/include/.",
         "-I",
-        "native/experiments/ff1850-threading/O3R-RCPC/integration",
+        "native/threading/rcpc/integration",
         "-Wformat",
         "-Werror=format",
         "-DFAUDIO_ANDROID_PLATFORM",
@@ -7123,22 +7087,20 @@
         "-I",
         "native/third-party/FAudio-0c423758/include",
         "-I",
-        "native/experiments/ff1850-threading/O4B-DRAW-RCPC/build/20261111-231137-349380/objects/faudio",
+        "native/threading/draw-rcpc/integration",
         "-I",
-        "native/experiments/ff1850-threading/O4B-DRAW-RCPC/integration",
+        "native/threading/draw-rcpc",
         "-I",
-        "native/experiments/ff1850-threading/O4B-DRAW-RCPC",
+        "native/threading/rcpc-loop/integration",
         "-I",
-        "native/experiments/ff1850-threading/O3T-RCPC-LOOP/integration",
+        "native/threading/worker-budget",
         "-I",
-        "native/experiments/ff1850-threading/O3V-WORKER-BUDGET",
-        "-I",
-        "native/experiments/ff1850-threading/O4A-MATH-RCPC/integration"
+        "native/threading/math-rcpc/integration"
       ]
     },
     {
       "output": "present_overlap.o",
-      "source": "native/experiments/ff1850-threading/O57-SIMULATION-PASS-AUDIT/present_overlap.c",
+      "source": "native/threading/pass-audit/present_overlap.c",
       "flags": [
         "--target=aarch64-linux-android29",
         "-march=armv8-a",
@@ -7155,78 +7117,78 @@
         "-I",
         "native/.",
         "-I",
-        "native/experiments/ff1850-threading/O57-SIMULATION-PASS-AUDIT"
+        "native/threading/pass-audit"
       ]
     },
     {
       "output": "veil_native_scaling.o",
-      "source": "native/experiments/ff1850-threading/O67-ORIGINAL-UI/veil-apk-update/veil_native_scaling.c",
+      "source": "native/android/app/veil_native_scaling.c",
       "flags": [
         "--target=aarch64-linux-android29",
         "-O2",
         "-fPIC",
         "-I",
-        "native/experiments/ff1850-threading/O67-ORIGINAL-UI/veil-apk-update"
+        "native/android/app"
       ]
     },
     {
       "output": "veil_shadow_settings.o",
-      "source": "native/experiments/ff1850-threading/O67-ORIGINAL-UI/veil-apk-update/veil_shadow_settings.c",
+      "source": "native/android/app/veil_shadow_settings.c",
       "flags": [
         "--target=aarch64-linux-android29",
         "-O2",
         "-fPIC",
         "-I",
-        "native/experiments/ff1850-threading/O67-ORIGINAL-UI/veil-apk-update"
+        "native/android/app"
       ]
     },
     {
       "output": "veil_shadow_hook.o",
-      "source": "native/experiments/ff1850-threading/O67-ORIGINAL-UI/veil-apk-update/veil_shadow_hook.S",
+      "source": "native/android/app/veil_shadow_hook.S",
       "flags": [
         "--target=aarch64-linux-android29",
         "-O2",
         "-fPIC",
         "-I",
-        "native/experiments/ff1850-threading/O67-ORIGINAL-UI/veil-apk-update"
+        "native/android/app"
       ]
     },
     {
       "output": "veil_transmog.o",
-      "source": "native/experiments/ff1850-threading/O67-ORIGINAL-UI/veil-apk-update/veil_transmog.c",
+      "source": "native/android/app/veil_transmog.c",
       "flags": [
         "--target=aarch64-linux-android29",
         "-O2",
         "-fPIC",
         "-I",
-        "native/experiments/ff1850-threading/O67-ORIGINAL-UI/veil-apk-update"
+        "native/android/app"
       ]
     },
     {
       "output": "veil_transmog_trampolines.o",
-      "source": "native/experiments/ff1850-threading/O67-ORIGINAL-UI/veil-apk-update/veil_transmog_trampolines.S",
+      "source": "native/android/app/veil_transmog_trampolines.S",
       "flags": [
         "--target=aarch64-linux-android29",
         "-O2",
         "-fPIC",
         "-I",
-        "native/experiments/ff1850-threading/O67-ORIGINAL-UI/veil-apk-update"
+        "native/android/app"
       ]
     },
     {
       "output": "veil_tablet.o",
-      "source": "native/experiments/ff1850-threading/O67-ORIGINAL-UI/veil-apk-update/release/veil_tablet.c",
+      "source": "native/android/app/release/veil_tablet.c",
       "flags": [
         "--target=aarch64-linux-android29",
         "-O2",
         "-fPIC",
         "-I",
-        "native/experiments/ff1850-threading/O67-ORIGINAL-UI/veil-apk-update"
+        "native/android/app"
       ]
     },
     {
       "output": "veil_environment.o",
-      "source": "native/experiments/ff1850-threading/O67-ORIGINAL-UI/veil-apk-update/veil_environment.c",
+      "source": "native/android/app/veil_environment.c",
       "flags": [
         "--target=aarch64-linux-android29",
         "-O2",
@@ -7235,35 +7197,35 @@
     },
     {
       "output": "veil_tablet_trampoline.o",
-      "source": "native/experiments/ff1850-threading/O67-ORIGINAL-UI/veil-apk-update/tablet/veil_tablet_trampoline.S",
+      "source": "native/android/app/tablet/veil_tablet_trampoline.S",
       "flags": [
         "--target=aarch64-linux-android29",
         "-O2",
         "-fPIC",
         "-I",
-        "native/experiments/ff1850-threading/O67-ORIGINAL-UI/veil-apk-update"
+        "native/android/app"
       ]
     },
     {
       "output": "waterfall_state.o",
-      "source": "native/experiments/ff1850-threading/O67-ORIGINAL-UI/veil-waterfall/waterfall_state.c",
+      "source": "native/android/veil-waterfall/waterfall_state.c",
       "flags": [
         "--target=aarch64-linux-android29",
         "-O2",
         "-fPIC",
         "-I",
-        "native/experiments/ff1850-threading/O67-ORIGINAL-UI/veil-apk-update"
+        "native/android/app"
       ]
     },
     {
       "output": "veil_dialogue_touch.o",
-      "source": "native/experiments/ff1850-threading/O67-ORIGINAL-UI/veil-dialogue-circle/veil_dialogue_touch.c",
+      "source": "native/android/veil-dialogue-circle/veil_dialogue_touch.c",
       "flags": [
         "--target=aarch64-linux-android29",
         "-O2",
         "-fPIC",
         "-I",
-        "native/experiments/ff1850-threading/O67-ORIGINAL-UI/veil-apk-update"
+        "native/android/app"
       ]
     }
   ],

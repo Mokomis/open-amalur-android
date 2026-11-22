@@ -5,7 +5,7 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
-SOURCE = ROOT / 'native/experiments/ff1850-threading/O67-ORIGINAL-UI/veil-apk-update/veil_native_scaling.c'
+SOURCE = ROOT / 'native/android/app/veil_native_scaling.c'
 HARNESS = r'''
 #include <assert.h>
 #include <stdio.h>
