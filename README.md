@@ -20,7 +20,7 @@ Veil draws visual inspiration from other interfaces, including Edge for Skyrim. 
 
 ## Download and install
 
-**Open Amalur for Android v0.1.26** · [Download the latest APK](https://github.com/Mokomis/open-amalur-android/releases/latest) · [v0.1.26 release notes](https://github.com/Mokomis/open-amalur-android/releases/tag/v0.1.26)
+**Open Amalur for Android v0.1.27** · [Download the latest APK](https://github.com/Mokomis/open-amalur-android/releases/latest) · [v0.1.27 release notes](https://github.com/Mokomis/open-amalur-android/releases/tag/v0.1.27)
 
 ### Minimum Android requirements
 
@@ -44,7 +44,7 @@ For a new setup on a device that meets the requirements above:
 
 | Device | GPU | Open Amalur status |
 | --- | --- | --- |
-| OPPO Pad Mini (OPD2515) | Adreno 829 | Tested on v0.1.26 with the system driver. Verified setup, the main menu, menu navigation, and character naming. |
+| OPPO Pad Mini (OPD2515) | Adreno 829 | Tested on v0.1.27 with the system driver. Verified setup, the main menu, menu navigation, character naming, and a Razer Kishi V3 Pro controller with rumble. |
 | AYN Thor Max (16 GB) | Adreno 740 | [A player reported it working](https://github.com/Mokomis/open-amalur-android/issues/1#issuecomment-6949032454) after the character creation fixes on an earlier release. |
 | Retroid Pocket 5 | Adreno 650 | The tester’s system driver exposed Vulkan 1.1. DD-Turnip reached gameplay with Vulkan 1.3. A later GPU crash is under investigation. [Latest Retroid test APK](https://github.com/Mokomis/open-amalur-android/releases/tag/v0.1.26-retroid-turnip-tutorial) |
 | POCO X7 Pro | Mali-G720 | Startup failure reported with the regular APK. The [PanVK test APK](https://github.com/Mokomis/open-amalur-android/releases/tag/v0.1.26-poco-panvk) reached the tutorial. [Rendering problems are under investigation](https://github.com/Mokomis/open-amalur-android/issues/3). |
