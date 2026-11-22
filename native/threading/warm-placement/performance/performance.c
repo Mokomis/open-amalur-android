@@ -36,7 +36,7 @@ int oa_fast_engine_cores=0;
 int oa_adpf_mode=0;
 extern unsigned oa_adpf_active_mask;
 extern uint64_t oa_adpf_reports[2];
-static char adpf_60_control[2048];
+static char adpf_disable_control[2048];
 static char engine_core_control[2048];
 static char texture_copy_control[2048];
 extern int oa_texture_copy_mode;
@@ -107,7 +107,8 @@ static void control_read(void){
  oa_rcpc_loop_set_mode(access(rcpc_loop_control_path,F_OK)==0);
  oa_rcpc_copy_capture_poll(access(rcpc_copy_capture_path,F_OK)==0,"rcpc-copy-capture.json");
 
- __atomic_store_n(&oa_adpf_mode, access(adpf_60_control,F_OK)==0, __ATOMIC_RELAXED);
+ /* Android performance hints are on by default; an adpf-disable file turns them off. */
+ __atomic_store_n(&oa_adpf_mode, access(adpf_disable_control,F_OK)!=0, __ATOMIC_RELAXED);
  read_engine_cores();
  __atomic_store_n(&oa_fast_handwritten_draw, access(handwritten_draw_enable, F_OK)==0, __ATOMIC_RELAXED);
 read_pass_batch_control();read_draw_control();read_upload_control();int registry=access(registry_control,F_OK)!=0;int prev_registry=__atomic_exchange_n(&oa_fast_map_registry,registry,__ATOMIC_RELAXED);if(prev_registry!=registry)rt_log("PERF active-range map registry %s",registry?"ON":"OFF");int fast=access(mapping_control,F_OK)!=0;int was=__atomic_exchange_n(&oa_fast_mapping,fast,__ATOMIC_RELAXED);if(was!=fast)rt_log("PERF fast mapping %s",fast?"ON":"OFF");
@@ -135,7 +136,7 @@ void oa_perf_start(const char*root){
  snprintf(sync_mode_control,sizeof sync_mode_control,"%s/sync-mode",root);
  snprintf(semaphore_wake_one_control,sizeof semaphore_wake_one_control,"%s/semaphore-wake-one",root);
 
- snprintf(adpf_60_control,sizeof adpf_60_control,"%s/adpf-60-enable",root);
+ snprintf(adpf_disable_control,sizeof adpf_disable_control,"%s/adpf-disable",root);
  snprintf(engine_core_control,sizeof engine_core_control,"%s/fast-engine-cores",root);
  snprintf(handwritten_draw_enable,sizeof handwritten_draw_enable,"%s/handwritten-draw-enable",root);
 
