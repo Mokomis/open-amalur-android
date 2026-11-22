@@ -7,9 +7,9 @@ extern int oa_diagnostics_enabled;
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <stdatomic.h>
 #ifdef __ANDROID__
 #include <android/log.h>
-#include <stdatomic.h>
 #endif
 
 uintptr_t x86_mem_base;
@@ -679,7 +679,7 @@ void rt_module_init_tree(RtModule *m, X86Ctx *ctx)
     else m->initialized = 1;
 }
 
-#ifdef __ANDROID__
+#if defined(__ANDROID__) || defined(_WIN32)
 enum { INTRO_INACTIVE, INTRO_PLAYING, INTRO_SKIP_REQUESTED, INTRO_COMPLETING };
 static atomic_int intro_movie_state;
 static atomic_uint intro_movie_handle;
@@ -792,7 +792,7 @@ void rt_resolve_imports(RtModule *m)
         const char *dll = rt_str(m->base + ld32(d + 12));
         uint32_t lookup = ld32(d) ? ld32(d) : ld32(d + 16), iat = ld32(d + 16);
         RtModule *target = rt_find_module(dll);
-#ifdef __ANDROID__
+#if defined(__ANDROID__) || defined(_WIN32)
         const int hook_intro = !m->is_dll && !strcasecmp(dll, "binkw32.dll");
         if (hook_intro)
             init_intro_bink(target);
@@ -809,7 +809,7 @@ void rt_resolve_imports(RtModule *m)
             if (ent & 0x80000000u) snprintf(name, sizeof name, "#%u", ent & 0xFFFF);
             else snprintf(name, sizeof name, "%s", rt_str(m->base + ent + 2));
             uint32_t addr = target ? rt_export(target, name) : 0;
-#ifdef __ANDROID__
+#if defined(__ANDROID__) || defined(_WIN32)
             if (hook_intro && bink_open && bink_should_skip && bink_close &&
                 (addr == bink_open || addr == bink_should_skip || addr == bink_close))
                 addr = rt_hle_thunk(dll, name);

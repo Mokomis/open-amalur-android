@@ -111,3 +111,34 @@ The launcher reads shared game files directly. It checks the game version and va
 A fresh Windows checkout regenerated the game, Bink and DirectX compiler translations from local files, compiled the 362 native objects, and linked the Android library. The stock-menu development APK built with that library imported a copied game folder on an OPPO Pad Mini (OPD2515) with Android Internet permission omitted. The engine mounted Fatesworn `cs:13757` when the matching archive was present and reached the base-game menu after the archive was removed from the test installation.
 
 Two independent Windows builds of the Veil 0.1.3 engine produced identical libraries. On the OPPO Pad Mini, the release launcher imported the full game offline, rejected a mismatched engine file, and launched Veil with the locally built engine and Fatesworn. The generated waterfall played in the Patron portrait. An in-place offline upgrade over the prior Veil build reused its game files and preserved the saves, graphics settings and touch layout.
+
+## Windows x64 development build
+
+Use the same supported Re-Reckoning files, LLVM-mingw and Python environment as the Android build. Windows compiles the original engine and Bink translation as an x64 executable and uses the shared Vulkan renderer and DXBC reflection code. The shared shader build uses the NDK's Windows `glslc`.
+
+```powershell
+$python = '.\.venv\Scripts\python.exe'
+& $python tools/build_native.py --prepare-only --game-dir $game --llvm-bin $llvm --output build\translation
+& $python tools/build_windows.py --translation build\translation --llvm-bin $llvm --ndk $ndk --output build\windows
+
+$apk = 'C:\path\to\open-amalur-veil-0.1.10-release.apk'
+$profile = Join-Path $PWD 'build\windows-profile'
+& $python tools/install_windows_veil.py --game-dir $game --apk $apk --profile $profile
+& .\build\windows\OpenAmalur.exe $game $profile "$profile\assets"
+```
+
+The Windows installer applies the signed release's Veil recipe into a local profile using your game files. It keeps the original archives read-only and replaces Android Hardware Scaling with Windows display modes in the Resolution tab. The profile also holds Windows settings, saves and runtime logs.
+
+Windows Options → Resolution includes every distinct size reported by Windows for attached desktop displays, plus the current desktop size and the existing 1920×1080 and 960×540 presets. Duplicate refresh-rate/color-depth modes share one size; portrait dimensions retain their orientation. Selections are saved by dimensions and take effect after restarting the game. The list is detected again each launch; a saved size that is no longer available falls back to 1920×1080. In Windowed mode this selects the game render/window size. Borderless Fullscreen covers the monitor at its desktop size while rendering at the selected resolution. Fullscreen temporarily switches the primary monitor to the selected resolution and restores the desktop when the game loses focus or exits. If a fullscreen size is unavailable on that monitor, a message explains the fallback to Borderless Fullscreen. Window Mode and Resolution changes apply after restarting.
+
+For Windows testing, launch with `VK_LOADER_LAYERS_DISABLE=~implicit~` and remove `VK_INSTANCE_LAYERS` to keep implicit Vulkan overlays disabled.
+
+Windows audio queues six mixer quanta through waveOut. At the game's 48 kHz / 480-frame configuration this provides 60 ms of buffering: the previous 30 ms queue ran dry when the output device returned buffers in 40 ms batches. Verify output with Windows loopback capture during music and outdoor gameplay. Android uses AAudio and does not share this queue.
+
+For every Windows change, check the corresponding Android implementation and whether the live Android release needs the same fix. Verify relevant Android behavior where possible and record any remaining device-test limits.
+
+In Options, LB/RB switch categories, the D-pad or left stick selects rows, left/right adjusts values, A opens actions, and B goes back. Windows maps shoulder presses to the engine's category trigger actions only while Options is visible, matching Android's existing adapter. This handles both title-screen and paused-game Options without changing gameplay shoulder buttons.
+
+Android continues to use immersive fullscreen. Its floating windows, split-screen and desktop windowing are managed by Android and the device manufacturer; the Windows-only mode selector is not installed in Android menus.
+
+Run `python3 tools/tests/test_windows_window_mode.py` to check Windows preference defaults, valid/invalid choices, persistence and restart semantics using a host file-operation shim. Real Win32 window sizing, monitor switching and focus restoration require an interactive Windows session.

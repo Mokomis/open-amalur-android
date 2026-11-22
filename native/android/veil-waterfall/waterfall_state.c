@@ -10,7 +10,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#ifndef _WIN32
 #include <sys/mman.h>
+#endif
 #include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
@@ -21,7 +23,9 @@ static uint64_t last_seen;
 static VeilWaterfallRect portrait;
 static AAsset *clip_asset;
 static const uint8_t *clip_bytes;
+#ifndef _WIN32
 static size_t clip_length;
+#endif
 
 static uint64_t monotonic_ms(void)
 {
@@ -35,6 +39,7 @@ void veil_waterfall_assets(AAssetManager *manager)
     atomic_store(&assets, manager);
 }
 
+#ifndef _WIN32
 static const uint8_t *load_local_waterfall(const char *root, const char *name, size_t length)
 {
     char path[2048];
@@ -51,6 +56,7 @@ static const uint8_t *load_local_waterfall(const char *root, const char *name, s
     __android_log_print(ANDROID_LOG_INFO, "VeilWaterfall", "Loaded local waterfall clip");
     return mapping;
 }
+#endif
 
 const uint8_t *veil_waterfall_load(size_t length)
 {
@@ -58,10 +64,13 @@ const uint8_t *veil_waterfall_load(size_t length)
     if (clip_asset) {
         AAsset_close(clip_asset);
         clip_asset = NULL;
+#ifndef _WIN32
     } else if (clip_bytes) {
         munmap((void *)clip_bytes, clip_length);
+#endif
     }
     clip_bytes = NULL;
+#ifndef _WIN32
     clip_length = length;
     const char *root = getenv("OA_OFFLINE_ROOT");
     if (root) {
@@ -69,12 +78,13 @@ const uint8_t *veil_waterfall_load(size_t length)
         if (!clip_bytes) clip_bytes = load_local_waterfall(root, "imported-install/veil-waterfall.bc3", length);
         if (clip_bytes) return clip_bytes;
     }
+#endif
 
     // A locally assembled development APK may still put its private clip in assets.
     AAssetManager *manager = atomic_load(&assets);
     AAsset *asset = manager ? AAssetManager_open(manager, "veil-waterfall.bc3", AASSET_MODE_BUFFER) : NULL;
     if (!asset) return NULL;
-    if (AAsset_getLength64(asset) == (off64_t)length) clip_bytes = AAsset_getBuffer(asset);
+    if (AAsset_getLength64(asset) == (int64_t)length) clip_bytes = AAsset_getBuffer(asset);
     if (clip_bytes) clip_asset = asset;
     else AAsset_close(asset);
     return clip_bytes;

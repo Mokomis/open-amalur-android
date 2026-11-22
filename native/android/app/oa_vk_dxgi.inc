@@ -219,9 +219,18 @@ static VkResult present_ensure_window(oa_chain *s,ANativeWindow *window,uint64_t
             if(o->native_window==window)return VK_NOT_READY;
     }
     ANativeWindow_acquire(window);
+#ifdef _WIN32
+    OaWin32SurfaceCreateInfo info = {
+        .sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
+        .hinstance = GetModuleHandleW(NULL),
+        .hwnd = (HWND)window,
+    };
+    VkResult result = pvkCreateWin32SurfaceKHR(g_instance, &info, NULL, &s->surface);
+#else
     VkAndroidSurfaceCreateInfoKHR info={VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR};
     info.window=window;
     VkResult result=pvkCreateAndroidSurfaceKHR(g_instance,&info,NULL,&s->surface);
+#endif
     if(result!=VK_SUCCESS){ANativeWindow_release(window);return result;}
     s->native_window=window;s->window_generation=generation;s->surface_lost=0;
     s->present.recreate=1;s->next_surface_check=0;s->suboptimal_reported=0;
@@ -521,8 +530,10 @@ static HRESULT COM s_present(oa_chain *s, UINT sync, UINT flags) {
                    (unsigned long long)__atomic_load_n(&texture_upload_fallbacks,__ATOMIC_RELAXED),
                    (unsigned long long)__atomic_load_n(&texture_upload_staging_bytes,__ATOMIC_RELAXED));
         }
+#ifndef _WIN32
         int want = GetFileAttributesA("Z:\\storage\\emulated\\0\\Download\\oa\\nocull") == INVALID_FILE_ATTRIBUTES && GetFileAttributesA("nocull") == INVALID_FILE_ATTRIBUTES;
         if (want != g_cull) { g_cull = want; logf_("culling %s at frame %llu", want ? "on" : "off", (unsigned long long)g_frames_shown); }
+#endif
     }
 
     static int last_draw_preparation = -1;

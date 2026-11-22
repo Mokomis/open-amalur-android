@@ -5,7 +5,6 @@
 #define WIN32_LEAN_AND_MEAN
 #include "oa_android_win.h"
 #include "rt.h"
-#include <android/native_window.h>
 #include <malloc.h>
 #include <pthread.h>
 #include <stdarg.h>
@@ -15,8 +14,22 @@
 #include <stdlib.h>
 #include <string.h>
 #define VK_NO_PROTOTYPES
+#ifndef _WIN32
+#include <android/native_window.h>
 #define VK_USE_PLATFORM_ANDROID_KHR
+#endif
 #include <vulkan/vulkan.h>
+#ifdef _WIN32
+#include "windows/vulkan_surface.h"
+typedef struct HWND__ ANativeWindow;
+#define OA_VK_SURFACE_ENTRY(X) X(vkCreateWin32SurfaceKHR)
+#define OA_SURFACE_EXTENSION "VK_KHR_win32_surface"
+static void ANativeWindow_acquire(ANativeWindow *window) { (void)window; }
+static void ANativeWindow_release(ANativeWindow *window) { (void)window; }
+#else
+#define OA_VK_SURFACE_ENTRY(X) X(vkCreateAndroidSurfaceKHR)
+#define OA_SURFACE_EXTENSION "VK_KHR_android_surface"
+#endif
 #include "oa_present_lifecycle.h"
 #include "oa_dynamic_resolution.h"
 #include "veil_native_scaling.h"

@@ -1,7 +1,9 @@
 #include "veil_native_scaling.h"
+#ifndef _WIN32
+#include "../veil-dialogue-circle/veil_dialogue_touch.h"
+#endif
 #include "veil_environment.h"
 #include "../veil-waterfall/waterfall_state.h"
-#include "../veil-dialogue-circle/veil_dialogue_touch.h"
 /* UTF-16 guest profile API. Reads retail files; writes only the existing overlay. */
 #include <pthread.h>
 __attribute__((visibility("hidden"))) int veil_shadow_ini_read(const char *, const char *, char[2]);
@@ -20,7 +22,13 @@ static char*ini_trim(char*s){while(*s==' '||*s=='\t'||*s=='\r')s++;size_t n=strl
 static void ini_path(uint32_t name,int write,char*out){char path[1024],canon[1024];if(!name)rt_fatal("INI default system path not qualified");guest_w(name,path,sizeof path);canonical(path,canon,sizeof canon);if(write){overlay_path(canon,out,2048);mkdirs_for(out);}else read_path(canon,out,2048);}
 static void ini_read(X86Ctx*ctx){char*section=ini_wide_string(ARG(0)),*key=ini_wide_string(ARG(1)),*fallback=ini_wide_string(ARG(2));if(!section||!key)rt_fatal("INI section/key enumeration not yet qualified");
     char shadow_value[8];
-    if (veil_native_scaling_read(section, key, shadow_value) || veil_dialogue_read(section, key, shadow_value, sizeof shadow_value) || veil_tablet_read(section, key, shadow_value) || veil_transmog_read(section, key, shadow_value) || veil_shadow_ini_read(section, key, shadow_value) || veil_environment_read(section, key, shadow_value)) {
+    if (
+        veil_native_scaling_read(section, key, shadow_value) ||
+#ifndef _WIN32
+        veil_dialogue_read(section, key, shadow_value, sizeof shadow_value) ||
+#endif
+        veil_tablet_read(section, key, shadow_value) ||
+        veil_transmog_read(section, key, shadow_value) || veil_shadow_ini_read(section, key, shadow_value) || veil_environment_read(section, key, shadow_value)) {
         size_t length = ini_put_wide(ARG(3), ARG(4), shadow_value);
         free(section);
         free(key);
@@ -37,7 +45,9 @@ static void ini_write(X86Ctx*ctx){char*section=ini_wide_string(ARG(0)),*key=ini_
         handled = 1;
     }
     if (handled < 0) handled = veil_waterfall_command(section, key, value);
+#ifndef _WIN32
     if (handled < 0) handled = veil_dialogue_command(section, key, value);
+#endif
     if (handled < 0) handled = veil_tablet_command(section, key, value);
     if (handled < 0)
         handled = veil_transmog_command(ctx, section, key, value);

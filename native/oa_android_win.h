@@ -4,6 +4,7 @@
 #include <d3d11.h>
 #include <dxgi1_2.h>
 #include <pthread.h>
+#ifndef _WIN32
 #include <dlfcn.h>
 #include <time.h>
 #include <stdlib.h>
@@ -37,6 +38,7 @@ static inline HMODULE LoadLibraryA(const char*n){return !strcmp(n,"vulkan-1.dll"
 #define GetProcAddress dlsym
 static inline DWORD GetFileAttributesA(const char*p){struct stat s;return stat(p,&s)?INVALID_FILE_ATTRIBUTES:S_ISDIR(s.st_mode)?16:0;}
 static inline int IsEqualGUID(const GUID*a,const GUID*b){return !memcmp(a,b,sizeof(*a));}
+#endif
 #ifndef IUnknown_QueryInterface
 #define IUnknown_QueryInterface(p,...) ((p)->lpVtbl->QueryInterface(p, ##__VA_ARGS__))
 #endif

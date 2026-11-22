@@ -1,18 +1,34 @@
-/* FAudio platform services for an Android NativeActivity. */
+/* Shared FAudio platform services with a native output backend per platform. */
 #include "FAudio_internal.h"
 #include "android/app/veil_environment.h"
+#ifdef _WIN32
+#include <mmsystem.h>
+#include <mmreg.h>
+/* waveOut can return completed buffers in 40 ms batches. Six 10 ms mixer
+ * quanta keep output queued across a batch and leave refill headroom. */
+#define WINDOWS_AUDIO_BUFFERS 6
+#else
 #include <aaudio/AAudio.h>
+#include <sys/resource.h>
+#endif
 #include <android/log.h>
 #include <errno.h>
 #include <pthread.h>
 #include <stdatomic.h>
-#include <sys/resource.h>
 #include <time.h>
 #include <unistd.h>
 
 typedef struct {
     FAudio *engine;
+#ifdef _WIN32
+    HWAVEOUT stream;
+    HANDLE ready;
+    WAVEHDR buffers[WINDOWS_AUDIO_BUFFERS];
+    float *device_buffers;
+    unsigned next_buffer;
+#else
     AAudioStream *stream;
+#endif
     pthread_t thread;
     float *buffer;
     int channels, rate, quantum;
@@ -31,13 +47,55 @@ void FAudio_Log(const char *message)
 static void close_output(AudioDevice *device)
 {
     if (!device->stream) return;
+#ifdef _WIN32
+    waveOutReset(device->stream);
+    for (unsigned i = 0; i < WINDOWS_AUDIO_BUFFERS; ++i)
+        if (device->buffers[i].dwFlags & WHDR_PREPARED)
+            waveOutUnprepareHeader(device->stream, &device->buffers[i], sizeof device->buffers[i]);
+    waveOutClose(device->stream);
+    CloseHandle(device->ready);
+    free(device->device_buffers);
+    memset(device->buffers, 0, sizeof device->buffers);
+    device->next_buffer = 0;
+#else
     AAudioStream_requestStop(device->stream);
     AAudioStream_close(device->stream);
+#endif
     device->stream = NULL;
 }
 
 static int open_output(AudioDevice *device)
 {
+#ifdef _WIN32
+    const size_t samples = (size_t)device->quantum * device->channels;
+    device->device_buffers = calloc(WINDOWS_AUDIO_BUFFERS * samples, sizeof(float));
+    if (!device->device_buffers) return -1;
+    device->ready = CreateEventW(NULL, FALSE, FALSE, NULL);
+    WAVEFORMATEX format = {
+        .wFormatTag = WAVE_FORMAT_IEEE_FLOAT,
+        .nChannels = device->channels,
+        .nSamplesPerSec = device->rate,
+        .nAvgBytesPerSec = device->rate * device->channels * sizeof(float),
+        .nBlockAlign = device->channels * sizeof(float),
+        .wBitsPerSample = 32,
+    };
+    if (!device->ready || waveOutOpen(&device->stream, WAVE_MAPPER, &format,
+        (DWORD_PTR)device->ready, 0, CALLBACK_EVENT) != MMSYSERR_NOERROR) {
+        if (device->ready) CloseHandle(device->ready);
+        free(device->device_buffers);
+        return -1;
+    }
+    for (unsigned i = 0; i < WINDOWS_AUDIO_BUFFERS; ++i) {
+        WAVEHDR *buffer = &device->buffers[i];
+        buffer->lpData = (char *)(device->device_buffers + i * samples);
+        buffer->dwBufferLength = (DWORD)(samples * sizeof(float));
+        if (waveOutPrepareHeader(device->stream, buffer, sizeof *buffer) != MMSYSERR_NOERROR) {
+            close_output(device);
+            return -1;
+        }
+    }
+    return 0;
+#else
     AAudioStreamBuilder *builder = NULL;
     aaudio_result_t result = AAudio_createStreamBuilder(&builder);
     if (result != AAUDIO_OK) return result;
@@ -56,13 +114,18 @@ static int open_output(AudioDevice *device)
         return AAUDIO_ERROR_INVALID_FORMAT;
     }
     return result;
+#endif
 }
 
 static void *mix_output(void *opaque)
 {
     AudioDevice *device = opaque;
+#ifdef _WIN32
+    SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
+#else
     pthread_setname_np(pthread_self(), "OA audio");
     setpriority(PRIO_PROCESS, 0, -5);
+#endif
     int logged_audio = 0;
     int stream_running = 0;
     while (!atomic_load_explicit(&device->stop, memory_order_relaxed)) {
@@ -76,20 +139,29 @@ static void *mix_output(void *opaque)
             continue;
         }
         if (!device->stream) {
-            if (open_output(device) != AAUDIO_OK) {
+            if (open_output(device) != 0) {
                 FAudio_sleep(250);
                 continue;
             }
         }
         if (!stream_running) {
+#ifndef _WIN32
             if (AAudioStream_requestStart(device->stream) != AAUDIO_OK) {
                 close_output(device);
                 FAudio_sleep(250);
                 continue;
             }
+#endif
             stream_running = 1;
             FAudio_Log("AAudio active in foreground");
         }
+#ifdef _WIN32
+        WAVEHDR *buffer = &device->buffers[device->next_buffer];
+        while ((buffer->dwFlags & WHDR_INQUEUE) &&
+               !atomic_load_explicit(&device->stop, memory_order_relaxed))
+            WaitForSingleObject(device->ready, 30);
+        if (atomic_load_explicit(&device->stop, memory_order_relaxed)) break;
+#endif
         const size_t samples = (size_t)device->quantum * device->channels;
         memset(device->buffer, 0, samples * sizeof(float));
         FAudio_INTERNAL_UpdateEngine(device->engine, device->buffer);
@@ -97,7 +169,7 @@ static void *mix_output(void *opaque)
             for (size_t i = 0; i < samples; ++i) {
                 if (device->buffer[i] > 0.0001f || device->buffer[i] < -0.0001f) {
                     logged_audio = 1;
-                    FAudio_Log("AAudio mixer generated non-silent game PCM");
+                    FAudio_Log("FAudio mixer generated non-silent game PCM");
                     break;
                 }
             }
@@ -109,6 +181,15 @@ static void *mix_output(void *opaque)
             if (atomic_load(&ambience_output) == device)
                 veil_ambience_mix(device->buffer, device->quantum, device->rate, rt_android_is_foreground());
         }
+#ifdef _WIN32
+        memcpy(buffer->lpData, device->buffer, buffer->dwBufferLength);
+        if (waveOutWrite(device->stream, buffer, sizeof *buffer) != MMSYSERR_NOERROR) {
+            close_output(device);
+            FAudio_sleep(20);
+        } else {
+            device->next_buffer = (device->next_buffer + 1) % WINDOWS_AUDIO_BUFFERS;
+        }
+#else
         int written = 0;
         while (written < device->quantum && rt_android_is_foreground() &&
                !atomic_load_explicit(&device->stop, memory_order_relaxed)) {
@@ -122,6 +203,7 @@ static void *mix_output(void *opaque)
             }
             written += frames;
         }
+#endif
     }
     AudioDevice *current = device;
     atomic_compare_exchange_strong(&ambience_output, &current, NULL);
@@ -129,7 +211,14 @@ static void *mix_output(void *opaque)
 }
 
 static pthread_once_t mixer_init = PTHREAD_ONCE_INIT;
-static void configure_mixer(void) { FAudio_INTERNAL_InitSIMDFunctions(0, 1); }
+static void configure_mixer(void)
+{
+#ifdef _WIN32
+    FAudio_INTERNAL_InitSIMDFunctions(1, 0);
+#else
+    FAudio_INTERNAL_InitSIMDFunctions(0, 1);
+#endif
+}
 
 void FAudio_PlatformAddRef(void) { pthread_once(&mixer_init, configure_mixer); }
 void FAudio_PlatformRelease(void) {}
@@ -150,7 +239,7 @@ void FAudio_PlatformInit(FAudio *engine, uint32_t flags, uint32_t index,
         return;
     }
     device->buffer = calloc((size_t)device->quantum * device->channels, sizeof(float));
-    if (!device->buffer || open_output(device) != AAUDIO_OK) {
+    if (!device->buffer || open_output(device) != 0) {
         free(device->buffer);
         free(device);
         return;
@@ -165,7 +254,7 @@ int oa_faudio_start_output(FAudio *engine)
     if (!device) return 0;
     if (pthread_create(&device->thread, NULL, mix_output, device) != 0) return 0;
     device->started = 1;
-    __android_log_print(ANDROID_LOG_INFO, "OpenAmalurAudio", "AAudio started rate=%d channels=%d quantum=%d",
+    __android_log_print(ANDROID_LOG_INFO, "OpenAmalurAudio", "Audio output started rate=%d channels=%d quantum=%d",
                         device->rate, device->channels, device->quantum);
     return 1;
 }
@@ -188,7 +277,7 @@ uint32_t FAudio_PlatformGetDeviceDetails(uint32_t index, FAudioDeviceDetails *de
     if (index != 0) return FAUDIO_E_INVALID_CALL;
     memset(details, 0, sizeof *details);
     details->DeviceID[0] = '0';
-    const char *name = "Android game audio";
+    const char *name = "Open Amalur audio";
     for (size_t i = 0; name[i]; ++i) details->DisplayName[i] = name[i];
     details->Role = FAudioGlobalDefaultDevice;
     WriteWaveFormatExtensible(&details->OutputFormat, 2, 48000, &DATAFORMAT_SUBTYPE_PCM);
@@ -206,7 +295,9 @@ typedef struct {
 static void *audio_thread(void *opaque)
 {
     AudioThread *thread = opaque;
+#ifndef _WIN32
     if (thread->name[0]) pthread_setname_np(pthread_self(), thread->name);
+#endif
     thread->result = thread->function(thread->argument);
     return NULL;
 }
@@ -236,7 +327,12 @@ void FAudio_PlatformWaitThread(FAudioThread handle, int32_t *result)
 
 void FAudio_PlatformThreadPriority(FAudioThreadPriority priority)
 {
+#ifdef _WIN32
+    SetThreadPriority(GetCurrentThread(), priority == FAUDIO_THREAD_PRIORITY_LOW ?
+                      THREAD_PRIORITY_BELOW_NORMAL : THREAD_PRIORITY_NORMAL);
+#else
     setpriority(PRIO_PROCESS, 0, priority == FAUDIO_THREAD_PRIORITY_LOW ? 5 : 0);
+#endif
 }
 
 uint64_t FAudio_PlatformGetThreadID(void) { return (uintptr_t)pthread_self(); }

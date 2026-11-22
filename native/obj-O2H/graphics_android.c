@@ -6,6 +6,10 @@
 #include "oa_android_win.h"
 #include <d3d11.h>
 #include <dxgi1_2.h>
+#ifdef _WIN32
+#include <dinput.h>
+#include <netlistmgr.h>
+#endif
 
 #define DIRECTINPUT_VERSION 0x0800
 
@@ -43,6 +47,13 @@ static Object *self(X86Ctx *ctx){return object(rt_arg(ctx,0));}
 static void *host_object(uint32_t g){return g?object(g)->host:NULL;}
 static void unsupported(X86Ctx *ctx){Object *p=self(ctx);rt_fatal("real graphics bridge lacks %s on %s; no native method called",rt_thunk_name(rt_self_last_target()),kind_names[p->kind]);}
 static int iid_kind(const GUID *id,int fallback){
+#ifdef _WIN32
+    if(IsEqualGUID(id,&IID_INetworkListManager))return NETMGR;
+    if(IsEqualGUID(id,&IID_IDirectInput8W))return DINPUTW;
+    if(IsEqualGUID(id,&IID_IDirectInput8A))return DINPUTA;
+    if(IsEqualGUID(id,&IID_IDirectInputDevice8W))return DIDEVICEW;
+    if(IsEqualGUID(id,&IID_IDirectInputDevice8A))return DIDEVICEA;
+#endif
     if(IsEqualGUID(id,&IID_ID3D11CommandList))return CMDLIST;
     if(IsEqualGUID(id,&IID_ID3D11Texture1D))return TEX1D;
     if(IsEqualGUID(id,&IID_ID3D11Texture3D))return TEX3D;
@@ -209,6 +220,10 @@ static void create_layout(X86Ctx*ctx){
 #include "mapping_android_fast_discard.inc"
 #include "handwritten_draw_android.inc"
 #define SET(K,I,M,F,N) do{tables[K].methods[SLOT(I,M)].fn=F;tables[K].methods[SLOT(I,M)].nargs=1+(N);}while(0)
+#ifdef _WIN32
+#include "windows/input.inc"
+#include "windows/network.inc"
+#endif
 #include "com_slot_names.inc"
 static void initialize_table(int k){
     Table *t=&tables[k];if(t->vtable)return;
@@ -261,6 +276,11 @@ static void initialize_table(int k){
     if(k==CBREF){SET(k,ID3D11ShaderReflectionConstantBuffer,GetDesc,cb_desc,1);SET(k,ID3D11ShaderReflectionConstantBuffer,GetVariableByIndex,cb_var_index,1);SET(k,ID3D11ShaderReflectionConstantBuffer,GetVariableByName,cb_var_name,1);}
     if(k==VARREF){SET(k,ID3D11ShaderReflectionVariable,GetDesc,var_desc,1);SET(k,ID3D11ShaderReflectionVariable,GetType,var_type,0);SET(k,ID3D11ShaderReflectionVariable,GetBuffer,var_buffer,0);}
     if(k==TYPEREF){SET(k,ID3D11ShaderReflectionType,GetDesc,type_desc,1);SET(k,ID3D11ShaderReflectionType,GetMemberTypeByIndex,type_index,1);SET(k,ID3D11ShaderReflectionType,GetMemberTypeByName,type_name,1);SET(k,ID3D11ShaderReflectionType,GetMemberTypeName,type_member_name,1);}
+#ifdef _WIN32
+    if(k==NETMGR){SET(k,INetworkListManager,IsConnected,network_connected,1);SET(k,INetworkListManager,IsConnectedToInternet,network_internet,1);SET(k,INetworkListManager,GetConnectivity,network_connectivity,1);}
+    if(k==DINPUTW || k==DINPUTA){SET(k,IDirectInput8W,CreateDevice,input_device,3);SET(k,IDirectInput8W,EnumDevices,input_enum,4);SET(k,IDirectInput8W,GetDeviceStatus,input_status,1);}
+    if(k==DIDEVICEW || k==DIDEVICEA){SET(k,IDirectInputDevice8W,Acquire,input_acquire,0);SET(k,IDirectInputDevice8W,Unacquire,input_unacquire,0);SET(k,IDirectInputDevice8W,GetDeviceState,input_state,2);SET(k,IDirectInputDevice8W,GetCapabilities,input_caps,1);SET(k,IDirectInputDevice8W,SetCooperativeLevel,input_cooperative,2);SET(k,IDirectInputDevice8W,SetDataFormat,input_format,1);SET(k,IDirectInputDevice8W,SetProperty,input_set_property,2);SET(k,IDirectInputDevice8W,GetProperty,input_get_property,2);SET(k,IDirectInputDevice8W,GetDeviceData,input_data,4);SET(k,IDirectInputDevice8W,Poll,input_poll,0);}
+#endif
     if(k==CMDLIST){SET(k,ID3D11CommandList,GetContextFlags,command_flags,0);}
     if(k==QUERY){SET(k,ID3D11Asynchronous,GetDataSize,query_size,0);SET(k,ID3D11Query,GetDesc,query_desc,1);}
     rt_hle_register(t->methods,128);
@@ -294,5 +314,8 @@ static void create_device(X86Ctx *ctx){
 static const HleDef defs[]={
     {"d3d11.dll","D3D11CreateDevice",create_device,10},
     {"d3dcompiler_43.dll","D3DReflect",compiler_reflect,4},
+#ifdef _WIN32
+    {"dinput8.dll","DirectInput8Create",input_create,5},
+#endif
 };
 void oa_graphics_register(void){rt_hle_register(defs,sizeof(defs)/sizeof(*defs));}

@@ -1,4 +1,7 @@
 #include "veil_native_scaling.h"
+#ifdef _WIN32
+#include "rt.h"
+#endif
 
 #include <limits.h>
 #include <stdlib.h>
@@ -10,13 +13,43 @@
 #include <strings.h>
 #include <unistd.h>
 
+#ifndef _WIN32
 static const char setting_key[] = "VeilNativeHardwareScaling";
 static const char active_key[] = "VeilNativeHardwareScalingActive";
-static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 static char settings_path[PATH_MAX];
+#endif
+static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 static char resolution_path[PATH_MAX];
 static char dynamic_path[PATH_MAX];
 static _Atomic int dynamic_resolution;
+#ifdef _WIN32
+static char window_mode_path[PATH_MAX];
+static const char *const window_modes[] = {"windowed", "borderless", "fullscreen"};
+static int requested_window_mode, active_window_mode;
+
+int veil_windows_mode(const char *root)
+{
+    pthread_mutex_lock(&lock);
+    if (!window_mode_path[0] && root) {
+        int length = snprintf(window_mode_path, sizeof window_mode_path, "%s/window-mode", root);
+        if (length < 0 || (size_t)length >= sizeof window_mode_path) window_mode_path[0] = 0;
+        else {
+            FILE *file = fopen(window_mode_path, "r");
+            char value[32], extra;
+            if (file) {
+                if (fscanf(file, "%31s %c", value, &extra) == 1)
+                    for (int i = 0; i < 3; ++i)
+                        if (!strcmp(value, window_modes[i])) requested_window_mode = i;
+                fclose(file);
+            }
+        }
+        active_window_mode = requested_window_mode;
+    }
+    int mode = active_window_mode;
+    pthread_mutex_unlock(&lock);
+    return mode;
+}
+#endif
 static int display_width = 1920;
 static int display_height = 1080;
 typedef struct { int width, height; } Resolution;
@@ -32,7 +65,9 @@ static int active_resolution;
 static int add_resolution(int width, int height)
 {
     if (width <= 0 || height <= 0) return -1;
+#ifndef _WIN32
     if (height > width) { int swap = width; width = height; height = swap; }
+#endif
     for (int i = 0; i < resolution_count; ++i)
         if (resolutions[i].width == width && resolutions[i].height == height) return i;
     resolutions[resolution_count] = (Resolution){width, height};
@@ -61,6 +96,7 @@ static int resolution_index(int width, int height)
         if (resolutions[i].width == width && resolutions[i].height == height) return i;
     return 0;
 }
+#ifndef _WIN32
 static int initialized;
 static const int percentages[] = {0, 25, 50, 75, 100};
 enum { DEFAULT_PRESET = 4, PRESET_COUNT = sizeof percentages / sizeof percentages[0] };
@@ -113,6 +149,9 @@ int veil_native_scaling_percent(const char *root)
     return percent;
 }
 
+#endif
+
+/* Windows builds never load the setting (no Dynamic Resolution menu there yet), so it stays off. */
 int veil_dynamic_resolution_enabled(void)
 {
     return atomic_load(&dynamic_resolution);
@@ -161,6 +200,13 @@ int veil_native_scaling_read(const char *section, const char *key, char *value)
     int handled = 1;
     int mode_index;
     char extra;
+#ifdef _WIN32
+    if (!strcasecmp(key, "VeilWindowMode"))
+        snprintf(value, 8, "%d", requested_window_mode);
+    else if (!strcasecmp(key, "VeilWindowModeActive"))
+        snprintf(value, 8, "%d", active_window_mode);
+    else
+#endif
     if (!strcasecmp(key, "VeilResolutionCount"))
         snprintf(value, 8, "%d", resolution_count);
     else if (sscanf(key, "VeilResolutionWidth%d%c", &mode_index, &extra) == 1 &&
@@ -169,10 +215,12 @@ int veil_native_scaling_read(const char *section, const char *key, char *value)
     else if (sscanf(key, "VeilResolutionHeight%d%c", &mode_index, &extra) == 1 &&
              mode_index >= 0 && mode_index < resolution_count)
         snprintf(value, 8, "%d", resolutions[mode_index].height);
+#ifndef _WIN32
     else if (!strcasecmp(key, setting_key))
         snprintf(value, 8, "%d", requested);
     else if (!strcasecmp(key, active_key))
         snprintf(value, 8, "%d", active);
+#endif
     else if (!strcasecmp(key, "VeilDynamicResolution"))
         snprintf(value, 8, "%d", veil_dynamic_resolution_enabled());
     else if (!strcasecmp(key, "VeilRenderResolution"))
@@ -216,7 +264,11 @@ static int save_setting(const char *path, const char *value)
 
     int ok = fprintf(file, "%s\n", value) > 0;
     ok = fclose(file) == 0 && ok;
+#ifdef _WIN32
+    ok = ok && host_rename(temporary, path);
+#else
     ok = ok && rename(temporary, path) == 0;
+#endif
     if (!ok)
         unlink(temporary);
     return ok;
@@ -228,8 +280,12 @@ int veil_native_scaling_write(const char *section, const char *key, const char *
         return -1;
     int resolution = !strcasecmp(key, "VeilRenderResolution");
     int dynamic = !strcasecmp(key, "VeilDynamicResolution");
-    if (!resolution && !dynamic && strcasecmp(key, setting_key))
-        return -1;
+#ifdef _WIN32
+    int window_mode = !strcasecmp(key, "VeilWindowMode");
+    if (!resolution && !dynamic && !window_mode) return -1;
+#else
+    if (!resolution && !dynamic && strcasecmp(key, setting_key)) return -1;
+#endif
     if (!value || !*value) return 0;
     char *end;
     errno = 0;
@@ -238,12 +294,24 @@ int veil_native_scaling_write(const char *section, const char *key, const char *
     int preset = (int)parsed;
 
     pthread_mutex_lock(&lock);
+#ifdef _WIN32
+    int count = resolution ? resolution_count : dynamic ? 2 : 3; /* 3 window modes */
+#else
     int count = resolution ? resolution_count : dynamic ? 2 : PRESET_COUNT;
+#endif
     if (preset >= count) {
         pthread_mutex_unlock(&lock);
         return 0;
     }
-    int ok;
+    int ok = 0;
+#ifdef _WIN32
+    if (window_mode) {
+        ok = save_setting(window_mode_path, window_modes[preset]);
+        if (ok) requested_window_mode = preset;
+        pthread_mutex_unlock(&lock);
+        return ok;
+    }
+#endif
     if (resolution) {
         char dimensions[64];
         snprintf(dimensions, sizeof dimensions, "%dx%d", resolutions[preset].width, resolutions[preset].height);
@@ -254,12 +322,14 @@ int veil_native_scaling_write(const char *section, const char *key, const char *
         ok = save_setting(dynamic_path, preset ? "1" : "0");
         if (ok)
             atomic_store(&dynamic_resolution, preset);
+#ifndef _WIN32
     } else {
         char percent[4];
         snprintf(percent, sizeof percent, "%d", percentages[preset]);
         ok = save_setting(settings_path, percent);
         if (ok)
             requested = preset;
+#endif
     }
     pthread_mutex_unlock(&lock);
     return ok;

@@ -1,3 +1,4 @@
+#include "rt.h"
 #include "veil_environment.h"
 
 #include <android/log.h>
@@ -60,7 +61,7 @@ static int save_settings(unsigned requested)
     if (!file) return 0;
     int ok = fprintf(file, "%u\n", requested) > 0;
     ok = fclose(file) == 0 && ok;
-    if (ok && rename(temporary, settings_path) == 0) return 1;
+    if (ok && host_rename(temporary, settings_path)) return 1;
     unlink(temporary);
     return 0;
 }

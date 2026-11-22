@@ -62,7 +62,7 @@ static int init_vulkan(void) {
     PFN_vkCreateInstance create;
     VkApplicationInfo app = {VK_STRUCTURE_TYPE_APPLICATION_INFO};
     VkInstanceCreateInfo ici = {VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO};
-    const char *IEXT[5] = {"VK_KHR_surface", "VK_KHR_android_surface"};
+    const char *IEXT[5] = {"VK_KHR_surface", OA_SURFACE_EXTENSION};
     const char *device_extensions[5] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
     VkPhysicalDeviceMapMemoryPlacedFeaturesEXT placed = {
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAP_MEMORY_PLACED_FEATURES_EXT
@@ -275,7 +275,7 @@ static int init_vulkan(void) {
                 }
             }
             if (!make_buffer_with_mapping(&g_f[i].rings[0], RING_SIZE,
-                    VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 1)) {
+                    VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 1, 0)) {
                 logf_("ring failed");
                 return 0;
             }

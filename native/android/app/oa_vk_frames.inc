@@ -55,7 +55,13 @@ static void *ring_alloc(uint32_t size, VkBuffer *buf, uint32_t *off) {
 static void desc_retire_pools(void);
 #define QUERY_MAX 32768u
 static long g_n_culled, g_n_tests, g_n_test_skipped;
+#ifdef _WIN32
+/* Previous-frame predicate results can suppress visible draws on Windows.
+   Draw those objects unconditionally to avoid intermittent pink surfaces. */
+static const int g_cull = 0;
+#else
 static int g_cull = 1;
+#endif
 
 static void read_queries(oa_frame *f) {
     static uint32_t r[QUERY_MAX];

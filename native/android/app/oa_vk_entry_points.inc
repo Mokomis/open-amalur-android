@@ -2,7 +2,7 @@
 /* ---- Vulkan entry points ---- */
 #define VK_FUNCS(X) \
     X(vkDestroyInstance) X(vkDestroySurfaceKHR) X(vkEnumeratePhysicalDevices) X(vkGetPhysicalDeviceProperties) X(vkGetPhysicalDeviceFeatures2) X(vkGetPhysicalDeviceQueueFamilyProperties) \
-    X(vkGetPhysicalDeviceMemoryProperties) X(vkEnumerateDeviceExtensionProperties) X(vkGetPhysicalDeviceFormatProperties) X(vkCreateDevice) X(vkGetDeviceProcAddr) X(vkCreateAndroidSurfaceKHR) \
+    X(vkGetPhysicalDeviceMemoryProperties) X(vkEnumerateDeviceExtensionProperties) X(vkGetPhysicalDeviceFormatProperties) X(vkCreateDevice) X(vkGetDeviceProcAddr) OA_VK_SURFACE_ENTRY(X) \
     X(vkGetPhysicalDeviceSurfaceCapabilitiesKHR) X(vkGetPhysicalDeviceSurfaceFormatsKHR) X(vkGetPhysicalDeviceSurfacePresentModesKHR) X(vkGetPhysicalDeviceSurfaceSupportKHR) X(vkGetPhysicalDeviceProperties2)
 #define VKD_FUNCS(X) \
     X(vkGetDeviceQueue) X(vkAllocateMemory) X(vkFreeMemory) X(vkMapMemory) X(vkCreateBuffer) X(vkDestroyBuffer) X(vkGetBufferMemoryRequirements) X(vkBindBufferMemory) \
@@ -57,7 +57,7 @@ typedef struct {
 } vk_buffer;
 
 static int make_buffer_with_mapping(vk_buffer *b, VkDeviceSize size,
-                                    VkBufferUsageFlags usage, int place) {
+                                    VkBufferUsageFlags usage, int place, int prefer_cached) {
     VkBufferCreateInfo ci = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
     VkMemoryRequirements r;
     VkMemoryAllocateInfo ai = {VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
@@ -66,9 +66,20 @@ static int make_buffer_with_mapping(vk_buffer *b, VkDeviceSize size,
     if (pvkCreateBuffer(g_dev, &ci, NULL, &b->buf)) return 0;
     pvkGetBufferMemoryRequirements(g_dev, b->buf, &r);
     ai.allocationSize = r.size;
-    ai.memoryTypeIndex = mem_type(r.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-    if (pvkAllocateMemory(g_dev, &ai, NULL, &b->mem)) {
-        ai.memoryTypeIndex = mem_type(r.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+    const VkMemoryPropertyFlags coherent = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    const VkMemoryPropertyFlags cached = coherent | VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
+    VkResult allocated = VK_ERROR_FEATURE_NOT_PRESENT;
+    if (prefer_cached) {
+        ai.memoryTypeIndex = mem_type(r.memoryTypeBits, cached, coherent);
+        if ((g_mem.memoryTypes[ai.memoryTypeIndex].propertyFlags & cached) == cached)
+            allocated = pvkAllocateMemory(g_dev, &ai, NULL, &b->mem);
+    }
+    if (allocated != VK_SUCCESS) {
+        ai.memoryTypeIndex = mem_type(r.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | coherent, coherent);
+        allocated = pvkAllocateMemory(g_dev, &ai, NULL, &b->mem);
+    }
+    if (allocated != VK_SUCCESS) {
+        ai.memoryTypeIndex = mem_type(r.memoryTypeBits, coherent, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
         if (pvkAllocateMemory(g_dev, &ai, NULL, &b->mem)) {
             pvkDestroyBuffer(g_dev,b->buf,NULL);
             memset(b,0,sizeof *b);
@@ -133,7 +144,7 @@ failed:
 }
 
 static int make_buffer(vk_buffer *b, VkDeviceSize size, VkBufferUsageFlags usage) {
-    return make_buffer_with_mapping(b, size, usage, 0);
+    return make_buffer_with_mapping(b, size, usage, 0, 0);
 }
 
 /* The driver can drop a reserved address on vkFreeMemory. Keep placed
@@ -147,7 +158,7 @@ typedef struct {
 static DynamicBufferSlot dynamic_buffers[DYNAMIC_BUFFER_SLOTS];
 static pthread_mutex_t dynamic_buffer_lock = PTHREAD_MUTEX_INITIALIZER;
 
-static int dynamic_buffer_acquire(vk_buffer *buffer, uint32_t bytes, VkBufferUsageFlags usage)
+static int dynamic_buffer_acquire(vk_buffer *buffer, uint32_t bytes, VkBufferUsageFlags usage, int prefer_cached)
 {
     unsigned slot = DYNAMIC_BUFFER_SLOTS;
     pthread_mutex_lock(&dynamic_buffer_lock);
@@ -166,7 +177,7 @@ static int dynamic_buffer_acquire(vk_buffer *buffer, uint32_t bytes, VkBufferUsa
     pthread_mutex_unlock(&dynamic_buffer_lock);
     if (slot == DYNAMIC_BUFFER_SLOTS) return make_buffer(buffer, bytes, usage);
 
-    int result = make_buffer_with_mapping(buffer, bytes, usage, 2);
+    int result = make_buffer_with_mapping(buffer, bytes, usage, 2, prefer_cached);
     pthread_mutex_lock(&dynamic_buffer_lock);
     if (result && buffer->guest) {
         buffer->pool_slot = slot + 1;

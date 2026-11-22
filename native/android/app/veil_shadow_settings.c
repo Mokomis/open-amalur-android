@@ -1,3 +1,4 @@
+#include "rt.h"
 #include "x86rt.h"
 
 #include <android/log.h>
@@ -153,7 +154,7 @@ static int save_settings(void)
     int ok = fprintf(file, "%u %u %u %u %u\n", requested_resolution, requested_distance,
                      requested_vegetation, requested_occlusion, requested_depth_of_field) > 0;
     ok = (fclose(file) == 0) && ok;
-    if (ok && rename(temporary, settings_path) == 0)
+    if (ok && host_rename(temporary, settings_path))
         return 1;
     unlink(temporary);
     return 0;

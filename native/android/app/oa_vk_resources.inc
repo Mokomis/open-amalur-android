@@ -18,9 +18,16 @@ static int buffer_add_gen(oa_buffer *b) {
     }
     const int place = g_dynamic_map_mode && b->size && b->size <= DYNAMIC_MAP_MAX_BUFFER &&
         b->usage == 2 && (b->bind & 3) && (b->cpu & 0x10000u);
+    int prefer_cached = 0;
+#ifdef _WIN32
+    /* The guest Map bridge reads the current vertex/index contents to find
+       changed bytes on NO_OVERWRITE. Reads from write-combined VRAM can stall
+       for milliseconds even though the GPU has finished the previous frame. */
+    prefer_cached = b->usage == 2 && (b->bind & 3) && (b->cpu & 0x10000u);
+#endif
     oa_buffer_generation gen = {0};
-    if (!(place ? dynamic_buffer_acquire(&gen.buffer, b->size, u) :
-                  make_buffer(&gen.buffer, b->size, u))) return 0;
+    if (!(place ? dynamic_buffer_acquire(&gen.buffer, b->size, u, prefer_cached) :
+                  make_buffer_with_mapping(&gen.buffer, b->size, u, 0, prefer_cached))) return 0;
     b->gens[b->ngens++] = gen;
     if (b->ngens == INLINE_BUFFER_GENERATIONS + 1)
         logf_("Vulkan expanded buffer generations: %u-byte buffer", b->size);
