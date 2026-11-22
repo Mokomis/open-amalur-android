@@ -3,7 +3,7 @@
 #include "waterfall_state.h"
 #include "veil_dialogue_touch.h"
 #include "veil_environment.h"
-#include "../../../../runtime/rt.h"
+#include "../../runtime/rt.h"
 __attribute__((visibility("hidden"))) void veil_shadow_init(void);
 __attribute__((visibility("hidden"))) void veil_tablet_viewport(unsigned, unsigned);
 __attribute__((visibility("hidden"))) void veil_tablet_touch_mode(void);
