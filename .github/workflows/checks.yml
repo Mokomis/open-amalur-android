@@ -1,0 +1,74 @@
+name: Checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  android:
+    name: Android launcher (Java, manifest, dex)
+    runs-on: ubuntu-24.04
+    env:
+      PLATFORM: android-35
+      BUILD_TOOLS: 35.0.0
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Install Android SDK packages
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;$PLATFORM" "build-tools;$BUILD_TOOLS" > /dev/null
+          echo "ANDROID_JAR=$ANDROID_HOME/platforms/$PLATFORM/android.jar" >> "$GITHUB_ENV"
+          echo "TOOLS=$ANDROID_HOME/build-tools/$BUILD_TOOLS" >> "$GITHUB_ENV"
+
+      # Same compiler settings as tools/build_apk.py.
+      - name: Compile Java
+        run: |
+          mkdir -p out/classes
+          javac --release 8 -Xlint:all,-options,-deprecation,-serial -Werror \
+            -classpath "$ANDROID_JAR" -d out/classes android/src/*.java
+
+      - name: Convert to Android bytecode (d8)
+        run: |
+          "$TOOLS/d8" --min-api 29 --lib "$ANDROID_JAR" --output out \
+            $(find out/classes -name '*.class')
+          test -s out/classes.dex
+
+      - name: Link manifest and resources (aapt2)
+        run: |
+          "$TOOLS/aapt2" compile --dir android/res -o out/resources.zip
+          "$TOOLS/aapt2" link -I "$ANDROID_JAR" --manifest android/AndroidManifest.xml \
+            -o out/base.apk out/resources.zip
+
+  python:
+    name: Tools and translator (Python)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install requirements
+        run: python -m pip install -r requirements.txt
+
+      - name: Check that every script parses
+        run: python -m compileall -q tools translator
+
+      - name: Run tests
+        run: python -m unittest discover -s tools/tests -v
