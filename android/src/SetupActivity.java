@@ -1,6 +1,7 @@
 package org.openamalur.originalengine;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.graphics.Color;
 import android.net.Uri;
@@ -127,10 +128,37 @@ public final class SetupActivity extends Activity {
             actions.addView(browse);
             startup.addView(actions, new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM));
             setContentView(startup);
-            launchExistingGame();
         } else {
             setContentView(scroll);
         }
+        // Explain an unsupported driver or the previous run's fatal exit before
+        // starting the engine again. A restored activity skips straight to launch.
+        Runnable proceed = installed ? (saved == null ? this::explainLastExit : this::launchExistingGame)
+                : () -> {};
+        if (saved == null && VulkanSupport.shouldWarn(this)) VulkanSupport.warn(this, proceed);
+        else proceed.run();
+    }
+
+    private void explainLastExit() {
+        int exit = LastExit.check(this);
+        if (exit == LastExit.NONE) {
+            launchExistingGame();
+            return;
+        }
+        String message = exit == LastExit.GPU_LOST
+                ? "Open Amalur closed last time because your device's graphics driver stopped "
+                        + "responding (Vulkan device lost). This is usually a driver problem on the device."
+                : "Open Amalur closed last time after an internal engine error.";
+        status.setText(message);
+        VeilDialogs.show(new AlertDialog.Builder(this)
+                .setTitle("Open Amalur closed unexpectedly")
+                .setMessage(message + "\n\nSending a crash report helps find the cause. It contains "
+                        + "recent logs and device details, not your saves or game files.")
+                .setCancelable(false)
+                .setNeutralButton("Send Crash Report", (dialog, button) ->
+                        startActivity(new Intent(this, CrashReportActivity.class)
+                                .putExtra(CrashReportActivity.CREATE_ON_OPEN, true)))
+                .setPositiveButton("Play", (dialog, button) -> launchExistingGame()));
     }
 
     private void chooseStorage(File choice) {
