@@ -60,19 +60,10 @@ final class LastExit {
         return lastFatalWasDeviceLoss(GameStorage.root(context)) ? GPU_LOST : ENGINE_ERROR;
     }
 
-    private static long runNumber(File file) {
-        String name = file.getName();
-        if (!name.matches("run-[0-9]{1,19}")) return -1;
-        try { return Long.parseLong(name.substring(4)); }
-        catch (NumberFormatException invalid) { return -1; }
-    }
-
     private static boolean lastFatalWasDeviceLoss(File root) {
-        if (root == null) return false;
-        File[] runs = root.listFiles(file -> file.isDirectory() && runNumber(file) >= 0);
-        if (runs == null || runs.length == 0) return false;
+        File[] runs = RunLogs.newestFirst(root);
+        if (runs.length == 0) return false;
         File latest = runs[0];
-        for (File run : runs) if (runNumber(run) > runNumber(latest)) latest = run;
         String fatal = null;
         try (RandomAccessFile log = new RandomAccessFile(new File(latest, "pc-runtime.log"), "r")) {
             long length = log.length();

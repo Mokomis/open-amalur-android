@@ -23,7 +23,6 @@ import java.io.InputStream;
 import java.io.RandomAccessFile;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.util.Arrays;
 import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
@@ -120,25 +119,17 @@ public final class CrashReportActivity extends Activity {
         }
     }
 
-    private static long runNumber(File file) {
-        String name = file.getName();
-        if (!name.matches("run-[0-9]{1,19}")) return -1;
-        try { return Long.parseLong(name.substring(4)); }
-        catch (NumberFormatException invalid) { return -1; }
-    }
-
     private static void addRecentRuns(ZipOutputStream zip, StringBuilder summary, File root)
             throws IOException {
         if (root == null) {
             summary.append("No selected storage for run logs.\n");
             return;
         }
-        File[] runs = root.listFiles(file -> file.isDirectory() && runNumber(file) >= 0);
-        if (runs == null || runs.length == 0) {
+        File[] runs = RunLogs.newestFirst(root);
+        if (runs.length == 0) {
             summary.append("No run logs found.\n");
             return;
         }
-        Arrays.sort(runs, (a, b) -> Long.compare(runNumber(b), runNumber(a)));
         File canonicalRoot = root.getCanonicalFile();
         int added = 0;
         for (File candidate : runs) {
