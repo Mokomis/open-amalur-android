@@ -14,11 +14,12 @@
         android:debuggable="false" android:allowBackup="false" android:extractNativeLibs="false">
         <activity android:name=".VeilActivity" android:theme="@style/OpenAmalurLaunch"
             android:exported="false" android:screenOrientation="landscape"
-            android:configChanges="keyboardHidden|orientation|screenSize">
+            android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|screenLayout|smallestScreenSize|density|uiMode|fontScale|layoutDirection|locale">
             <meta-data android:name="android.app.lib_name" android:value="oaoriginal" />
         </activity>
         <activity android:name=".SetupActivity" android:theme="@style/OpenAmalurLaunch" android:exported="true"
-            android:screenOrientation="landscape" android:configChanges="keyboardHidden|orientation|screenSize">
+            android:screenOrientation="landscape"
+            android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|screenLayout|smallestScreenSize|density|uiMode|fontScale|layoutDirection|locale">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
