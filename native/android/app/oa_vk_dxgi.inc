@@ -285,6 +285,7 @@ static int64_t g_t_wait, g_t_acquire, g_t_submit;
 void oa_perf_frame(uint64_t,unsigned,unsigned);
 #include "oa_waterfall.inc"
 
+#include "oa_thermal.h"
 extern int veil_tablet_gameplay_active(void);
 extern int rt_android_is_foreground(void);
 
@@ -304,6 +305,15 @@ static void update_render_resolution(oa_chain *s, uint64_t now, int presented)
 
     unsigned level = enabled ? oa_resolution_next(&s->resolution_timing, now, render_region_level)
                              : OA_RESOLUTION_FULL;
+    if (enabled) {
+        static OaThermal thermal;
+        unsigned previous = thermal.floor;
+        unsigned floor = oa_thermal_poll(&thermal, now);
+        if (floor != previous)
+            logf_("THERMAL floor %u -> %u status=%d headroom=%.2f", previous, floor,
+                  thermal.last_status, (double)thermal.last_headroom);
+        if (level < floor) level = floor;
+    }
     if (level == render_region_level) return;
     unsigned width = oa_resolution_dimension(s->w, level);
     unsigned height = oa_resolution_dimension(s->h, level);
