@@ -513,6 +513,7 @@ HIDDEN void veil_tablet_lock_mouse(void)
     atomic_store(&lock_mouse, true);
 }
 
+#ifndef _WIN32
 JNI_API(lockMouse)(JNIEnv *env, jclass type)
 {
     (void)env;
@@ -521,7 +522,6 @@ JNI_API(lockMouse)(JNIEnv *env, jclass type)
     return 0;
 }
 
-#ifndef _WIN32
 HIDDEN uint32_t veil_stock_pad_get(uint32_t index, uint8_t state[16]);
 HIDDEN uint32_t veil_trace_pad_get(uint32_t index, uint8_t state[16])
 {
