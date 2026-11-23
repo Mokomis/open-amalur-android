@@ -8,6 +8,7 @@ from amalur_script import parse_bytes
 from fit_veil_inventory import insert_callback
 from mark_veil_portraits import Code, constant_value
 from patch_veil_touch_target import method
+from veil_choice_widgets import lookup
 
 PENDING = "m_veil_spell_to_map"
 
@@ -99,6 +100,31 @@ def finish_drop(fn):
     return c, r + 2
 
 
+def cast_selected_slot(fn):
+    c = Code(fn)
+    r = fn["maximum_stack_size"]
+    # R2 is the tapped digit (0 for slot ten). R4 is the slot the game
+    # actually accepted. An empty slot can leave the previous spell selected.
+    c.op("TEST", 4)
+    c.jump("end")
+    c.op("MOD", r, 4, 256 + c.index(10))
+    c.op("EQ", 0, r, 2)
+    c.jump("end")
+    method(c, r, "character_data", "get_equipped_spells")
+    c.op("CALL_I", r, 1, 2)
+    lookup(c, r, r, 4)
+    c.op("TEST", r)
+    c.jump("end")
+    c.op("EQ", 1, r, 256 + c.index(0))
+    c.jump("end")
+    method(c, r, "GAME", "set_personal_ini_entry_num")
+    c.load(r + 1, "VeilCastHotbarSlot")
+    c.op("MOVE", r + 2, 4)
+    c.op("CALL_I", r, 3, 1)
+    c.mark("end")
+    return c, r + 3
+
+
 def quick_save(fn):
     c = Code(fn)
     c.op("EQ", 0, 2, 256 + c.index(10))
@@ -154,6 +180,11 @@ def patch_batch(data):
                 site, = (op["pc"] for op in fn["instructions"] if op["opcode_name"] == "LOADK" and
                          constants[op["Bx_raw"]] == "VeilTabletMenu")
                 changes.append((14, site + 3, quick_save))
+                # Insert in descending order. R4 still holds the numeric slot
+                # immediately before the existing acknowledgement formats it.
+                ack, = (op["pc"] for op in fn["instructions"] if op["opcode_name"] == "GETFIELD"
+                        and constants[op["C_raw"]] == "get_pc_equipped_magic_slot")
+                changes.append((14, ack + 4, cast_selected_slot))
             for child, site, writer in changes:
                 script = insert_callback(script, child, site, writer)
             parse_bytes(script)

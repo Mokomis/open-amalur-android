@@ -8,7 +8,7 @@ __attribute__((visibility("hidden"))) void veil_shadow_init(void);
 __attribute__((visibility("hidden"))) void veil_tablet_viewport(unsigned, unsigned);
 __attribute__((visibility("hidden"))) void veil_tablet_touch_mode(void);
 __attribute__((visibility("hidden"))) void veil_tablet_lock_mouse(void);
-__attribute__((visibility("hidden"))) void veil_tablet_poll_actions(void);
+__attribute__((visibility("hidden"))) int veil_tablet_poll_actions(void);
 __attribute__((visibility("hidden"))) int veil_tablet_map_open(void);
 __attribute__((visibility("hidden"))) int veil_tablet_death_menu_active(void);
 __attribute__((visibility("hidden"))) void veil_tablet_death_menu_tap(void);
@@ -563,14 +563,15 @@ void android_main(struct android_app *app)
     if (env) oa_gamepad_init(env, app->activity->clazz);
 
     ANativeActivity_setWindowFlags(app->activity, AWINDOW_FLAG_FULLSCREEN | AWINDOW_FLAG_KEEP_SCREEN_ON, 0);
+    int action_timeout = 1000;
     while (!app->destroyRequested) {
         int events;
         struct android_poll_source *source = NULL;
-        int timeout = touch.due ? 10 : 1000;
+        int timeout = touch.due && action_timeout > 10 ? 10 : action_timeout;
         int id = ALooper_pollOnce(timeout, NULL, &events, (void **)&source);
         if (id >= 0 && source) source->process(app, source);
         oa_gamepad_poll();
-        veil_tablet_poll_actions();
+        action_timeout = veil_tablet_poll_actions();
         if (!oa_app->window) finish_touch();
         else poll_touch();
     }

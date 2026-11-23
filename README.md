@@ -20,7 +20,7 @@ Veil draws visual inspiration from other interfaces, including Edge for Skyrim. 
 
 ## Download and install
 
-**Open Amalur for Android v0.1.31** · [Download the latest APK](https://github.com/Mokomis/open-amalur-android/releases/latest) · [v0.1.31 release notes](https://github.com/Mokomis/open-amalur-android/releases/tag/v0.1.31)
+**Open Amalur for Android v0.1.32** · [Download the latest APK](https://github.com/Mokomis/open-amalur-android/releases/latest) · [v0.1.32 release notes](https://github.com/Mokomis/open-amalur-android/releases/tag/v0.1.32)
 
 ### Minimum Android requirements
 
@@ -114,7 +114,7 @@ Veil uses compact lists and a consistent set of buttons, tabs, and prompts acros
 - **HUD size** in Options → Gameplay offers Default, Small, and Hidden. Selecting Default or Small restores the gameplay HUD, even if that size is already selected.
 - **Quick Save** on the gameplay screen writes to the regular quick-save slot whenever the game allows saving. Open **Load Game → Quick Save** to resume.
 - **Touch layout editor** lets you move each control and set its size and opacity independently. Tap **Edit Layout**, tap a control, adjust **Opacity**, and tap **Done**. Controls set to 0% are still visible in the editor.
-- **Spell hotbar** lets you choose which learned spells to use. Open **Game Menu → Abilities**, tap a learned active ability, then tap the numbered slot where you want it. During gameplay, tap that slot to select the spell and tap **Cast** to use it.
+- **Spell hotbar.** Open **Game Menu → Abilities**, tap a learned active ability, then tap the numbered slot where you want it. During gameplay, tap the slot once to select and cast its spell. The separate **Cast** button casts your last selected spell again. Normal mana costs and cooldowns apply. Tapping an empty slot leaves your selection alone.
 - **Reckoning and tutorial controls** include on-screen LT and RT prompts, touch finishers, and Continue buttons on screens that require a controller button or key.
 - **Controller support** covers gameplay, menu navigation and vibration on controllers that expose a vibrator to Android.
 - **Camera Bounding** limits how far the camera pulls back during group fights.

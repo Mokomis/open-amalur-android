@@ -99,7 +99,7 @@ python tools/patch_veil_inventory_spacing.py v0.1.31/134230570_klua.batch invent
 python tools/patch_veil_touch_spells.py inventory.batch 134230570_klua.batch
 ```
 
-Pass the final batch to `generate_veil_edits.py` as a replacement, with the 0.1.31 recipe properties as previous metadata. Package it with the matching Android app and rebuilt `veil_tablet.c` engine.
+Pass the final batch to `generate_veil_edits.py` as a replacement, with the 0.1.31 recipe properties as previous metadata. Package it with the matching Android app and an engine rebuilt with both `native_app.c` and `veil_tablet.c`.
 
 For Android 0.1.30, run `python tools/patch_veil_touch_menus.py <0.1.29 script batch> <output folder>/134230570_klua.batch`. Regenerate the Veil recipe with this replacement and the 0.1.29 metadata. The release uses the 0.1.29 native engine.
 

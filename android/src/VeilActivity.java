@@ -40,6 +40,7 @@ public final class VeilActivity extends NativeActivity {
     private static native int lockMouse();
     private static native int aspect();
     private static native int hotbarHudMode();
+    private static native int cancelHotbar();
     private static native int input(int enabled, int buttons, int lt, int rt, int cast,
                                     int lx, int ly, int rx, int ry);
     private static native int menu(int destination);
@@ -1020,6 +1021,7 @@ public final class VeilActivity extends NativeActivity {
         }
 
         void releaseAll() {
+            cancelHotbar();
             for (int i = 0; i < controls.length; i++) {
                 controls[i].pointer = -1;
                 releasedUntil[i] = 0;
