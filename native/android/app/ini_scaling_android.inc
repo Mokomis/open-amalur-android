@@ -53,7 +53,7 @@ static int ini_replace(const char *path, const char *text)
         ok = !ferror(file);
         if (fclose(file) != 0) ok = 0;
     } else close(fd);
-    if (ok && rename(temporary, path) == 0) return 1;
+    if (ok && host_rename(temporary, path)) return 1;
     unlink(temporary);
     return 0;
 }
