@@ -20,7 +20,7 @@ Veil draws visual inspiration from other interfaces, including Edge for Skyrim. 
 
 ## Download and install
 
-**Open Amalur for Android v0.1.27** · [Download the latest APK](https://github.com/Mokomis/open-amalur-android/releases/latest) · [v0.1.27 release notes](https://github.com/Mokomis/open-amalur-android/releases/tag/v0.1.27)
+**Open Amalur for Android v0.1.28** · [Download the latest APK](https://github.com/Mokomis/open-amalur-android/releases/latest) · [v0.1.28 release notes](https://github.com/Mokomis/open-amalur-android/releases/tag/v0.1.28)
 
 ### Minimum Android requirements
 
@@ -110,7 +110,7 @@ Veil uses compact lists and a consistent set of buttons, tabs, and prompts acros
 ### Gameplay and controls
 
 - **Transmog** changes the look of equipped armor and same-type weapons, such as a sword taking the appearance of another sword. The equipped item retains its stats. Appearance choices are saved with the character.
-- **Tablet controls** provide separate movement and camera sticks, Run/Leap, attacks, dodge, block, interaction, and shortcuts for the game menu, inventory, world map, quests, and Item Radial.
+- **Tablet controls** provide separate movement and camera sticks, Run/Leap, attacks, dodge, block, interaction, and shortcuts for the game menu, inventory, world map, quests, and Item Radial. Tap **Sneak** to crouch or stand. When picking a lock, use the on-screen **Pick** arrows to set the angle and the **Bolt** arrows to move the bolt.
 - **HUD size** in Options → Gameplay offers Default, Small, and Hidden. Selecting Default or Small restores the gameplay HUD, even if that size is already selected.
 - **Touch layout editor** moves and resizes individual controls and saves the layout.
 - **Ability and Reckoning controls** include a tappable 1–9/0 ability bar, a Cast button for the selected spell, on-screen LT and RT prompts, touch finishers, and Continue buttons on screens that require a controller button or key.
