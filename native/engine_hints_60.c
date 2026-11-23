@@ -5,12 +5,12 @@
 #include <time.h>
 #include <unistd.h>
 #include "rt.h"
+#include "android/app/veil_native_scaling.h"
 
 typedef struct APerformanceHintManager APerformanceHintManager;
 typedef struct APerformanceHintSession APerformanceHintSession;
 typedef struct AWorkDuration AWorkDuration;
 
-extern int oa_adpf_mode;
 unsigned oa_adpf_active_mask;
 uint64_t oa_adpf_reports[2];
 
@@ -127,7 +127,7 @@ static void change_hint(HintSession *s, unsigned index, int mode)
 void oa_hint_begin(unsigned role)
 {
     HintSession *s = &local[role-1];
-    const int mode = __atomic_load_n(&oa_adpf_mode,__ATOMIC_RELAXED);
+    const int mode = veil_cpu_performance_hints_enabled();
     if (s->mode != mode)
         change_hint(s,role-1,mode);
     if (s->session) {

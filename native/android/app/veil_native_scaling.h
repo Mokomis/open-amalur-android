@@ -5,6 +5,7 @@ __attribute__((visibility("hidden"))) void veil_display_resolutions(const int *s
 
 __attribute__((visibility("hidden"))) int veil_dynamic_resolution_enabled(void);
 __attribute__((visibility("hidden"))) int veil_resolution_heat_response_enabled(void);
+__attribute__((visibility("hidden"))) int veil_cpu_performance_hints_enabled(void);
 __attribute__((visibility("hidden"))) int veil_native_scaling_percent(const char *root);
 __attribute__((visibility("hidden"))) int veil_render_resolution(const char *root, int window_width, int window_height, int *width, int *height);
 __attribute__((visibility("hidden"))) int veil_native_scaling_read(const char *section, const char *key, char *value);

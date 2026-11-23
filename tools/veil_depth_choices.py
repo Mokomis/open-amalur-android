@@ -191,7 +191,7 @@ def prepare_row(c):
     c.op("CALL_I", 9, 2, 1)
 
 
-def restart_footer(c):
+def restart_footer(c, selected_id=None):
     c.native(11, "find_static_type")
     c.glob(12, "m_window")
     c.load(13, 1221325)  # Text label on the background panel
@@ -209,6 +209,10 @@ def restart_footer(c):
     c.load(
         14, "Restart the game to apply changes to\nAmbient Occlusion or Depth of Field."
     )
+    if selected_id is not None:
+        c.op("EQ", 0, selected_id, 256 + c.index("VeilCpuPerformanceHints"))
+        c.jump("footer_paint")
+        c.load(14, "Shares a 60 FPS CPU target with Android.\nOPPO ran 95 FPS off and 90 FPS on.")
     c.mark("footer_paint")
     c.op("CALL_I", 12, 3, 1)
     c.mark("footer_done")

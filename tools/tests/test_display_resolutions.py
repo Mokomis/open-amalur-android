@@ -55,6 +55,21 @@ int main(int argc, char **argv) {
         }
         return 0;
     }
+    if (!strcmp(argv[3], "cpu") || !strcmp(argv[3], "cpu_reload")) {
+        const char *key = "VeilCpuPerformanceHints";
+        int previous = !strcmp(argv[3], "cpu_reload");
+        veil_native_scaling_percent(argv[1]);
+        assert(veil_cpu_performance_hints_enabled() == previous);
+        assert(!veil_native_scaling_write("DEFAULT", key, "2"));
+        assert(veil_native_scaling_write("DEFAULT", key, previous ? "0" : "1"));
+        assert(veil_cpu_performance_hints_enabled() == !previous);
+        char value[8];
+        assert(veil_native_scaling_read("DEFAULT", key, value));
+        assert(!strcmp(value, previous ? "0" : "1"));
+        assert(!veil_dynamic_resolution_enabled());
+        assert(veil_resolution_heat_response_enabled());
+        return 0;
+    }
     if (!strcmp(argv[3], "budget")) {
         OaResolutionTiming timing = {0};
         uint64_t now = 1;
@@ -152,6 +167,16 @@ class DisplayResolutions(unittest.TestCase):
         self.assertEqual(heat.read_text().strip(), '1')
         self.run_case('native', action='heat_reload')
         self.assertEqual(heat.read_text().strip(), '0')
+
+    def test_cpu_hints_default_off_and_persist_independently(self):
+        (self.path / 'veil-dynamic-resolution').write_text('0\n')
+        (self.path / 'veil-resolution-heat-response').write_text('1\n')
+        preference = self.path / 'veil-cpu-performance-hints'
+        preference.unlink(missing_ok=True)
+        self.run_case('native', action='cpu')
+        self.assertEqual(preference.read_text().strip(), '1')
+        self.run_case('native', action='cpu_reload')
+        self.assertEqual(preference.read_text().strip(), '0')
 
     def test_dynamic_resolution_hysteresis(self):
         self.run_case('native', action='budget')

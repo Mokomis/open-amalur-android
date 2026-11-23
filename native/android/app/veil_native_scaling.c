@@ -15,10 +15,27 @@ static const char active_key[] = "VeilNativeHardwareScalingActive";
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 static char settings_path[PATH_MAX];
 static char resolution_path[PATH_MAX];
-static char dynamic_path[PATH_MAX];
-static char heat_path[PATH_MAX];
-static _Atomic int dynamic_resolution;
-static _Atomic int heat_response;
+typedef struct {
+    const char *key;
+    const char *filename;
+    char path[PATH_MAX];
+    _Atomic int enabled;
+} GraphicsSwitch;
+
+enum { DYNAMIC_RESOLUTION, HEAT_RESPONSE, CPU_HINTS };
+static GraphicsSwitch switches[] = {
+    [DYNAMIC_RESOLUTION] = {.key = "VeilDynamicResolution", .filename = "veil-dynamic-resolution"},
+    [HEAT_RESPONSE] = {.key = "VeilResolutionHeatResponse", .filename = "veil-resolution-heat-response"},
+    [CPU_HINTS] = {.key = "VeilCpuPerformanceHints", .filename = "veil-cpu-performance-hints"},
+};
+
+static GraphicsSwitch *find_switch(const char *key)
+{
+    for (size_t i = 0; i < sizeof switches / sizeof switches[0]; ++i)
+        if (!strcasecmp(key, switches[i].key)) return &switches[i];
+    return NULL;
+}
+
 static int display_width = 1920;
 static int display_height = 1080;
 typedef struct { int width, height; } Resolution;
@@ -69,19 +86,19 @@ enum { DEFAULT_PRESET = 4, PRESET_COUNT = sizeof percentages / sizeof percentage
 static int requested = DEFAULT_PRESET;
 static int active = DEFAULT_PRESET;
 
-static void load_switch(const char *root, const char *name, char path[PATH_MAX], _Atomic int *setting)
+static void load_switch(const char *root, GraphicsSwitch *setting)
 {
-    int size = snprintf(path, PATH_MAX, "%s/%s", root, name);
+    int size = snprintf(setting->path, PATH_MAX, "%s/%s", root, setting->filename);
     if (size < 0 || size >= PATH_MAX) {
-        path[0] = '\0';
+        setting->path[0] = '\0';
         return;
     }
-    FILE *file = fopen(path, "r");
+    FILE *file = fopen(setting->path, "r");
     if (file) {
         int option;
         char extra;
         if (fscanf(file, "%d %c", &option, &extra) == 1 && option == 1)
-            atomic_store(setting, 1);
+            atomic_store(&setting->enabled, 1);
         fclose(file);
     }
 }
@@ -111,8 +128,8 @@ int veil_native_scaling_percent(const char *root)
                 fclose(file);
             }
         }
-        load_switch(root, "veil-dynamic-resolution", dynamic_path, &dynamic_resolution);
-        load_switch(root, "veil-resolution-heat-response", heat_path, &heat_response);
+        for (size_t i = 0; i < sizeof switches / sizeof switches[0]; ++i)
+            load_switch(root, &switches[i]);
         active = requested;
         initialized = 1;
     }
@@ -123,12 +140,17 @@ int veil_native_scaling_percent(const char *root)
 
 int veil_dynamic_resolution_enabled(void)
 {
-    return atomic_load(&dynamic_resolution);
+    return atomic_load(&switches[DYNAMIC_RESOLUTION].enabled);
 }
 
 int veil_resolution_heat_response_enabled(void)
 {
-    return atomic_load(&heat_response);
+    return atomic_load(&switches[HEAT_RESPONSE].enabled);
+}
+
+int veil_cpu_performance_hints_enabled(void)
+{
+    return atomic_load_explicit(&switches[CPU_HINTS].enabled, memory_order_relaxed);
 }
 
 int veil_render_resolution(const char *root, int window_width, int window_height,
@@ -171,6 +193,7 @@ int veil_native_scaling_read(const char *section, const char *key, char *value)
     if (!section || !key || strcasecmp(section, "DEFAULT"))
         return 0;
     pthread_mutex_lock(&lock);
+    GraphicsSwitch *setting = find_switch(key);
     int handled = 1;
     int mode_index;
     char extra;
@@ -186,10 +209,8 @@ int veil_native_scaling_read(const char *section, const char *key, char *value)
         snprintf(value, 8, "%d", requested);
     else if (!strcasecmp(key, active_key))
         snprintf(value, 8, "%d", active);
-    else if (!strcasecmp(key, "VeilDynamicResolution"))
-        snprintf(value, 8, "%d", veil_dynamic_resolution_enabled());
-    else if (!strcasecmp(key, "VeilResolutionHeatResponse"))
-        snprintf(value, 8, "%d", veil_resolution_heat_response_enabled());
+    else if (setting)
+        snprintf(value, 8, "%d", atomic_load(&setting->enabled));
     else if (!strcasecmp(key, "VeilRenderResolution"))
         snprintf(value, 8, "%d", requested_resolution);
     else if (!strcasecmp(key, "VeilRenderResolutionActive"))
@@ -242,9 +263,8 @@ int veil_native_scaling_write(const char *section, const char *key, const char *
     if (!section || !key || strcasecmp(section, "DEFAULT"))
         return -1;
     int resolution = !strcasecmp(key, "VeilRenderResolution");
-    int dynamic = !strcasecmp(key, "VeilDynamicResolution");
-    int heat = !strcasecmp(key, "VeilResolutionHeatResponse");
-    if (!resolution && !dynamic && !heat && strcasecmp(key, setting_key))
+    GraphicsSwitch *setting = find_switch(key);
+    if (!resolution && !setting && strcasecmp(key, setting_key))
         return -1;
     if (!value || !*value) return 0;
     char *end;
@@ -254,7 +274,7 @@ int veil_native_scaling_write(const char *section, const char *key, const char *
     int preset = (int)parsed;
 
     pthread_mutex_lock(&lock);
-    int count = resolution ? resolution_count : (dynamic || heat) ? 2 : PRESET_COUNT;
+    int count = resolution ? resolution_count : setting ? 2 : PRESET_COUNT;
     if (preset >= count) {
         pthread_mutex_unlock(&lock);
         return 0;
@@ -266,10 +286,10 @@ int veil_native_scaling_write(const char *section, const char *key, const char *
         ok = save_setting(resolution_path, dimensions);
         if (ok)
             requested_resolution = preset;
-    } else if (dynamic || heat) {
-        ok = save_setting(heat ? heat_path : dynamic_path, preset ? "1" : "0");
+    } else if (setting) {
+        ok = save_setting(setting->path, preset ? "1" : "0");
         if (ok)
-            atomic_store(heat ? &heat_response : &dynamic_resolution, preset);
+            atomic_store(&setting->enabled, preset);
     } else {
         char percent[4];
         snprintf(percent, sizeof percent, "%d", percentages[preset]);

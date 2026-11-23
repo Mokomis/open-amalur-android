@@ -20,7 +20,7 @@ Veil draws visual inspiration from other interfaces, including Edge for Skyrim. 
 
 ## Download and install
 
-**Open Amalur for Android v0.1.28** · [Download the latest APK](https://github.com/Mokomis/open-amalur-android/releases/latest) · [v0.1.28 release notes](https://github.com/Mokomis/open-amalur-android/releases/tag/v0.1.28)
+**Open Amalur for Android v0.1.29** · [Download the latest APK](https://github.com/Mokomis/open-amalur-android/releases/latest) · [v0.1.29 release notes](https://github.com/Mokomis/open-amalur-android/releases/tag/v0.1.29)
 
 ### Minimum Android requirements
 
@@ -124,6 +124,7 @@ Veil uses compact lists and a consistent set of buttons, tabs, and prompts acros
 - **Android Hardware Scaling** offers Off, 25%, 50%, 75%, and 100%. The setting defaults to 100% and takes effect after a restart. Choose **Native** resolution to match the display’s aspect ratio for gameplay and in-engine cinematics.
 - **Dynamic Resolution (60 FPS)** is under Options → Graphics and defaults to Off. Turn it on during SDR gameplay to target 60 FPS. It uses your configured render size, including Android Hardware Scaling, as its ceiling. Under load it can step down to five-sixths or two-thirds of each dimension, then step back up when there is headroom. The switch takes effect during play.
 - **Reduce Resolution When Hot**, directly below Dynamic Resolution, defaults to Off, including on upgrade. Enable both switches to let Android’s heat reading lower the resolution early and allow it to recover as the device cools. With only Dynamic Resolution enabled, frame times determine the render size. The game remembers each switch separately.
+- **CPU Performance Hints** defaults to Off, including when upgrading from 0.1.28. Enable it to tell Android how much CPU time drawing and simulation take against a 60 FPS target. Android can lower CPU clocks when it sees spare time. In one-minute OPPO Pad Mini tests on a 120 Hz display, enabling hints reduced average FPS from 95 to 90 (about 5%). The 95th-percentile frame time was nearly identical. Results can vary by device. The switch works independently of Dynamic Resolution and takes effect during play. [OPPO measurements](https://github.com/Mokomis/open-amalur-android/commit/b3a938653d67bcc05ffa9289058d881f6424b75d)
 - **Shadow Map Resolution** offers 512, 1024, 1536, and 2048 px.
 - **Shadow Distance** and **Vegetation Draw Distance** each offer 75, 100, 125, and 150 percent.
 - **Ambient Occlusion** offers Off, On, and High. **Depth of Field** offers 0, 50, 100, and 150 percent. The menu identifies settings that take effect after a restart.

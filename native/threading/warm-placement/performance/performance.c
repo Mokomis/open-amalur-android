@@ -14,6 +14,7 @@
 #include <unistd.h>
 #include <time.h>
 #include "rt.h"
+#include "android/app/veil_native_scaling.h"
 int oa_diagnostics_enabled;
 static char draw_math_rcpc_path[2048];
 static char math_rcpc_path[2048];
@@ -33,10 +34,8 @@ int oa_fast_draw_preparation=1;
 int oa_fast_pass_batches=1;
 int oa_fast_handwritten_draw=0;
 int oa_fast_engine_cores=0;
-int oa_adpf_mode=0;
 extern unsigned oa_adpf_active_mask;
 extern uint64_t oa_adpf_reports[2];
-static char adpf_disable_control[2048];
 static char engine_core_control[2048];
 static char texture_copy_control[2048];
 extern int oa_texture_copy_mode;
@@ -107,8 +106,6 @@ static void control_read(void){
  oa_rcpc_loop_set_mode(access(rcpc_loop_control_path,F_OK)==0);
  oa_rcpc_copy_capture_poll(access(rcpc_copy_capture_path,F_OK)==0,"rcpc-copy-capture.json");
 
- /* Android performance hints are on by default; an adpf-disable file turns them off. */
- __atomic_store_n(&oa_adpf_mode, access(adpf_disable_control,F_OK)!=0, __ATOMIC_RELAXED);
  read_engine_cores();
  __atomic_store_n(&oa_fast_handwritten_draw, access(handwritten_draw_enable, F_OK)==0, __ATOMIC_RELAXED);
 read_pass_batch_control();read_draw_control();read_upload_control();int registry=access(registry_control,F_OK)!=0;int prev_registry=__atomic_exchange_n(&oa_fast_map_registry,registry,__ATOMIC_RELAXED);if(prev_registry!=registry)rt_log("PERF active-range map registry %s",registry?"ON":"OFF");int fast=access(mapping_control,F_OK)!=0;int was=__atomic_exchange_n(&oa_fast_mapping,fast,__ATOMIC_RELAXED);if(was!=fast)rt_log("PERF fast mapping %s",fast?"ON":"OFF");
@@ -136,7 +133,6 @@ void oa_perf_start(const char*root){
  snprintf(sync_mode_control,sizeof sync_mode_control,"%s/sync-mode",root);
  snprintf(semaphore_wake_one_control,sizeof semaphore_wake_one_control,"%s/semaphore-wake-one",root);
 
- snprintf(adpf_disable_control,sizeof adpf_disable_control,"%s/adpf-disable",root);
  snprintf(engine_core_control,sizeof engine_core_control,"%s/fast-engine-cores",root);
  snprintf(handwritten_draw_enable,sizeof handwritten_draw_enable,"%s/handwritten-draw-enable",root);
 
@@ -165,7 +161,7 @@ void oa_perf_frame(uint64_t draws,unsigned width,unsigned height){uint64_t now=n
  if(now-last_report<5000000000ull)return;
  uint64_t rn=__atomic_load_n(&oa_rpc_total_ns,__ATOMIC_RELAXED),rc=__atomic_load_n(&oa_rpc_total_calls,__ATOMIC_RELAXED);
  double elapsed=(now-last_report)*1e-9;double ordered[8192];memcpy(ordered,intervals,count*sizeof(double));qsort(ordered,count,sizeof(double),order);
- if(metrics){fprintf(metrics,"{\"monotonic_ns\":%llu,\"total_frames\":%llu,\"frames\":%llu,\"seconds\":%.6f,\"fps\":%.3f,\"fps_kind\":\"render_submit_loop\",\"p50_ms\":%.3f,\"p95_ms\":%.3f,\"render_thread_cpu_ms_per_frame\":%.3f,\"rpc_ms_per_frame\":%.3f,\"rpc_calls_per_frame\":%.3f,\"draws_per_frame\":%.1f,\"width\":%u,\"height\":%u,\"fast_mapping\":%d,\"fast_map_registry\":%d,\"fast_draw\":%d,\"direct_upload\":%d,\"fast_pass_batch\":%d,\"fast_handwritten_draw\":%d,\"fast_engine_cores\":%d,\"sync_mode\":%d,\"semaphore_wake_one\":%d,\"rcpc_copy\":%d,\"rcpc_copy_seen\":%d,\"draw_math_rcpc\":%d,\"draw_math_rcpc_seen\":%u,\"math_loop_rcpc\":%d,\"math_loop_rcpc_seen\":%u,\"rcpc_loop\":%d,\"rcpc_loop_seen\":%d,\"visibility_prepass\":%d,\"visibility_prepass_workers\":%u,\"visibility_prepass_seen\":%d,\"visibility_prepass_batches\":%llu,\"visibility_prepass_shapes\":%llu,\"visibility_prepass_helper_shapes\":%llu,\"visibility_prepass_validated\":%llu,\"visibility_prepass_mismatches\":%llu,\"adpf\":%d,\"adpf_target_ns\":16666667,\"adpf_sessions\":%u,\"adpf_draw_reports\":%llu,\"adpf_sim_reports\":%llu,\"diagnostics\":%d,\"build\":\"%s\"}\n",(unsigned long long)now,(unsigned long long)total_frames,(unsigned long long)frame,elapsed,frame/elapsed,ordered[count/2],ordered[(count-1)*95/100],cpu_sum/frame,(rn-rpc_previous)*1e-6/frame,(rc-rpc_calls_previous)/(double)frame,(draws-draw_previous)/(double)frame,width,height,__atomic_load_n(&oa_fast_mapping,__ATOMIC_RELAXED),__atomic_load_n(&oa_fast_map_registry,__ATOMIC_RELAXED),__atomic_load_n(&oa_fast_draw_preparation,__ATOMIC_RELAXED),__atomic_load_n(&oa_direct_constant_upload,__ATOMIC_RELAXED),__atomic_load_n(&oa_fast_pass_batches,__ATOMIC_RELAXED),__atomic_load_n(&oa_fast_handwritten_draw,__ATOMIC_RELAXED),__atomic_load_n(&oa_fast_engine_cores,__ATOMIC_RELAXED),oa_sync_get_mode(),oa_sync_get_wake_one(),oa_rcpc_copy_get_mode(),oa_rcpc_copy_get_seen(),oa_draw_rcpc_get_mode(),oa_draw_rcpc_get_seen(),oa_math_rcpc_get_mode(),oa_math_rcpc_get_seen(),oa_rcpc_loop_get_mode(),oa_rcpc_loop_get_seen(),oa_visibility_prepass_mode(),oa_visibility_prepass_workers(),oa_visibility_prepass_seen(),(unsigned long long)oa_visibility_prepass_batches(),(unsigned long long)oa_visibility_prepass_shapes(),(unsigned long long)oa_visibility_prepass_helper_shapes(),(unsigned long long)oa_visibility_prepass_validated(),(unsigned long long)oa_visibility_prepass_mismatches(),__atomic_load_n(&oa_adpf_mode,__ATOMIC_RELAXED),__atomic_load_n(&oa_adpf_active_mask,__ATOMIC_RELAXED),(unsigned long long)__atomic_load_n(&oa_adpf_reports[0],__ATOMIC_RELAXED),(unsigned long long)__atomic_load_n(&oa_adpf_reports[1],__ATOMIC_RELAXED),__atomic_load_n(&oa_diagnostics_enabled,__ATOMIC_RELAXED),
+ if(metrics){fprintf(metrics,"{\"monotonic_ns\":%llu,\"total_frames\":%llu,\"frames\":%llu,\"seconds\":%.6f,\"fps\":%.3f,\"fps_kind\":\"render_submit_loop\",\"p50_ms\":%.3f,\"p95_ms\":%.3f,\"render_thread_cpu_ms_per_frame\":%.3f,\"rpc_ms_per_frame\":%.3f,\"rpc_calls_per_frame\":%.3f,\"draws_per_frame\":%.1f,\"width\":%u,\"height\":%u,\"fast_mapping\":%d,\"fast_map_registry\":%d,\"fast_draw\":%d,\"direct_upload\":%d,\"fast_pass_batch\":%d,\"fast_handwritten_draw\":%d,\"fast_engine_cores\":%d,\"sync_mode\":%d,\"semaphore_wake_one\":%d,\"rcpc_copy\":%d,\"rcpc_copy_seen\":%d,\"draw_math_rcpc\":%d,\"draw_math_rcpc_seen\":%u,\"math_loop_rcpc\":%d,\"math_loop_rcpc_seen\":%u,\"rcpc_loop\":%d,\"rcpc_loop_seen\":%d,\"visibility_prepass\":%d,\"visibility_prepass_workers\":%u,\"visibility_prepass_seen\":%d,\"visibility_prepass_batches\":%llu,\"visibility_prepass_shapes\":%llu,\"visibility_prepass_helper_shapes\":%llu,\"visibility_prepass_validated\":%llu,\"visibility_prepass_mismatches\":%llu,\"adpf\":%d,\"adpf_target_ns\":16666667,\"adpf_sessions\":%u,\"adpf_draw_reports\":%llu,\"adpf_sim_reports\":%llu,\"diagnostics\":%d,\"build\":\"%s\"}\n",(unsigned long long)now,(unsigned long long)total_frames,(unsigned long long)frame,elapsed,frame/elapsed,ordered[count/2],ordered[(count-1)*95/100],cpu_sum/frame,(rn-rpc_previous)*1e-6/frame,(rc-rpc_calls_previous)/(double)frame,(draws-draw_previous)/(double)frame,width,height,__atomic_load_n(&oa_fast_mapping,__ATOMIC_RELAXED),__atomic_load_n(&oa_fast_map_registry,__ATOMIC_RELAXED),__atomic_load_n(&oa_fast_draw_preparation,__ATOMIC_RELAXED),__atomic_load_n(&oa_direct_constant_upload,__ATOMIC_RELAXED),__atomic_load_n(&oa_fast_pass_batches,__ATOMIC_RELAXED),__atomic_load_n(&oa_fast_handwritten_draw,__ATOMIC_RELAXED),__atomic_load_n(&oa_fast_engine_cores,__ATOMIC_RELAXED),oa_sync_get_mode(),oa_sync_get_wake_one(),oa_rcpc_copy_get_mode(),oa_rcpc_copy_get_seen(),oa_draw_rcpc_get_mode(),oa_draw_rcpc_get_seen(),oa_math_rcpc_get_mode(),oa_math_rcpc_get_seen(),oa_rcpc_loop_get_mode(),oa_rcpc_loop_get_seen(),oa_visibility_prepass_mode(),oa_visibility_prepass_workers(),oa_visibility_prepass_seen(),(unsigned long long)oa_visibility_prepass_batches(),(unsigned long long)oa_visibility_prepass_shapes(),(unsigned long long)oa_visibility_prepass_helper_shapes(),(unsigned long long)oa_visibility_prepass_validated(),(unsigned long long)oa_visibility_prepass_mismatches(),veil_cpu_performance_hints_enabled(),__atomic_load_n(&oa_adpf_active_mask,__ATOMIC_RELAXED),(unsigned long long)__atomic_load_n(&oa_adpf_reports[0],__ATOMIC_RELAXED),(unsigned long long)__atomic_load_n(&oa_adpf_reports[1],__ATOMIC_RELAXED),__atomic_load_n(&oa_diagnostics_enabled,__ATOMIC_RELAXED),
 #ifdef OA_BUILD_PROFILE
 OA_BUILD_PROFILE
 #else
