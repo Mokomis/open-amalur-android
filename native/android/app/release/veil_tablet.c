@@ -44,6 +44,7 @@ static _Atomic bool death_menu_tap;
 static _Atomic bool item_radial;
 static _Atomic bool map_open;
 static _Atomic unsigned touch_ability_slot;
+static _Atomic int hotbar_hud_mode;
 static _Atomic bool touch_cast;
 static _Atomic uint64_t finisher_packet;
 static _Atomic uint64_t finisher_update;
@@ -226,6 +227,10 @@ HIDDEN int veil_tablet_command(const char *section, const char *key, const char 
         }
         return 1;
     }
+    if (!strcasecmp(key, "VeilHotbarHudMode")) {
+        atomic_store(&hotbar_hud_mode, value[0] == '2' ? 2 : value[0] == '1' ? 1 : 0);
+        return 1;
+    }
     if (!strcasecmp(key, "VeilTabletSlotSelected")) {
         __android_log_print(ANDROID_LOG_INFO, "VeilTablet", "Selected native ability slot %s", value);
         return 1;
@@ -285,8 +290,8 @@ HIDDEN int veil_tablet_read(const char *section, const char *key, char *value)
     unsigned result;
     if (!strcasecmp(key, "VeilTabletMenu")) {
         result = atomic_exchange(&menu_request, 0);
-        if (result) cancel_touch_target();
-        else result = poll_touch_target();
+        if (result >= 1 && result <= 6) cancel_touch_target();
+        else if (!result) result = poll_touch_target();
     } else if (!strcasecmp(key, "VeilTabletMashTap")) {
         unsigned pending = atomic_load(&mash_taps);
         result = 0;
@@ -417,6 +422,13 @@ JNI_API(finisher)(JNIEnv *env, jclass type)
     return 1;
 }
 
+JNI_API(hotbarHudMode)(JNIEnv *env, jclass type)
+{
+    (void)env;
+    (void)type;
+    return atomic_load(&hotbar_hud_mode);
+}
+
 JNI_API(aspect)(JNIEnv *env, jclass type)
 {
     (void)env;
@@ -494,7 +506,7 @@ JNI_API(menu)(JNIEnv *env, jclass type, jint destination)
 {
     (void)env;
     (void)type;
-    if (destination >= 1 && destination <= 6)
+    if ((destination >= 1 && destination <= 6) || destination == 10)
         atomic_store(&menu_request, destination);
     else if (destination >= 11 && destination <= 20) {
         __android_log_print(ANDROID_LOG_INFO, "VeilTablet", "Touch ability slot %d", destination - 10);

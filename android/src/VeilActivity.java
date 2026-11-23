@@ -39,6 +39,7 @@ public final class VeilActivity extends NativeActivity {
     private static native int mode();
     private static native int lockMouse();
     private static native int aspect();
+    private static native int hotbarHudMode();
     private static native int input(int enabled, int buttons, int lt, int rt, int cast,
                                     int lx, int ly, int rx, int ry);
     private static native int menu(int destination);
@@ -482,6 +483,7 @@ public final class VeilActivity extends NativeActivity {
         final float xDefault, yDefault, sizeDefault;
         final int button, shortcut;
         float x, y, size;
+        int opacity = 100;
         int pointer = -1;
         Control(String label, String settingsKey, float x, float y, float size, int button, int shortcut) {
             name = label.replace('\n', ' ');
@@ -498,6 +500,7 @@ public final class VeilActivity extends NativeActivity {
             x = xDefault;
             y = yDefault;
             size = sizeDefault;
+            opacity = 100;
         }
     }
 
@@ -508,7 +511,7 @@ public final class VeilActivity extends NativeActivity {
         private static final float CONTROL_EDGE_MARGIN = 6f / 720f;
         private static final float LEGACY_ASPECT = 17778f / 10000f;
         private static final String FULL_DISPLAY_LAYOUT = "full-display-layout";
-        private static final int MOVE = 0, LOOK = 1, FATE = 12, MENU = 9;
+        private static final int MOVE = 0, LOOK = 1, MENU = 9, FATE = 12, EDIT = 14;
         private final Control[] controls = {
             new Control("Move", "move", .145f, .78f, .195f, 0, 0),
             new Control("Camera", "look", .68f, .63f, .152f, 0, 0),
@@ -528,6 +531,7 @@ public final class VeilActivity extends NativeActivity {
             new Control("Item\nRadial", "items", .703f, .150f, .078f, 0, 6),
             new Control("Cast", "cast", .762f, .723f, .081f, 0, 0),
             new Control("Sneak", "sneak", .243f, .674f, .095f, 0x0200, 0),
+            new Control("Quick\nSave", "quick-save", .360f, .150f, .078f, 0, 10),
         };
         private static final int BLOCK = 5, INTERACT = 6, MAGIC = 7, SPRINT = 8, CAST = 16;
         private final SharedPreferences preferences = getSharedPreferences("veil-touch", MODE_PRIVATE);
@@ -536,6 +540,7 @@ public final class VeilActivity extends NativeActivity {
         private final RectF gameViewport = new RectF();
         private final RectF done = new RectF(), defaults = new RectF();
         private final RectF toggle = new RectF(), minus = new RectF(), plus = new RectF();
+        private final RectF opacityMinus = new RectF(), opacityPlus = new RectF();
         private boolean enabled = preferences.getBoolean("enabled", true);
         private boolean restoreLegacyPositions =
                 preferences.contains("move.x") && !preferences.getBoolean(FULL_DISPLAY_LAYOUT, false);
@@ -614,6 +619,7 @@ public final class VeilActivity extends NativeActivity {
                 c.x = preferences.getFloat(c.settingsKey + ".x", c.xDefault);
                 c.y = preferences.getFloat(c.settingsKey + ".y", c.yDefault);
                 c.size = preferences.getFloat(c.settingsKey + ".size", c.sizeDefault);
+                c.opacity = Math.max(0, Math.min(100, preferences.getInt(c.settingsKey + ".opacity", 100)));
             }
         }
 
@@ -638,6 +644,7 @@ public final class VeilActivity extends NativeActivity {
             for (Control c : controls) {
                 settings.putFloat(c.settingsKey + ".x", c.x).putFloat(c.settingsKey + ".y", c.y);
                 settings.putFloat(c.settingsKey + ".size", c.size);
+                settings.putInt(c.settingsKey + ".opacity", c.opacity);
             }
             settings.apply();
         }
@@ -698,6 +705,8 @@ public final class VeilActivity extends NativeActivity {
             toggle.set(defaults.left - 145*u, done.top, defaults.left - 10*u, done.bottom);
             plus.set(toggle.left - 63*u, done.top, toggle.left - 20*u, done.bottom);
             minus.set(plus.left - 103*u, done.top, plus.left - 60*u, done.bottom);
+            opacityPlus.set(minus.left - 56*u, done.top, minus.left - 13*u, done.bottom);
+            opacityMinus.set(opacityPlus.left - 115*u, done.top, opacityPlus.left - 72*u, done.bottom);
         }
 
         private float cx(Control c) { return c.x * screen.width(); }
@@ -746,26 +755,40 @@ public final class VeilActivity extends NativeActivity {
             if (editing) drawEditor(canvas);
         }
 
+        private void controlColor(int color, int opacity) {
+            paint.setColor(color);
+            paint.setAlpha(((color >>> 24) * opacity + 50) / 100);
+        }
+
+        private int displayOpacity(int index) {
+            int opacity = controls[index].opacity;
+            boolean requiredPrompt = triggerLesson && (index == BLOCK || index == MAGIC || index == FATE);
+            boolean menuRecovery = index == MENU && (!enabled || controls[EDIT].opacity == 0 && opacity == 0);
+            return editing || requiredPrompt || menuRecovery ? Math.max(25, opacity) : opacity;
+        }
+
         private void drawControl(Canvas canvas, int index) {
             Control c = controls[index];
+            int opacity = displayOpacity(index);
+            if (opacity == 0) return;
             float x = cx(c), y = cy(c), r = radius(c);
             boolean active = c.pointer >= 0 || (editing && selected == index);
             paint.setStyle(Paint.Style.FILL);
-            paint.setColor(active ? 0xd34e4432 : FILL);
+            controlColor(active ? 0xd34e4432 : FILL, opacity);
             canvas.drawCircle(x, y, r, paint);
             paint.setStyle(Paint.Style.STROKE);
             paint.setStrokeWidth(Math.max(1.3f, controlReferenceHeight / 480));
-            paint.setColor(active ? IVORY : 0xbda99164);
+            controlColor(active ? IVORY : 0xbda99164, opacity);
             canvas.drawCircle(x, y, r, paint);
             paint.setStyle(Paint.Style.FILL);
             if (index == MOVE || index == LOOK) {
                 float dx = (index == MOVE ? moveX : lookX) * r * .54f;
                 float dy = -(index == MOVE ? moveY : lookY) * r * .54f;
-                paint.setColor(active ? 0xc5b39f72 : 0x6eb39f72);
+                controlColor(active ? 0xc5b39f72 : 0x6eb39f72, opacity);
                 canvas.drawCircle(x + dx, y + dy, r * .31f, paint);
                 if (index == LOOK && enemyLocked && !editing) {
                     float cx = x + dx, cy = y + dy;
-                    paint.setColor(IVORY);
+                    controlColor(IVORY, opacity);
                     paint.setStyle(Paint.Style.STROKE);
                     paint.setStrokeWidth(r * .045f);
                     canvas.drawArc(cx - .095f*r, cy - .16f*r, cx + .095f*r, cy + .07f*r,
@@ -777,11 +800,11 @@ public final class VeilActivity extends NativeActivity {
                 return;
             }
             String[] label = index == INTERACT && finisherPosition != 0 ? FINISHER_LABEL : c.labelLines;
-            drawControlLabel(canvas, label, x, y, r);
+            drawControlLabel(canvas, label, x, y, r, opacity);
         }
 
-        private void drawControlLabel(Canvas canvas, String[] lines, float x, float y, float radius) {
-            paint.setColor(IVORY);
+        private void drawControlLabel(Canvas canvas, String[] lines, float x, float y, float radius, int opacity) {
+            controlColor(IVORY, opacity);
             paint.setTypeface(CONTROL_LABEL_FONT);
             float size = radius * (lines.length == 1 ? .49f : .46f);
             paint.setTextSize(size);
@@ -800,14 +823,8 @@ public final class VeilActivity extends NativeActivity {
         }
 
         private int abilitySlot(float x, float y) {
-            float unit = gameViewport.width() / 1280f;
-            float railCenter = gameViewport.centerX() + 20f * unit;
-            float relativeX = (x - railCenter) / unit;
-            int slot = Math.round((relativeX + 338f) / 75f) + 1;
-            if (slot < 1 || slot > 10 || Math.abs(relativeX - ((slot - 1) * 75f - 338f)) > 34)
-                return 0;
-            float bottomOffset = (gameViewport.bottom - y) / (gameViewport.height() / 720f);
-            return bottomOffset >= 0 && bottomOffset <= 64 ? slot : 0;
+            return TouchHotbar.slot(x, y, gameViewport.centerX(), gameViewport.bottom,
+                                    gameViewport.height(), hotbarHudMode());
         }
 
         private boolean floatingFinisherHit(float x, float y) {
@@ -923,23 +940,31 @@ public final class VeilActivity extends NativeActivity {
             paint.setStrokeWidth(u);
             canvas.drawLine(screen.left, footerTop, screen.right, footerTop, paint);
             text(canvas, controls[selected].name, screen.left+22*u, screen.bottom-35*u, 22*u, IVORY);
-            text(canvas, "Drag a control. Select one to resize it.", screen.left+22*u,
+            text(canvas, "Drag to move. Tap to adjust.", screen.left+22*u,
                  screen.bottom-15*u, 15*u, GOLD);
             editorButton(canvas, toggle, enabled ? "Controls On" : "Gameplay Off", u);
             editorButton(canvas, defaults, "Reset", u);
             editorButton(canvas, done, "Done", u);
             editorButton(canvas, minus, "−", u);
             editorButton(canvas, plus, "+", u);
+            editorButton(canvas, opacityMinus, "−", u);
+            editorButton(canvas, opacityPlus, "+", u);
             paint.setTextAlign(Paint.Align.CENTER);
+            float sizeX = (minus.right + plus.left) / 2;
+            float opacityX = (opacityMinus.right + opacityPlus.left) / 2;
+            text(canvas, "Size", sizeX, done.top + 15*u, 13*u, GOLD);
+            text(canvas, "Opacity", opacityX, done.top + 15*u, 13*u, GOLD);
             text(canvas, Math.round(100*controls[selected].size/controls[selected].sizeDefault)+"%",
-                 (minus.right + plus.left) / 2, screen.bottom-28*u, 15*u, IVORY);
+                 sizeX, done.bottom - 7*u, 15*u, IVORY);
+            text(canvas, controls[selected].opacity+"%", opacityX, done.bottom - 7*u, 15*u, IVORY);
             paint.setTextAlign(Paint.Align.LEFT);
         }
 
         private int hit(float x, float y) {
             for (int i = controls.length - 1; i >= 0; i--) {
                 Control c = controls[i];
-                if (triggerLesson && i != BLOCK && i != MAGIC && i != FATE) continue;
+                if (displayOpacity(i) == 0) continue;
+                if (!editing && triggerLesson && i != BLOCK && i != MAGIC && i != FATE) continue;
                 if (Math.hypot(x - cx(c), y - cy(c)) <= radius(c)) return i;
             }
             return -1;
@@ -968,6 +993,9 @@ public final class VeilActivity extends NativeActivity {
                 } else if (toggle.contains(x,y)) {
                     enabled = !enabled;
                     send();
+                } else if (opacityMinus.contains(x,y) || opacityPlus.contains(x,y)) {
+                    Control control = controls[selected];
+                    control.opacity = Math.max(0, Math.min(100, control.opacity + (opacityPlus.contains(x,y) ? 10 : -10)));
                 } else if (minus.contains(x,y) || plus.contains(x,y)) {
                     Control control = controls[selected];
                     control.size = clamp(control.size + (plus.contains(x,y) ? .009f : -.009f), .055f, .31f);
