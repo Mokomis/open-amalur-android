@@ -32,6 +32,29 @@ int main(int argc, char **argv) {
         assert(!veil_dynamic_resolution_enabled());
         return 0;
     }
+    if (!strcmp(argv[3], "heat") || !strcmp(argv[3], "heat_reload")) {
+        const char *heat = "VeilResolutionHeatResponse";
+        veil_native_scaling_percent(argv[1]);
+        char value[8];
+        if (!strcmp(argv[3], "heat")) {
+            // Upgrade a profile with DRS already on and no heat preference.
+            assert(veil_dynamic_resolution_enabled());
+            assert(!veil_resolution_heat_response_enabled());
+            assert(!veil_native_scaling_write("DEFAULT", heat, "2"));
+            assert(veil_native_scaling_write("DEFAULT", heat, "1"));
+            assert(veil_native_scaling_write("DEFAULT", "VeilDynamicResolution", "0"));
+        }
+        assert(!veil_dynamic_resolution_enabled());
+        assert(veil_resolution_heat_response_enabled());
+        assert(veil_native_scaling_read("DEFAULT", heat, value) && !strcmp(value, "1"));
+        if (!strcmp(argv[3], "heat_reload")) {
+            assert(veil_native_scaling_write("DEFAULT", "VeilDynamicResolution", "1"));
+            assert(veil_native_scaling_write("DEFAULT", heat, "0"));
+            assert(veil_dynamic_resolution_enabled());
+            assert(!veil_resolution_heat_response_enabled());
+        }
+        return 0;
+    }
     if (!strcmp(argv[3], "budget")) {
         OaResolutionTiming timing = {0};
         uint64_t now = 1;
@@ -120,6 +143,15 @@ class DisplayResolutions(unittest.TestCase):
         self.assertEqual(preference.read_text().strip(), '1')
         self.run_case('native', action='dynamic_reload')
         self.assertEqual(preference.read_text().strip(), '0')
+
+    def test_heat_response_is_independent_and_survives_restart(self):
+        (self.path / 'veil-dynamic-resolution').write_text('1\n')
+        heat = self.path / 'veil-resolution-heat-response'
+        heat.unlink(missing_ok=True)
+        self.run_case('native', action='heat')
+        self.assertEqual(heat.read_text().strip(), '1')
+        self.run_case('native', action='heat_reload')
+        self.assertEqual(heat.read_text().strip(), '0')
 
     def test_dynamic_resolution_hysteresis(self):
         self.run_case('native', action='budget')

@@ -92,6 +92,8 @@ The builder adds the prepared Allestar Glade loop as `assets/veil-waterfall.bc3`
 
 `tools/generate_veil_edits.py` takes your original game directory, a locally modded `patch_0.pak`, and output paths for the recipe, properties and a local reference archive. Use the original and modded archives from the same supported game version.
 
+For the Android heat-response option, run `tools/patch_veil_dynamic_resolution.py` on a copy of the 0.1.28 `134230570_klua.batch`. Regenerate the recipe with that replacement and the previous release metadata, and package it with the matching engine.
+
 For Android touch lockpicking, extract the script batch from the 0.1.27 Veil archive and run `python tools/patch_veil_lockpicking.py <input batch> <output folder>/134230570_klua.batch`. Pass the result to `generate_veil_edits.py --replace` with the previous release metadata. Package the new recipe together with the updated Android engine and Java controls.
 
 For the Android **Import Saves** row, run `python tools/add_veil_import_row.py <current Veil patch_0.pak> <output folder>`. Pass its `134230570_klua.batch` to `generate_veil_edits.py --replace` with the previous release metadata, then package the recipe with the matching Android engine.

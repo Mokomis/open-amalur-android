@@ -3,10 +3,8 @@
 /* Lowers the dynamic resolution ceiling before Android throttles the device.
  *
  * Android reports a thermal status and, from Android 12, a "headroom" forecast
- * where 1.0 means the device is about to throttle severely. When dynamic
- * resolution is on, the renderer keeps its level at or below the floor chosen
- * here, so a hot device trades pixels for frame rate early instead of
- * stuttering once the system clamps the CPU and GPU. */
+ * where 1.0 corresponds to severe throttling. With the heat response enabled,
+ * the renderer can lower its resolution before slow frames are observed. */
 #include <stdint.h>
 
 /* Values of AThermalStatus in <android/thermal.h>. */

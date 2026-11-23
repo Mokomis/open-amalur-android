@@ -305,7 +305,7 @@ static void update_render_resolution(oa_chain *s, uint64_t now, int presented)
 
     unsigned level = enabled ? oa_resolution_next(&s->resolution_timing, now, render_region_level)
                              : OA_RESOLUTION_FULL;
-    if (enabled) {
+    if (enabled && veil_resolution_heat_response_enabled()) {
         static OaThermal thermal;
         unsigned previous = thermal.floor;
         unsigned floor = oa_thermal_poll(&thermal, now);

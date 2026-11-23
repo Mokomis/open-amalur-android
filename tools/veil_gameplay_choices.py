@@ -16,6 +16,7 @@ TOGGLES = (
     "VeilNightAmbience",
     "VeilDayAmbience",
     "VeilDynamicResolution",
+    "VeilResolutionHeatResponse",
     "vsync",
     "postproc",
     "vegetation",
