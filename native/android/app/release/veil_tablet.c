@@ -25,6 +25,12 @@ static _Atomic bool lock_splash, lock_game, lock_mouse;
 static _Atomic bool enabled;
 static _Atomic bool sprint_on_stick;
 static _Atomic unsigned menu_request;
+enum { TARGET_TOGGLE = 7, TARGET_TICK, TARGET_CANCEL };
+static _Atomic bool target_toggle, target_active, target_cancel;
+static _Atomic int target_pan;
+static _Atomic uint64_t target_sample;
+static uint64_t next_target_tick;  // Owned by the gameplay HUD.
+static unsigned target_samples, target_centered;
 static _Atomic bool mash_active;
 static _Atomic unsigned mash_taps;
 static _Atomic unsigned tutorial_mode;
@@ -59,12 +65,33 @@ static struct {
 static pthread_mutex_t pad_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 HIDDEN void veil_tablet_wake_input(void);
+HIDDEN int veil_tablet_gameplay_active(void);
 
 static uint64_t now_ms(void)
 {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (uint64_t)ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
+}
+
+static void cancel_touch_target(void)
+{
+    atomic_store(&target_toggle, false);
+    if (atomic_exchange(&target_active, false))
+        atomic_store(&target_cancel, true);
+    atomic_store(&target_pan, 0);
+}
+
+static unsigned poll_touch_target(void)
+{
+    if (atomic_load(&target_active) && !veil_tablet_gameplay_active()) cancel_touch_target();
+    if (atomic_exchange(&target_cancel, false)) return TARGET_CANCEL;
+    if (atomic_exchange(&target_toggle, false)) return TARGET_TOGGLE;
+    if (!atomic_load(&target_active)) return 0;
+    uint64_t now = now_ms();
+    if (now < next_target_tick) return 0;
+    next_target_tick = now + 50;
+    return TARGET_TICK;
 }
 
 static void load_camera_setting(void)
@@ -153,7 +180,33 @@ HIDDEN int veil_tablet_command(const char *section, const char *key, const char 
             last = value[0];
             __android_log_print(ANDROID_LOG_INFO, "VeilTablet", "Gameplay HUD %c", last);
         }
+        if (value[0] != '1') cancel_touch_target();
         atomic_store(&hud_update, value[0] == '1' ? now_ms() : 0);
+        return 1;
+    }
+    if (!strcasecmp(key, "VeilTouchTarget")) {
+        bool active = *value && strcmp(value, "0");
+        atomic_store(&target_active, active);
+        atomic_store(&target_pan, 0);
+        next_target_tick = 0;
+        __android_log_print(ANDROID_LOG_INFO, "VeilTarget", "%s %s (%u samples, %u centered)",
+                            active ? "Acquired" : "Released", value, active ? 0 : target_samples, active ? 0 : target_centered);
+        target_samples = target_centered = 0;
+        return 1;
+    }
+    if (!strcasecmp(key, "VeilTouchTargetX")) {
+        if (atomic_load(&target_active)) {
+            int offset = atoi(value);
+            if (offset > 100) offset = 100;
+            if (offset < -100) offset = -100;
+            int magnitude = abs(offset);
+            // A small central band avoids hunting when the enemy idles.
+            int pan = magnitude <= 7 ? 0 : 8000 + 230 * (magnitude - 7);
+            atomic_store(&target_pan, offset < 0 ? -pan : pan);
+            atomic_store(&target_sample, now_ms());
+            ++target_samples;
+            if (!pan) ++target_centered;
+        }
         return 1;
     }
     if (!strcasecmp(key, "VeilCameraBounding")) {
@@ -232,6 +285,8 @@ HIDDEN int veil_tablet_read(const char *section, const char *key, char *value)
     unsigned result;
     if (!strcasecmp(key, "VeilTabletMenu")) {
         result = atomic_exchange(&menu_request, 0);
+        if (result) cancel_touch_target();
+        else result = poll_touch_target();
     } else if (!strcasecmp(key, "VeilTabletMashTap")) {
         unsigned pending = atomic_load(&mash_taps);
         result = 0;
@@ -300,7 +355,8 @@ JNI_API(mode)(JNIEnv *env, jclass type)
         return 4;
     if (now - atomic_load(&hud_update) >= 300)
         return 0;
-    return atomic_load(&enabled) ? 1 : 3;
+    if (!atomic_load(&enabled)) return 3;
+    return atomic_load(&target_active) ? 9 : 1;
 }
 
 JNI_API(nameDialogVisible)(JNIEnv *env, jclass type)
@@ -412,6 +468,9 @@ JNI_API(input)(JNIEnv *env, jclass type, jint on, jint buttons, jint lt, jint rt
         buttons |= atomic_load(&sprint_on_stick) ? 0x40 : 0x1000;
     }
     pthread_mutex_lock(&pad_mutex);
+    if (!on) cancel_touch_target();
+    else if ((buttons & 0x80) && !(pad.buttons & 0x80) && veil_tablet_gameplay_active())
+        atomic_store(&target_toggle, true);
     if (atomic_load(&enabled) != (on != 0) || pad.buttons != buttons ||
         pad.lt != lt || pad.rt != rt || pad.lx != lx || pad.ly != ly ||
         pad.rx != rx || pad.ry != ry) {
@@ -529,7 +588,7 @@ HIDDEN uint32_t veil_trace_pad_get(uint32_t index, uint8_t state[16])
         if (buttons || state[6] > 32 || state[7] > 32 ||
             sticks[0] < -4096 || sticks[0] > 4096 || sticks[1] < -4096 || sticks[1] > 4096 ||
             sticks[2] < -4096 || sticks[2] > 4096 || sticks[3] < -4096 || sticks[3] > 4096) {
-            atomic_store(&controller_active, true);
+            if (!atomic_exchange(&controller_active, true)) cancel_touch_target();
             return status;
         }
         if (!atomic_load(&enabled) || atomic_load(&controller_active))
@@ -537,8 +596,18 @@ HIDDEN uint32_t veil_trace_pad_get(uint32_t index, uint8_t state[16])
     }
     // Present a neutral virtual pad even before the touch overlay starts.
     pthread_mutex_lock(&pad_mutex);
+    // Let an explicit camera drag take priority, then resume tracking when released.
+    static int16_t previous_rx;
+    int16_t rx = pad.rx;
+    if (!rx && atomic_load(&target_active) && now_ms() - atomic_load(&target_sample) < 180)
+        rx = (int16_t)atomic_load(&target_pan);
+    if (rx != previous_rx) {
+        previous_rx = rx;
+        ++packet;
+    }
     memcpy(state, &packet, sizeof(packet));
     memcpy(state + 4, &pad, sizeof(pad));
+    memcpy(state + 12, &rx, sizeof(rx));
     if (finisher_active) state[5] |= 0x10;
     pthread_mutex_unlock(&pad_mutex);
     return 0;

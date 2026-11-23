@@ -555,6 +555,8 @@ public final class VeilActivity extends NativeActivity {
         private final long[] startedAt = new long[controls.length];
         private final long[] releasedUntil = new long[controls.length];
         private boolean hasGesture;
+        private static final int MODE_TARGET_LOCKED = 9;
+        private boolean enemyLocked;
         private boolean cameraHoldEligible;
         private boolean cameraStickPressed;
         private static final int RIGHT_STICK_BUTTON = 0x0080;
@@ -563,7 +565,12 @@ public final class VeilActivity extends NativeActivity {
                 updateBadge.show(!noOverlays && VeilActivity.this.hasWindowFocus() && titleVisible() != 0);
                 int current = mode();
                 if (current == 2) openEditor();
-                boolean next = current == 1 || current == 3;
+                boolean locked = current == MODE_TARGET_LOCKED;
+                if (enemyLocked != locked) {
+                    enemyLocked = locked;
+                    invalidate();
+                }
+                boolean next = current == 1 || current == 3 || locked;
                 boolean nextMash = current == 4;
                 boolean nextTutorial = current == 5;
                 boolean nextTriggers = current == 6;
@@ -756,6 +763,17 @@ public final class VeilActivity extends NativeActivity {
                 float dy = -(index == MOVE ? moveY : lookY) * r * .54f;
                 paint.setColor(active ? 0xc5b39f72 : 0x6eb39f72);
                 canvas.drawCircle(x + dx, y + dy, r * .31f, paint);
+                if (index == LOOK && enemyLocked && !editing) {
+                    float cx = x + dx, cy = y + dy;
+                    paint.setColor(IVORY);
+                    paint.setStyle(Paint.Style.STROKE);
+                    paint.setStrokeWidth(r * .045f);
+                    canvas.drawArc(cx - .095f*r, cy - .16f*r, cx + .095f*r, cy + .07f*r,
+                                   180, 180, false, paint);
+                    paint.setStyle(Paint.Style.FILL);
+                    canvas.drawRoundRect(cx - .15f*r, cy - .055f*r, cx + .15f*r, cy + .15f*r,
+                                         .035f*r, .035f*r, paint);
+                }
                 return;
             }
             String[] label = index == INTERACT && finisherPosition != 0 ? FINISHER_LABEL : c.labelLines;
