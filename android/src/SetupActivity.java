@@ -338,6 +338,7 @@ public final class SetupActivity extends Activity {
                 (message, copied, total) -> runOnUiThread(() -> status.setText(total > 0
                         ? String.format(Locale.ROOT, "%s (%d%%)", message, copied * 100 / total) : message + "…")));
         GameFiles.prepareLocalProfile(storage);
+        PersonalSettings.prepare(storage);
         // Runs before the engine starts its new run folder, so the run that just
         // ended stays available to LastExit and crash reports.
         RunLogs.prune(storage);

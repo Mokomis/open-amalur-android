@@ -7,6 +7,7 @@
 __attribute__((visibility("hidden"))) void veil_shadow_init(void);
 __attribute__((visibility("hidden"))) void veil_tablet_viewport(unsigned, unsigned);
 __attribute__((visibility("hidden"))) void veil_tablet_touch_mode(void);
+__attribute__((visibility("hidden"))) void veil_tablet_lock_mouse(void);
 __attribute__((visibility("hidden"))) void veil_tablet_poll_actions(void);
 __attribute__((visibility("hidden"))) int veil_tablet_map_open(void);
 __attribute__((visibility("hidden"))) int veil_tablet_death_menu_active(void);
@@ -224,7 +225,7 @@ int oa_android_height(void)
 }
 int oa_android_connectivity(void){if(!oa_app)return -1;JNIEnv*env=NULL;JavaVM*vm=oa_app->activity->vm;int attach=(*vm)->GetEnv(vm,(void**)&env,JNI_VERSION_1_6)==JNI_EDETACHED;if(attach&&(*vm)->AttachCurrentThread(vm,&env,NULL)!=JNI_OK)return -1;int flags=-1;jobject activity=oa_app->activity->clazz;jclass ac=(*env)->GetObjectClass(env,activity);jmethodID get=(*env)->GetMethodID(env,ac,"getSystemService","(Ljava/lang/String;)Ljava/lang/Object;");jstring name=(*env)->NewStringUTF(env,"connectivity");jobject cm=get?(*env)->CallObjectMethod(env,activity,get,name):NULL;if(cm&&!(*env)->ExceptionCheck(env)){jclass cc=(*env)->GetObjectClass(env,cm);jmethodID gn=(*env)->GetMethodID(env,cc,"getActiveNetwork","()Landroid/net/Network;");jobject network=gn?(*env)->CallObjectMethod(env,cm,gn):NULL;flags=0;if(network){flags=0x20;jmethodID gc=(*env)->GetMethodID(env,cc,"getNetworkCapabilities","(Landroid/net/Network;)Landroid/net/NetworkCapabilities;");jobject cap=gc?(*env)->CallObjectMethod(env,cm,gc,network):NULL;if(cap){jclass cl=(*env)->GetObjectClass(env,cap);jmethodID has=(*env)->GetMethodID(env,cl,"hasCapability","(I)Z");if(has&&(*env)->CallBooleanMethod(env,cap,has,12)&&(*env)->CallBooleanMethod(env,cap,has,16))flags=0x40;(*env)->DeleteLocalRef(env,cl);(*env)->DeleteLocalRef(env,cap);}(*env)->DeleteLocalRef(env,network);}(*env)->DeleteLocalRef(env,cc);(*env)->DeleteLocalRef(env,cm);}if((*env)->ExceptionCheck(env)){(*env)->ExceptionClear(env);flags=-1;}(*env)->DeleteLocalRef(env,name);(*env)->DeleteLocalRef(env,ac);if(attach)(*vm)->DetachCurrentThread(vm);return flags;}
 static void*engine_thread(void*unused){(void)unused;const char*root=selected_storage_path;if(!root){__android_log_print(ANDROID_LOG_ERROR,"OpenAmalur","selected game path unavailable");return NULL;}char run[2048],overlay[2048],path[2048],game[2048],koa[2048];snprintf(run,sizeof run,"%s/run-%lld",root,(long long)time(NULL));mkdir(run,0770);snprintf(overlay,sizeof overlay,"%s/overlay",run);mkdir(overlay,0770);chdir(run);
-{char folder[2048];snprintf(folder,sizeof folder,"%s/overlay",overlay);mkdir(folder,0770);snprintf(folder,sizeof folder,"%s/overlay/kaiko",overlay);mkdir(folder,0770);snprintf(folder,sizeof folder,"%s/overlay/kaiko/koa",overlay);mkdir(folder,0770);snprintf(folder,sizeof folder,"%s/overlay/kaiko/koa/personal.ini",overlay);FILE*ini=fopen(folder,"wb");if(ini){const char*text="[DEFAULT]\nDisplayFullscreen=0\n";fputc(0xff,ini);fputc(0xfe,ini);for(const char*c=text;*c;c++){fputc(*c,ini);fputc(0,ini);}fclose(ini);}}
+{char folder[2048];snprintf(folder,sizeof folder,"%s/overlay",overlay);mkdir(folder,0770);snprintf(folder,sizeof folder,"%s/overlay/kaiko",overlay);mkdir(folder,0770);snprintf(folder,sizeof folder,"%s/overlay/kaiko/koa",overlay);mkdir(folder,0770);}
 snprintf(path,sizeof path,"%s/pc-runtime.log",run);setenv("ME_PC_LOG_PATH",path,1);snprintf(path,sizeof path,"%s/oa-vulkan.log",run);oa_vk_android_initialize_log(path);char install[2048], ready[2048];
 snprintf(ready, sizeof ready, "%s/imported-install/.ready", root);
 snprintf(install, sizeof install, "%s%s", root, access(ready, R_OK) == 0 ? "/imported-install" : "");
@@ -424,6 +425,7 @@ static int map_pinch(AInputEvent *event, int action, int x, int y)
 
 static void mouse_event(AInputEvent *event, int action, int x, int y)
 {
+    veil_tablet_lock_mouse();
     static int previous_buttons;
     static const int button_mask[] = {
         AMOTION_EVENT_BUTTON_PRIMARY, AMOTION_EVENT_BUTTON_SECONDARY, AMOTION_EVENT_BUTTON_TERTIARY

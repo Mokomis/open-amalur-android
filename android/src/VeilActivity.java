@@ -37,6 +37,7 @@ public final class VeilActivity extends NativeActivity {
     private static final String[] FINISHER_LABEL = {"Finish", "A"};
 
     private static native int mode();
+    private static native int lockMouse();
     private static native int aspect();
     private static native int input(int enabled, int buttons, int lt, int rt, int cast,
                                     int lx, int ly, int rx, int ry);
@@ -526,6 +527,7 @@ public final class VeilActivity extends NativeActivity {
             new Control("Edit\nLayout", "edit", .646f, .150f, .078f, 0, 5),
             new Control("Item\nRadial", "items", .703f, .150f, .078f, 0, 6),
             new Control("Cast", "cast", .762f, .723f, .081f, 0, 0),
+            new Control("Sneak", "sneak", .243f, .674f, .095f, 0x0200, 0),
         };
         private static final int BLOCK = 5, INTERACT = 6, MAGIC = 7, SPRINT = 8, CAST = 16;
         private final SharedPreferences preferences = getSharedPreferences("veil-touch", MODE_PRIVATE);
@@ -542,6 +544,9 @@ public final class VeilActivity extends NativeActivity {
         private int slotPointer = -1, pressedSlot = 0;
         private int finisherPointer = -1;
         private int finisherPosition;
+        private final LockTouch lock = new LockTouch();
+        private final RectF lockBounds = new RectF();
+        private LockTouch.Action[] lockActions;
         private final RectF mashButton = new RectF();
         private int selected, editorPointer = -1;
         private int disabledMenuPointer = -1;
@@ -559,7 +564,14 @@ public final class VeilActivity extends NativeActivity {
                 boolean nextMash = current == 4;
                 boolean nextTutorial = current == 5;
                 boolean nextTriggers = current == 6;
-                updateWindowInput(next || editing || nextMash || nextTutorial || nextTriggers);
+                LockTouch.Action[] nextLock = current == 7 ? LockTouch.GAME :
+                        current == 8 ? LockTouch.SPLASH : null;
+                if (lockActions != nextLock) {
+                    releaseAll();
+                    lockActions = nextLock;
+                    invalidate();
+                }
+                updateWindowInput(next || editing || nextMash || nextTutorial || nextTriggers || nextLock != null);
                 if (mashVisible != nextMash || tutorialVisible != nextTutorial) {
                     mashVisible = nextMash;
                     tutorialVisible = nextTutorial;
@@ -580,8 +592,8 @@ public final class VeilActivity extends NativeActivity {
                     finisherPosition = nextFinisher;
                     invalidate();
                 }
-                if (visible || triggerLesson) send();
-                if (running) postDelayed(this, visible || editing || mashVisible || tutorialVisible || triggerLesson ? 25 : 90);
+                if (visible || triggerLesson || lockActions != null) send();
+                if (running) postDelayed(this, visible || editing || mashVisible || tutorialVisible || triggerLesson || lockActions != null ? 25 : 90);
             }
         };
 
@@ -684,8 +696,17 @@ public final class VeilActivity extends NativeActivity {
 
         @Override protected void onDraw(Canvas canvas) {
             super.onDraw(canvas);
-            if (!visible && !editing && !mashVisible && !tutorialVisible && !triggerLesson) return;
+            if (!visible && !editing && !mashVisible && !tutorialVisible && !triggerLesson && lockActions == null) return;
             layoutControls();
+            if (lockActions != null && !editing) {
+                long now = android.os.SystemClock.uptimeMillis();
+                for (int i = 0; i < lockActions.length; i++) {
+                    lockButtonBounds(i);
+                    editorButton(canvas, lockBounds, lockActions[i].label, gameViewport.height() / 720f,
+                                 lock.held(lockActions[i], now));
+                }
+                return;
+            }
             if (triggerLesson && !editing) {
                 drawControl(canvas, BLOCK);
                 drawControl(canvas, MAGIC);
@@ -776,6 +797,69 @@ public final class VeilActivity extends NativeActivity {
             return Math.hypot(x - promptX, y - promptY) <= gameViewport.height() * .065f;
         }
 
+        private void lockButtonBounds(int i) {
+            float u = gameViewport.height() / 720f;
+            // Put pick and bolt under opposite thumbs. Keep the lock face visible.
+            float width = 132 * u, gap = 8 * u;
+            int count = lockActions.length;
+            boolean utility = i >= count - 2;
+            boolean right = utility ? i == count - 1 : (count == 4 ? i == 1 : i >= 2);
+            float left = right ? gameViewport.right - 20*u - width : gameViewport.left + 20*u;
+            if (!utility && count == 6) {
+                if (i == 1) left += width + gap;
+                if (i == 2) left -= width + gap;
+            }
+            float bottom = gameViewport.bottom - (utility ? 12 : 78) * u;
+            lockBounds.set(left, bottom - 57*u, left + width, bottom);
+        }
+
+        private void yieldLockToMouse(MotionEvent event) {
+            if (lockActions != null && event.isFromSource(InputDevice.SOURCE_MOUSE)) {
+                lockMouse();
+                releaseAll();
+                updateWindowInput(false);
+            }
+        }
+
+        @Override public boolean onHoverEvent(MotionEvent event) {
+            yieldLockToMouse(event);
+            return super.onHoverEvent(event);
+        }
+
+        @Override public boolean onGenericMotionEvent(MotionEvent event) {
+            yieldLockToMouse(event);
+            return super.onGenericMotionEvent(event);
+        }
+
+        private boolean lockTouch(MotionEvent event) {
+            int action = event.getActionMasked(), index = event.getActionIndex();
+            int pointer = event.getPointerId(index);
+            if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_POINTER_DOWN) {
+                for (int i = 0; i < lockActions.length; i++) {
+                    lockButtonBounds(i);
+                    if (lockBounds.contains(event.getX(index), event.getY(index))) {
+                        lock.press(lockActions[i], pointer, android.os.SystemClock.uptimeMillis());
+                        break;
+                    }
+                }
+            } else if (action == MotionEvent.ACTION_POINTER_UP || action == MotionEvent.ACTION_UP) {
+                lock.release(pointer);
+            } else if (action == MotionEvent.ACTION_CANCEL) {
+                lock.clear();
+            } else if (action == MotionEvent.ACTION_MOVE) {
+                for (int i = 0; i < lockActions.length; i++) {
+                    int finger = lock.pointer(lockActions[i]);
+                    int pos = event.findPointerIndex(finger);
+                    if (pos < 0) continue;
+                    lockButtonBounds(i);
+                    if (!lockBounds.contains(event.getX(pos), event.getY(pos))) lock.release(finger);
+                }
+            }
+            send();
+            invalidate();
+            return true;
+        }
+
         private boolean mashTouch(MotionEvent event) {
             int action = event.getActionMasked(), index = event.getActionIndex();
             if ((action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_POINTER_DOWN) &&
@@ -793,7 +877,11 @@ public final class VeilActivity extends NativeActivity {
         }
 
         private void editorButton(Canvas canvas, RectF bounds, String label, float u) {
-            paint.setColor(0xff222a2a);
+            editorButton(canvas, bounds, label, u, false);
+        }
+
+        private void editorButton(Canvas canvas, RectF bounds, String label, float u, boolean pressed) {
+            paint.setColor(pressed ? 0xff554730 : 0xff222a2a);
             canvas.drawRoundRect(bounds, 2*u, 2*u, paint);
             paint.setStyle(Paint.Style.STROKE);
             paint.setStrokeWidth(u);
@@ -887,6 +975,7 @@ public final class VeilActivity extends NativeActivity {
                 controls[i].pointer = -1;
                 releasedUntil[i] = 0;
             }
+            lock.clear();
             moveX = moveY = lookX = lookY = 0;
             disabledMenuPointer = -1;
             slotPointer = -1;
@@ -899,6 +988,11 @@ public final class VeilActivity extends NativeActivity {
         private void send() {
             int buttons = 0, lt = 0, rt = 0, cast = 0;
             long now = android.os.SystemClock.uptimeMillis();
+            if (lockActions != null) {
+                lock.sample(lockActions, now);
+                input(enabled ? 1 : 0, lock.buttons, 0, 0, 0, lock.boltAxis, 0, lock.pickAxis, 0);
+                return;
+            }
             for (int i = 0; i < controls.length; i++) {
                 if (controls[i].pointer < 0 && now >= releasedUntil[i]) continue;
                 buttons |= controls[i].button;
@@ -943,9 +1037,10 @@ public final class VeilActivity extends NativeActivity {
         }
 
         @Override public boolean onTouchEvent(MotionEvent event) {
-            if (!visible && !editing && !hasGesture && !mashVisible && !tutorialVisible && !triggerLesson) return false;
+            if (!visible && !editing && !hasGesture && !mashVisible && !tutorialVisible && !triggerLesson && lockActions == null) return false;
             layoutControls();
             if (editing) return editorTouch(event);
+            if (lockActions != null) return lockTouch(event);
             if (mashVisible || tutorialVisible) return mashTouch(event);
             if (!enabled) return disabledMenuTouch(event);
             int action = event.getActionMasked(), index = event.getActionIndex();

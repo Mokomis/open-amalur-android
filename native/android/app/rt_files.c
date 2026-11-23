@@ -97,6 +97,12 @@ static const char *under_root(const char *g)
 static void overlay_path(const char *g, char *out, size_t n)
 {
     const char *root = getenv("OA_OFFLINE_ROOT");
+#ifdef __ANDROID__
+    if (root && !_stricmp(g, GUEST_ROOT "\\kaiko\\koa\\personal.ini")) {
+        snprintf(out, n, "%s/veil-personal.ini", root);
+        return;
+    }
+#endif
     if (root && !_stricmp(g, GUEST_ROOT "\\kaiko\\koa\\scalability.ini")) {
         snprintf(out, n, "%s/veil-scalability.ini", root);
         return;

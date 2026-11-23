@@ -6,6 +6,7 @@
 #include "../veil-waterfall/waterfall_state.h"
 /* UTF-16 guest profile API. Reads retail files; writes only the existing overlay. */
 #include <pthread.h>
+#include <unistd.h>
 __attribute__((visibility("hidden"))) int veil_shadow_ini_read(const char *, const char *, char[2]);
 __attribute__((visibility("hidden"))) int veil_shadow_ini_write(const char *, const char *, const char *);
 __attribute__((visibility("hidden"))) int veil_transmog_command(X86Ctx *, const char *, const char *, const char *);
@@ -38,6 +39,24 @@ static void ini_read(X86Ctx*ctx){char*section=ini_wide_string(ARG(0)),*key=ini_w
     }
     char path[2048];ini_path(ARG(5),0,path);pthread_mutex_lock(&ini_lock);char*text=ini_read_text(path),*value=NULL,*save=NULL;int in_section=0;for(char*line=strtok_r(text,"\n",&save);line;line=strtok_r(NULL,"\n",&save)){char*t=ini_trim(line);if(*t=='['){char*e=strchr(t+1,']');if(e){*e=0;in_section=!strcasecmp(ini_trim(t+1),section);}continue;}if(in_section&&*t!=';'&&*t!='#'){char*eq=strchr(t,'=');if(eq){*eq=0;if(!strcasecmp(ini_trim(t),key)){char*v=ini_trim(eq+1);size_t n=strlen(v);if(n>=2&&((v[0]=='"'&&v[n-1]=='"')||(v[0]=='\''&&v[n-1]=='\''))){v[n-1]=0;v++;}free(value);value=strdup(v);}}}}size_t n=ini_put_wide(ARG(3),ARG(4),value?value:fallback?fallback:"");free(value);free(text);pthread_mutex_unlock(&ini_lock);free(section);free(key);free(fallback);RET(n);}
 static void ini_write_utf16(FILE*f,const char*s){fputc(0xff,f);fputc(0xfe,f);const unsigned char*p=(const unsigned char*)s;while(*p){uint32_t c=ini_next(&p);if(c>65535){c-=65536;uint16_t a=0xd800+(c>>10),b=0xdc00+(c&1023);fputc(a&255,f);fputc(a>>8,f);fputc(b&255,f);fputc(b>>8,f);}else{fputc(c&255,f);fputc(c>>8,f);}}}
+static int ini_replace(const char *path, const char *text)
+{
+    char temporary[2080];
+    if (snprintf(temporary, sizeof temporary, "%s.XXXXXX", path) >= (int)sizeof temporary)
+        return 0;
+    int fd = mkstemp(temporary);
+    if (fd < 0) return 0;
+    FILE *file = fdopen(fd, "wb");
+    int ok = 0;
+    if (file) {
+        ini_write_utf16(file, text);
+        ok = !ferror(file);
+        if (fclose(file) != 0) ok = 0;
+    } else close(fd);
+    if (ok && rename(temporary, path) == 0) return 1;
+    unlink(temporary);
+    return 0;
+}
 static void ini_write(X86Ctx*ctx){char*section=ini_wide_string(ARG(0)),*key=ini_wide_string(ARG(1)),*value=ini_wide_string(ARG(2));if(!section&&!key&&!value){RET(1);return;}if(!section){free(key);free(value);RET(0);return;}
     int handled = veil_native_scaling_write(section, key, value);
     if (handled < 0 && key && value && !strcasecmp(section, "DEFAULT") && !strcasecmp(key, "VeilIntroCart")) {
@@ -64,7 +83,7 @@ static void ini_write(X86Ctx*ctx){char*section=ini_wide_string(ARG(0)),*key=ini_
     }
     char path[2048];ini_path(ARG(3),1,path);pthread_mutex_lock(&ini_lock);char original_path[2048];ini_path(ARG(3),0,original_path);char*text=ini_read_text(original_path);size_t cap=strlen(text)+(key?strlen(key):0)+(value?strlen(value):0)+strlen(section)+128;char*out=calloc(cap,1);size_t used=0;int target=0,found=0,inserted=0;char*save=NULL;
 #define INI_APPEND(...) do{int nn=snprintf(out+used,cap-used,__VA_ARGS__);if(nn<0||(size_t)nn>=cap-used)rt_fatal("INI update output bound");used+=nn;}while(0)
-for(char*line=strtok_r(text,"\n",&save);line;line=strtok_r(NULL,"\n",&save)){char*copy=strdup(line),*t=ini_trim(copy);if(*t=='['){if(target&&key&&value&&!inserted){INI_APPEND("%s=%s\n",key,value);inserted=1;}char*e=strchr(t+1,']');target=0;if(e){*e=0;target=!strcasecmp(ini_trim(t+1),section);if(target)found=1;}if(!(target&&!key))INI_APPEND("%s\n",line);}else if(target&&!key){/* delete section */}else if(target&&key){char*eq=strchr(t,'=');int match=0;if(eq){*eq=0;match=!strcasecmp(ini_trim(t),key);}if(match){if(value&&!inserted){INI_APPEND("%s=%s\n",key,value);inserted=1;}}else INI_APPEND("%s\n",line);}else INI_APPEND("%s\n",line);free(copy);}if(key&&value&&!inserted){if(!found)INI_APPEND("\n[%s]\n",section);INI_APPEND("%s=%s\n",key,value);}FILE*f=fopen(path,"wb");int ok=f!=NULL;if(f){ini_write_utf16(f,out);ok=!ferror(f);fclose(f);}free(out);free(text);pthread_mutex_unlock(&ini_lock);free(section);free(key);free(value);RET(ok);
+for(char*line=strtok_r(text,"\n",&save);line;line=strtok_r(NULL,"\n",&save)){char*copy=strdup(line),*t=ini_trim(copy);if(*t=='['){if(target&&key&&value&&!inserted){INI_APPEND("%s=%s\n",key,value);inserted=1;}char*e=strchr(t+1,']');target=0;if(e){*e=0;target=!strcasecmp(ini_trim(t+1),section);if(target)found=1;}if(!(target&&!key))INI_APPEND("%s\n",line);}else if(target&&!key){/* delete section */}else if(target&&key){char*eq=strchr(t,'=');int match=0;if(eq){*eq=0;match=!strcasecmp(ini_trim(t),key);}if(match){if(value&&!inserted){INI_APPEND("%s=%s\n",key,value);inserted=1;}}else INI_APPEND("%s\n",line);}else INI_APPEND("%s\n",line);free(copy);}if(key&&value&&!inserted){if(!found)INI_APPEND("\n[%s]\n",section);INI_APPEND("%s=%s\n",key,value);}int ok=ini_replace(path,out);free(out);free(text);pthread_mutex_unlock(&ini_lock);free(section);free(key);free(value);RET(ok);
 #undef INI_APPEND
 }
 static const HleDef ini_defs[]={{"kernel32.dll","GetPrivateProfileStringW",ini_read,6},{"kernel32.dll","WritePrivateProfileStringW",ini_write,4}};
