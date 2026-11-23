@@ -21,6 +21,7 @@ static _Atomic int title_cover_presented;
 static _Atomic int options_visible;
 static _Atomic bool script_navigation;
 static _Atomic bool controller_active;
+static _Atomic bool lock_splash, lock_game, lock_mouse;
 static _Atomic bool enabled;
 static _Atomic bool sprint_on_stick;
 static _Atomic unsigned menu_request;
@@ -125,6 +126,10 @@ HIDDEN int veil_tablet_command(const char *section, const char *key, const char 
 {
     if (!key || !value || strcasecmp(section, "DEFAULT"))
         return -1;
+    if (!strcasecmp(key, "VeilLockSplash") || !strcasecmp(key, "VeilLockGame")) {
+        atomic_store(!strcasecmp(key, "VeilLockGame") ? &lock_game : &lock_splash, value[0] == '1');
+        return 1;
+    }
     if (!strcasecmp(key, "VeilOptionsScriptInput")) {
         atomic_store(&script_navigation, value[0] == '1');
         return 1;
@@ -239,6 +244,9 @@ HIDDEN int veil_tablet_read(const char *section, const char *key, char *value)
         result = atomic_exchange(&tutorial_tap, false);
     } else if (!strcasecmp(key, "VeilDeathMenuTap")) {
         result = atomic_exchange(&death_menu_tap, false);
+    } else if (!strcasecmp(key, "VeilLockTouch")) {
+        result = atomic_load(&lock_game) && atomic_load(&enabled) &&
+                 !atomic_load(&controller_active) && !atomic_load(&lock_mouse);
     } else if (!strcasecmp(key, "VeilTabletInput")) {
         result = atomic_load(&controller_active) ? 2 :
                  atomic_load(&enabled) ? 1 : 0;
@@ -286,6 +294,8 @@ JNI_API(mode)(JNIEnv *env, jclass type)
         unsigned tutorial = atomic_load(&tutorial_mode);
         if (tutorial) return tutorial == 2 ? 6 : 5;
     }
+    if (atomic_load(&lock_game) || atomic_load(&lock_splash))
+        return atomic_load(&enabled) && !atomic_load(&lock_mouse) ? (atomic_load(&lock_game) ? 7 : 8) : 0;
     if (atomic_load(&mash_active) && atomic_load(&enabled))
         return 4;
     if (now - atomic_load(&hud_update) >= 300)
@@ -482,12 +492,27 @@ HIDDEN int veil_tablet_gameplay_active(void)
 {
     return now_ms() - atomic_load(&hud_update) < 300 &&
            !atomic_load(&item_radial) && !atomic_load(&map_open) &&
-           !atomic_load(&options_visible) && !atomic_load(&tutorial_mode);
+           !atomic_load(&options_visible) && !atomic_load(&tutorial_mode) &&
+           !atomic_load(&lock_splash) && !atomic_load(&lock_game);
 }
 
 HIDDEN void veil_tablet_touch_mode(void)
 {
     atomic_store(&controller_active, false);
+    atomic_store(&lock_mouse, false);
+}
+
+HIDDEN void veil_tablet_lock_mouse(void)
+{
+    atomic_store(&lock_mouse, true);
+}
+
+JNI_API(lockMouse)(JNIEnv *env, jclass type)
+{
+    (void)env;
+    (void)type;
+    veil_tablet_lock_mouse();
+    return 0;
 }
 
 HIDDEN uint32_t veil_stock_pad_get(uint32_t index, uint8_t state[16]);

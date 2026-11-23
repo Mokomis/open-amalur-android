@@ -105,7 +105,7 @@ def insert_callback(data, index, pc, write_code):
 
 
 def mark_window(data, child, key, show_pc, hide_pc):
-    for pc, value in ((hide_pc, "0"), (show_pc, "1")):
+    for pc, value in sorted(((hide_pc, "0"), (show_pc, "1")), reverse=True):
         def edit(fn):
             register = fn["maximum_stack_size"]
             code = Code(fn)
