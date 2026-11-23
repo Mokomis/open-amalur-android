@@ -555,6 +555,9 @@ public final class VeilActivity extends NativeActivity {
         private final long[] startedAt = new long[controls.length];
         private final long[] releasedUntil = new long[controls.length];
         private boolean hasGesture;
+        private boolean cameraHoldEligible;
+        private boolean cameraStickPressed;
+        private static final int RIGHT_STICK_BUTTON = 0x0080;
         private final Runnable pulse = new Runnable() {
             @Override public void run() {
                 updateBadge.show(!noOverlays && VeilActivity.this.hasWindowFocus() && titleVisible() != 0);
@@ -976,6 +979,7 @@ public final class VeilActivity extends NativeActivity {
                 releasedUntil[i] = 0;
             }
             lock.clear();
+            cameraHoldEligible = cameraStickPressed = false;
             moveX = moveY = lookX = lookY = 0;
             disabledMenuPointer = -1;
             slotPointer = -1;
@@ -1001,6 +1005,10 @@ public final class VeilActivity extends NativeActivity {
                 if (i == SPRINT) buttons |= 0x40;
                 if (i == CAST) cast = 1;
             }
+            if (cameraHoldEligible && controls[LOOK].pointer >= 0 &&
+                now - startedAt[LOOK] >= android.view.ViewConfiguration.getLongPressTimeout())
+                cameraStickPressed = true;
+            if (cameraStickPressed) buttons |= RIGHT_STICK_BUTTON;
             input(enabled ? 1 : 0, buttons, lt, rt, cast, (int)(32767*moveX), (int)(32767*moveY),
                   (int)(32767*lookX), (int)(32767*lookY));
         }
@@ -1016,6 +1024,7 @@ public final class VeilActivity extends NativeActivity {
                 moveX = dx * scale;
                 moveY = dy * scale;
             } else {
+                if (length > .20f) cameraHoldEligible = false;
                 lookX = dx * scale;
                 lookY = dy * scale;
             }
@@ -1047,6 +1056,7 @@ public final class VeilActivity extends NativeActivity {
             if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_POINTER_DOWN) {
                 float x = event.getX(index), y = event.getY(index);
                 int which = hit(x,y);
+                boolean onCameraStick = which == LOOK;
                 if (finisherPointer < 0 && !triggerLesson && finisherPosition != 0 &&
                     (which == INTERACT || floatingFinisherHit(x, y))) {
                     finisherPointer = event.getPointerId(index);
@@ -1073,6 +1083,8 @@ public final class VeilActivity extends NativeActivity {
                 startedAt[which] = android.os.SystemClock.uptimeMillis();
                 releasedUntil[which] = 0;
                 if (which == LOOK) {
+                    cameraHoldEligible = onCameraStick;
+                    cameraStickPressed = false;
                     lookStartX = x;
                     lookStartY = y;
                 }
@@ -1102,7 +1114,10 @@ public final class VeilActivity extends NativeActivity {
                     if (i > LOOK && c.shortcut == 0)
                         releasedUntil[i] = startedAt[i] + 72;
                     if (i == MOVE) moveX = moveY = 0;
-                    if (i == LOOK) lookX = lookY = 0;
+                    if (i == LOOK) {
+                        lookX = lookY = 0;
+                        cameraHoldEligible = cameraStickPressed = false;
+                    }
                     if (c.shortcut > 0 && hit(event.getX(index),event.getY(index)) == i) {
                         releaseAll();
                         if (c.shortcut == 5) openEditor();

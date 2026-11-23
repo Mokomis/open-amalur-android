@@ -20,7 +20,7 @@ Veil draws visual inspiration from other interfaces, including Edge for Skyrim. 
 
 ## Download and install
 
-**Open Amalur for Android v0.1.29** · [Download the latest APK](https://github.com/Mokomis/open-amalur-android/releases/latest) · [v0.1.29 release notes](https://github.com/Mokomis/open-amalur-android/releases/tag/v0.1.29)
+**Open Amalur for Android v0.1.30** · [Download the latest APK](https://github.com/Mokomis/open-amalur-android/releases/latest) · [v0.1.30 release notes](https://github.com/Mokomis/open-amalur-android/releases/tag/v0.1.30)
 
 ### Minimum Android requirements
 
@@ -103,14 +103,14 @@ Veil uses compact lists and a consistent set of buttons, tabs, and prompts acros
 - **Inventory, stash, and equipment** with compact item lists, a separate details pane, equipped-item markers, and appearance controls. Consumables can be mapped to the Item Radial. Weapons use Primary and Secondary slots.
 - **Character and progression screens** for stats, skills, abilities, destinies, and character creation. Character creation uses Veil-framed portraits and a single **Use name** confirmation with the Android keyboard.
 - **Quest log and maps** with side-by-side quest lists and objectives, pinch-to-zoom on maps, and touch confirmation for quest tutorials.
-- **Save and load** with full-screen slots and a touch action for creating or overwriting a save. Overwriting keeps the game's confirmation prompt.
+- **Save and load** with full-screen slots and a touch action for creating or overwriting a save. Tap a slot to load it. Loading from the pause menu and overwriting a save both keep the game's confirmation prompt.
 - **Dialogue** with tap selection, a draggable wheel in conversations that use one, and an on-screen Skip control.
-- **Trading, stash, and NPC services** including buying, selling, repair, training, and healing. Veil also covers alchemy, blacksmithing, sagecrafting, lockpicking, and the timed Dispel screen.
+- **Trading, stash, and NPC services** include repair, training, and healing. At a merchant, tap an item and use **Buy**, **Sell**, or **Compare** at the bottom of the screen. Veil also covers alchemy, blacksmithing, sagecrafting, lockpicking, and the timed Dispel screen.
 
 ### Gameplay and controls
 
 - **Transmog** changes the look of equipped armor and same-type weapons, such as a sword taking the appearance of another sword. The equipped item retains its stats. Appearance choices are saved with the character.
-- **Tablet controls** provide separate movement and camera sticks, Run/Leap, attacks, dodge, block, interaction, and shortcuts for the game menu, inventory, world map, quests, and Item Radial. Tap **Sneak** to crouch or stand. When picking a lock, use the on-screen **Pick** arrows to set the angle and the **Bolt** arrows to move the bolt.
+- **Tablet controls** provide separate movement and camera sticks, Run/Leap, attacks, dodge, block, interaction, and shortcuts for the game menu, inventory, world map, quests, and Item Radial. Drag the right stick to look around. Holding it still sends the same camera command as clicking the right stick on a controller. Tap **Sneak** to crouch or stand. When picking a lock, use the on-screen **Pick** arrows to set the angle and the **Bolt** arrows to move the bolt.
 - **HUD size** in Options → Gameplay offers Default, Small, and Hidden. Selecting Default or Small restores the gameplay HUD, even if that size is already selected.
 - **Touch layout editor** moves and resizes individual controls and saves the layout.
 - **Ability and Reckoning controls** include a tappable 1–9/0 ability bar, a Cast button for the selected spell, on-screen LT and RT prompts, touch finishers, and Continue buttons on screens that require a controller button or key.
