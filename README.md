@@ -22,6 +22,8 @@ Veil draws visual inspiration from other interfaces, including Edge for Skyrim. 
 
 **Open Amalur for Android v0.1.34** · [Download the latest APK](https://github.com/Mokomis/open-amalur-android/releases/latest) · [v0.1.34 release notes](https://github.com/Mokomis/open-amalur-android/releases/tag/v0.1.34)
 
+Special thanks to **oblivium-beep for the continued help with touch ui testing!**
+
 ### Minimum Android requirements
 
 - **64-bit Arm and Android 13 or newer** for gameplay with the system Vulkan driver. The APK targets `arm64-v8a`. The setup screen itself requires Android 11 or newer. [Android Vulkan support](https://developer.android.com/games/develop/vulkan/native-engine-support#determine-the-available-vulkan-api-version)
