@@ -630,5 +630,39 @@
         "    esp -= 4; sts32(esp, 0xC165FAu); X86_SPILL; veil_spell_after_input(ctx); X86_RELOAD;\n"
       ]
     ]
+  ],
+  "shard_126.o": [
+    [
+      1,
+      1,
+      "eaa48f34471c4b1a2ac6b07283526e7b86cdafa3de22d32e2f8b7aac4bcb2696",
+      [
+        "#include \"oa_probe_fast.h\"\n",
+        "#include \"android/app/release/touch_run_pad.h\"\n",
+        "bool veil_drop_run_interaction(X86Ctx *,uint32_t,uint32_t,uint32_t,uint32_t);\n"
+      ]
+    ],
+    [
+      9332,
+      1,
+      "1ca86a1cba35e51421872a1205e6876c12e8fb872c5b9fd2458a2da5e7e93c2d",
+      [
+        "L_00BB39C0:;\n",
+        "    if (__builtin_expect(atomic_load_explicit(&veil_run_filter_active, memory_order_relaxed), 0) &&\n",
+        "        veil_drop_run_interaction(ctx, esp, ebx, esi, edi)) {\n",
+        "        ecx = lds32(esp + 0x18u);\n",
+        "        goto L_veil_next_match;\n",
+        "    }\n"
+      ]
+    ],
+    [
+      9396,
+      1,
+      "fee9474f6106c9fc6d39c67496f53e0ff2c9ddb63e26a5190a3f48a9a4177d7c",
+      [
+        "L_veil_next_match:;\n",
+        "    { uint32_t a = edi; int c = x86_cf(&F);\n"
+      ]
+    ]
   ]
 }

@@ -25,6 +25,8 @@ static unsigned calls, original_updates, last_original_update;
 static unsigned slots[16];
 static VeilSpellPhase phases[16];
 
+void veil_context_frame_begin(void) {}
+void veil_context_after_input(X86Ctx *ctx) { (void)ctx; }
 int veil_touch_spell_playable(void) { return playable; }
 uint32_t veil_spell_player(X86Ctx *ctx) { (void)ctx; return TEST_PLAYER; }
 uint32_t veil_spell_hold_delay(X86Ctx *ctx, unsigned slot) { (void)ctx; (void)slot; return 66; }

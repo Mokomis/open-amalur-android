@@ -164,4 +164,22 @@ enum {
     SPELL_CONDITION_TIMED_HOLD = 4
 };
 
+/* f_BB39A0 matches an input-mode action before UI and actor publication.
+ * f_ECBCD0 dispatches the selected row registered by f_ED6AA0. */
+enum {
+    INPUT_MODE_ACTION_HANDLES = 8,
+    INPUT_MATCH_SEQUENCES = 0,
+    INPUT_MATCH_INDICES = 0x10,
+    INPUT_MATCH_STATE_SIZE = 0x14,
+    INPUT_INTERACT_ACTION_HASH = 0x021f035c, /* interact_with_or_action */
+    INTERACTION_QUEUE_ROWS = 0x3c74,
+    INTERACTION_QUEUE_COUNT = 0x3c78,
+    INTERACTION_QUEUE_SELECTED = 0x3c88,
+    INTERACTION_ROW_SIZE = 0x20,
+    INTERACTION_ROW_LABEL = 0x14,
+    INTERACTION_ROW_ACTION = 0x1c,
+    INTERACTION_JUMP_DOWN_LABEL = 0x00e21530, /* JUMP_DOWN_INTERACT */
+    INTERACTION_JUMP_DOWN_ACTION = 0x00e50920 /* Locomotion_Jump_Down */
+};
+
 #endif

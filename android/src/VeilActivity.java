@@ -40,6 +40,7 @@ public final class VeilActivity extends NativeActivity {
     private static native int lockMouse();
     private static native int aspect();
     private static native int hotbarHudMode();
+    private static native int aggressionOffered();
     private static native int cancelHotbar();
     private static native int input(int enabled, int buttons, int lt, int rt, int cast,
                                     int lx, int ly, int rx, int ry);
@@ -513,6 +514,7 @@ public final class VeilActivity extends NativeActivity {
         private static final float LEGACY_ASPECT = 17778f / 10000f;
         private static final String FULL_DISPLAY_LAYOUT = "full-display-layout";
         private static final int MOVE = 0, LOOK = 1, MENU = 9, FATE = 12, EDIT = 14;
+        private static final int AGGRESSION_SHORTCUT = 21;
         private final Control[] controls = {
             new Control("Move", "move", .145f, .78f, .195f, 0, 0),
             new Control("Camera", "look", .68f, .63f, .152f, 0, 0),
@@ -533,6 +535,7 @@ public final class VeilActivity extends NativeActivity {
             new Control("Cast", "cast", .762f, .723f, .081f, 0, 0),
             new Control("Sneak", "sneak", .243f, .674f, .095f, 0x0200, 0),
             new Control("Quick\nSave", "quick-save", .360f, .150f, .078f, 0, 10),
+            new Control("Aggressive\nMode", "aggressive", .243f, .543f, .095f, 0, AGGRESSION_SHORTCUT),
         };
         private static final int BLOCK = 5, INTERACT = 6, MAGIC = 7, SPRINT = 8, CAST = 16;
         private final SharedPreferences preferences = getSharedPreferences("veil-touch", MODE_PRIVATE);
@@ -563,6 +566,7 @@ public final class VeilActivity extends NativeActivity {
         private boolean hasGesture;
         private static final int MODE_TARGET_LOCKED = 9;
         private boolean enemyLocked;
+        private boolean showAggression;
         private boolean cameraHoldEligible;
         private boolean cameraStickPressed;
         private static final int RIGHT_STICK_BUTTON = 0x0080;
@@ -577,6 +581,11 @@ public final class VeilActivity extends NativeActivity {
                     invalidate();
                 }
                 boolean next = current == 1 || current == 3 || locked;
+                boolean nextAggression = next && enabled && aggressionOffered() != 0;
+                if (nextAggression != showAggression) {
+                    showAggression = nextAggression;
+                    invalidate();
+                }
                 boolean nextMash = current == 4;
                 boolean nextTutorial = current == 5;
                 boolean nextTriggers = current == 6;
@@ -762,6 +771,7 @@ public final class VeilActivity extends NativeActivity {
         }
 
         private int displayOpacity(int index) {
+            if (!editing && controls[index].shortcut == AGGRESSION_SHORTCUT && !showAggression) return 0;
             int opacity = controls[index].opacity;
             boolean requiredPrompt = triggerLesson && (index == BLOCK || index == MAGIC || index == FATE);
             boolean menuRecovery = index == MENU && (!enabled || controls[EDIT].opacity == 0 && opacity == 0);
@@ -828,7 +838,9 @@ public final class VeilActivity extends NativeActivity {
                                     gameViewport.height(), hotbarHudMode());
         }
 
-        private boolean floatingFinisherHit(float x, float y) {
+        private boolean finisherHit(int control, float x, float y) {
+            if (control == INTERACT) return true;
+            if (control >= 0 || abilitySlot(x, y) != 0) return false;
             if (finisherPosition == 0) return false;
             int position = finisherPosition - 1;
             float promptX = gameViewport.left + (position % 1281) * gameViewport.width() / 1280f;
@@ -1050,7 +1062,7 @@ public final class VeilActivity extends NativeActivity {
                 buttons |= controls[i].button;
                 if (i == BLOCK || i == FATE) lt = 255;
                 if (i == MAGIC || i == FATE) rt = 255;
-                if (i == SPRINT) buttons |= 0x40;
+                if (i == SPRINT) buttons |= 0x10000; // Dedicated touch intent, outside the XInput button mask.
                 if (i == CAST && controls[i].pointer >= 0) cast = 1;
             }
             if (cameraHoldEligible && controls[LOOK].pointer >= 0 &&
@@ -1106,7 +1118,7 @@ public final class VeilActivity extends NativeActivity {
                 int which = hit(x,y);
                 boolean onCameraStick = which == LOOK;
                 if (finisherPointer < 0 && !triggerLesson && finisherPosition != 0 &&
-                    (which == INTERACT || floatingFinisherHit(x, y))) {
+                    finisherHit(which, x, y)) {
                     finisherPointer = event.getPointerId(index);
                     hasGesture = true;
                     return true;
@@ -1146,7 +1158,7 @@ public final class VeilActivity extends NativeActivity {
                 int pointer = event.getPointerId(index);
                 if (pointer == finisherPointer) {
                     float x = event.getX(index), y = event.getY(index);
-                    if (hit(x, y) == INTERACT || floatingFinisherHit(x, y)) finisher();
+                    if (finisherHit(hit(x, y), x, y)) finisher();
                     finisherPointer = -1;
                 }
                 if (pointer == slotPointer) {
@@ -1167,7 +1179,7 @@ public final class VeilActivity extends NativeActivity {
                         cameraHoldEligible = cameraStickPressed = false;
                     }
                     if (c.shortcut > 0 && hit(event.getX(index),event.getY(index)) == i) {
-                        releaseAll();
+                        if (c.shortcut != AGGRESSION_SHORTCUT) releaseAll();
                         if (c.shortcut == 5) openEditor();
                         else menu(c.shortcut);
                     }

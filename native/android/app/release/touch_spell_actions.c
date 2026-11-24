@@ -1,5 +1,6 @@
 #include "touch_spell_actions.h"
 #include "guest_layout.h"
+#include "touch_run_pad.h"
 
 extern void f_00A71E80(X86Ctx *);  /* look up a loaded asset */
 extern void f_00B8A350(X86Ctx *);  /* notify mode-stack listeners */
@@ -20,6 +21,22 @@ uint32_t veil_spell_player(X86Ctx *ctx)
     return player && !ld32(player + PLAYER_LOCAL_SLOT) ? player : 0;
 }
 
+static uint32_t action_handle(X86Ctx *ctx, uint32_t hash)
+{
+    uint32_t manager = ld32(SPELL_ACTION_MANAGER);
+    if (!manager || ld32(manager) != SPELL_ACTION_MANAGER_VTABLE) return 0;
+    X86Ctx saved = *ctx;
+    ctx->esp = (ctx->esp - 96) & ~15u;
+    ctx->ecx = manager;
+    st32(ctx->esp, 0);
+    st32(ctx->esp + 4, ctx->esp + 16);
+    st32(ctx->esp + 16, hash);
+    f_00BC35E0(ctx);
+    uint32_t handle = ctx->eax;
+    *ctx = saved;
+    return handle;
+}
+
 /* PC_Magic_A through PC_Magic_J are the ten actual PC spell bindings. */
 static uint32_t spell_handle(X86Ctx *ctx, unsigned slot, VeilSpellPhase phase)
 {
@@ -31,19 +48,8 @@ static uint32_t spell_handle(X86Ctx *ctx, unsigned slot, VeilSpellPhase phase)
         [VEIL_SPELL_PRESS] = 0, [VEIL_SPELL_HOLD] = 0x006a9dc5,
         [VEIL_SPELL_RELEASE] = 0x00cd1818, [VEIL_SPELL_CHAIN] = 0x00a010b3
     };
-    uint32_t manager = ld32(SPELL_ACTION_MANAGER);
-    if (slot < 1 || slot > 10 || (unsigned)phase >= sizeof(suffix)/sizeof(suffix[0]) ||
-        !manager || ld32(manager) != SPELL_ACTION_MANAGER_VTABLE) return 0;
-    X86Ctx saved = *ctx;
-    ctx->esp = (ctx->esp - 96) & ~15u;
-    ctx->ecx = manager;
-    st32(ctx->esp, 0);
-    st32(ctx->esp + 4, ctx->esp + 16);
-    st32(ctx->esp + 16, names[slot - 1] + suffix[phase]);
-    f_00BC35E0(ctx);
-    uint32_t handle = ctx->eax;
-    *ctx = saved;
-    return handle;
+    if (slot < 1 || slot > 10 || (unsigned)phase >= sizeof(suffix)/sizeof(suffix[0])) return 0;
+    return action_handle(ctx, names[slot - 1] + suffix[phase]);
 }
 
 static uint32_t loaded_asset(X86Ctx *ctx, uint32_t manager, uint32_t handle)
@@ -158,4 +164,60 @@ bool veil_spell_emit(X86Ctx *ctx, uint32_t player, unsigned slot, VeilSpellPhase
      * sends one mode-stack event to the player's animation/equipment listeners. */
     if (count) publish_actor_actions(ctx, stack, handles, count);
     return true;
+}
+
+/* Original game input actions reached from the Android Run/Leap control. */
+static _Thread_local uint32_t frame_interact_handle;
+extern unsigned veil_take_touch_context(void);
+extern int veil_touch_spell_playable(void);
+
+static bool jump_down_offered(void)
+{
+    uint32_t game = ld32(GUEST_GAME_DATA_PTR);
+    if (!game) return false;
+    uint32_t rows = ld32(game + INTERACTION_QUEUE_ROWS);
+    uint32_t count = ld32(game + INTERACTION_QUEUE_COUNT);
+    uint32_t selected = ld32(game + INTERACTION_QUEUE_SELECTED);
+    if (!rows || selected >= count) return false;
+    uint32_t row = rows + selected * INTERACTION_ROW_SIZE;
+    return ld32(row + INTERACTION_ROW_LABEL) == INTERACTION_JUMP_DOWN_LABEL &&
+           ld32(row + INTERACTION_ROW_ACTION) == INTERACTION_JUMP_DOWN_ACTION;
+}
+
+void veil_context_frame_begin(void)
+{
+    frame_interact_handle = 0;
+}
+
+/* Before the original match publishes either its script or actor event.
+ * Ignore only the virtual A match. Keyboard F, real controllers, spells and
+ * the original SprintOn/Off/Toggle actions still follow their own bindings. */
+bool veil_drop_run_interaction(X86Ctx *ctx, uint32_t stack, uint32_t mode,
+                               uint32_t matches, uint32_t item)
+{
+    uint32_t index = ld32(ld32(matches + INPUT_MATCH_INDICES) + item * sizeof(uint32_t));
+    uint32_t sequences = ld32(matches + INPUT_MATCH_SEQUENCES);
+    if (ld32(sequences + index * INPUT_MATCH_STATE_SIZE + SPELL_SEQUENCE_MATCHED_BINDING) != 0)
+        return false;
+    uint32_t handle = ld32(ld32(mode + INPUT_MODE_ACTION_HANDLES) + index * sizeof(uint32_t));
+    if (!frame_interact_handle) {
+        X86Ctx query = *ctx;
+        query.esp = stack;
+        frame_interact_handle = action_handle(&query, INPUT_INTERACT_ACTION_HASH);
+    }
+    return handle && handle == frame_interact_handle && !jump_down_offered();
+}
+
+void veil_context_after_input(X86Ctx *ctx)
+{
+    unsigned intent = veil_take_touch_context();
+    if (intent == VEIL_NO_CONTEXT || !veil_touch_spell_playable()) return;
+    if (intent == VEIL_LEAP_ONLY && !jump_down_offered()) return;
+    uint32_t player = veil_spell_player(ctx);
+    if (!player || !ld32(player + PLAYER_ACTOR) ||
+        ld32(player + PLAYER_INPUT_STACK) != SPELL_INPUT_STACK_VTABLE) return;
+    uint32_t handle = action_handle(ctx, INPUT_INTERACT_ACTION_HASH);
+    bool for_actor = false;
+    if (match_action(ctx, player, handle, &for_actor) && for_actor)
+        publish_actor_actions(ctx, player + PLAYER_INPUT_STACK, &handle, 1);
 }

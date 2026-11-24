@@ -158,6 +158,8 @@ static void dispatch_touch_spell(X86Ctx *ctx)
 
 void veil_spell_after_input(X86Ctx *ctx)
 {
+    veil_context_frame_begin();
     f_00C15370(ctx);
+    veil_context_after_input(ctx);
     if (atomic_load(&needs_input_tick)) dispatch_touch_spell(ctx);
 }

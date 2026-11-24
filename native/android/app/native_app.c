@@ -2,6 +2,7 @@
 #include "veil_native_scaling.h"
 #include "waterfall_state.h"
 #include "veil_dialogue_touch.h"
+#include "veil_map_gesture.h"
 #include "veil_environment.h"
 #include "../../runtime/rt.h"
 __attribute__((visibility("hidden"))) void veil_shadow_init(void);
@@ -10,6 +11,8 @@ __attribute__((visibility("hidden"))) void veil_tablet_touch_mode(void);
 __attribute__((visibility("hidden"))) void veil_tablet_lock_mouse(void);
 __attribute__((visibility("hidden"))) int veil_tablet_poll_actions(void);
 __attribute__((visibility("hidden"))) int veil_tablet_map_open(void);
+__attribute__((visibility("hidden"))) void veil_tablet_map_gesture(int command);
+__attribute__((visibility("hidden"))) int veil_tablet_quantity_slider_open(void);
 __attribute__((visibility("hidden"))) int veil_tablet_death_menu_active(void);
 __attribute__((visibility("hidden"))) void veil_tablet_death_menu_tap(void);
 /* Full original-engine host; no scene replay and no replacement game logic. */
@@ -323,6 +326,7 @@ static unsigned scan_code(unsigned vk){static const unsigned char letters[26]={3
 static struct {
     int x, y;
     int active, pressed, ended;
+    int slider, down_x, down_y;
     uint64_t due;
 } touch;
 
@@ -338,12 +342,31 @@ static void finish_touch(void)
     if (touch.pressed)
         rt_android_mouse_button(0, 0, touch.x, touch.y);
     touch.active = touch.pressed = touch.ended = 0;
+    touch.slider = 0;
     touch.due = 0;
 }
 
 static void poll_touch(void)
 {
+    if (touch.slider && !veil_tablet_quantity_slider_open()) {
+        finish_touch();
+        return;
+    }
     if (!touch.due || touch_ms() < touch.due) return;
+    if (touch.slider) {
+        if (!touch.pressed) {
+            /* Let the game's pointer hover the handle before the down event,
+             * even when a finger has already moved to the far end of the bar. */
+            rt_android_mouse_button(0, 1, touch.down_x, touch.down_y);
+            touch.pressed = 1;
+            touch.due = touch_ms() + 45;
+        } else {
+            rt_android_mouse_move(touch.x, touch.y);
+            touch.due = 0;
+            if (touch.ended) finish_touch();
+        }
+        return;
+    }
     if (touch.pressed) {
         finish_touch();
         return;
@@ -358,6 +381,10 @@ static void touch_event(int action, int x, int y)
     if (action == AMOTION_EVENT_ACTION_DOWN) {
         finish_touch();
         touch.active = 1;
+        touch.slider = veil_tablet_quantity_slider_open();
+        touch.down_x = x;
+        touch.down_y = y;
+        if (touch.slider) rt_android_mouse_move(x, y);
         touch.due = touch_ms() + 55;
     }
     if (action == AMOTION_EVENT_ACTION_CANCEL) {
@@ -367,9 +394,9 @@ static void touch_event(int action, int x, int y)
     if (!touch.active || touch.ended) return;
     touch.x = x;
     touch.y = y;
-    rt_android_mouse_move(x, y);
+    if (!touch.slider || !touch.due) rt_android_mouse_move(x, y);
     if (action == AMOTION_EVENT_ACTION_UP) {
-        if (touch.pressed) finish_touch();
+        if (touch.pressed && !(touch.slider && touch.due)) finish_touch();
         else touch.ended = 1;
     }
 }
@@ -397,28 +424,77 @@ static int death_menu_touch(int action, int x, int y)
     return 1;
 }
 
-static int map_pinch(AInputEvent *event, int action, int x, int y)
+static void map_point_to_game(int *x, int *y, int width, int height)
 {
-    static int pinching;
-    static float last_span;
-    if (action == AMOTION_EVENT_ACTION_DOWN) pinching = 0;
-    if (action == AMOTION_EVENT_ACTION_POINTER_DOWN && !pinching && veil_tablet_map_open()) {
-        finish_touch();
-        pinching = 1;
-        last_span = 0;
+    if (display_viewport.width > 0 && display_viewport.height > 0 && width > 0 && height > 0) {
+        *x = oa_viewport_input(*x, display_viewport.x, display_viewport.width, width);
+        *y = oa_viewport_input(*y, display_viewport.y, display_viewport.height, height);
     }
-    if (!pinching) return 0;
-    if (action == AMOTION_EVENT_ACTION_UP || action == AMOTION_EVENT_ACTION_CANCEL)
-        pinching = 0;
-    if (AMotionEvent_getPointerCount(event) < 2 || !veil_tablet_map_open()) return 1;
-    float span = hypotf(AMotionEvent_getX(event, 1) - AMotionEvent_getX(event, 0),
-                         AMotionEvent_getY(event, 1) - AMotionEvent_getY(event, 0));
-    if (action == AMOTION_EVENT_ACTION_POINTER_DOWN || last_span == 0) last_span = span;
-    if (action == AMOTION_EVENT_ACTION_MOVE && span > 0 &&
-        (span > last_span * 1.15f || span < last_span / 1.15f)) {
+}
+
+static MapGesture map_fingers;
+
+static void cancel_map_touch(void)
+{
+    if (map_fingers.state == MAP_DRAG)
+        rt_android_mouse_button(0, 0, map_fingers.x, map_fingers.y);
+    map_fingers.state = MAP_IDLE;
+}
+
+static int map_touch(AInputEvent *event, int action, int x, int y, int width, int height)
+{
+    MapGesture *g = &map_fingers;
+    int open = veil_tablet_map_open();
+    if (action == AMOTION_EVENT_ACTION_DOWN) {
+        cancel_map_touch();
+        if (!open) return 0;
+        finish_touch();
+        map_begin(g, x, y, fmaxf(4.f, fminf(width, height) * .011f), touch_ms());
         rt_android_mouse_move(x, y);
-        rt_android_mouse_wheel(span > last_span ? 120 : -120, x, y);
-        last_span = span;
+        return 1;
+    }
+    if (g->state == MAP_IDLE) return 0;
+    if (!open || action == AMOTION_EVENT_ACTION_CANCEL) {
+        cancel_map_touch();
+        return 1;
+    }
+    size_t count = AMotionEvent_getPointerCount(event);
+    if (count > 2 || action == AMOTION_EVENT_ACTION_POINTER_UP) {
+        if (g->state == MAP_DRAG) rt_android_mouse_button(0, 0, x, y);
+        g->state = MAP_DRAIN;
+    } else if (count == 2 && g->state != MAP_DRAIN) {
+        float ax = AMotionEvent_getX(event, 0), ay = AMotionEvent_getY(event, 0);
+        float bx = AMotionEvent_getX(event, 1), by = AMotionEvent_getY(event, 1);
+        float span = hypotf(bx - ax, by - ay);
+        if (action == AMOTION_EVENT_ACTION_POINTER_DOWN) {
+            if (map_second_finger(g, span)) rt_android_mouse_button(0, 0, x, y);
+        } else if (action == AMOTION_EVENT_ACTION_MOVE) {
+            int steps = map_pinch_steps(g, span);
+            if (steps) {
+                int mx = (int)((ax + bx) * .5f), my = (int)((ay + by) * .5f);
+                map_point_to_game(&mx, &my, width, height);
+                rt_android_mouse_move(mx, my);
+                veil_tablet_map_gesture(steps);
+            }
+        }
+    } else if (action == AMOTION_EVENT_ACTION_MOVE && g->state != MAP_DRAIN) {
+        if (map_move(g, x, y) == MAP_START_DRAG) {
+            rt_android_mouse_move(g->x, g->y);
+            veil_tablet_map_gesture(MAP_DRAG_COMMAND);
+            rt_android_mouse_button(0, 1, g->x, g->y);
+        }
+        rt_android_mouse_move(x, y);
+    } else if (action == AMOTION_EVENT_ACTION_UP) {
+        enum MapFingerResult result = map_end(g, x, y, touch_ms());
+        if (result == MAP_END_DRAG) rt_android_mouse_button(0, 0, x, y);
+        if (result == MAP_TAP) {
+            veil_tablet_map_gesture(0);
+            touch_event(AMOTION_EVENT_ACTION_DOWN, x, y);
+            touch_event(AMOTION_EVENT_ACTION_UP, x, y);
+        } else if (result == MAP_WAYPOINT) {
+            rt_android_mouse_move(x, y);
+            veil_tablet_map_gesture(MAP_WAYPOINT_COMMAND);
+        }
     }
     return 1;
 }
@@ -485,13 +561,25 @@ static int32_t input(struct android_app*app,AInputEvent*e){(void)app;if(intro_mo
     }
     if ((AInputEvent_getSource(e) & AINPUT_SOURCE_TOUCHSCREEN) == AINPUT_SOURCE_TOUCHSCREEN) {
         if (action == AMOTION_EVENT_ACTION_DOWN) veil_tablet_touch_mode();
+        /* A modal opened over dialogue or the HUD owns the whole gesture.
+         * The oldest finger owns its drag. Other fingers cannot move it. */
+        if (touch.slider || veil_tablet_quantity_slider_open()) {
+            if (action == AMOTION_EVENT_ACTION_POINTER_UP &&
+                (AMotionEvent_getAction(e) >> AMOTION_EVENT_ACTION_POINTER_INDEX_SHIFT) == 0)
+                action = AMOTION_EVENT_ACTION_UP;
+            if (action == AMOTION_EVENT_ACTION_DOWN || action == AMOTION_EVENT_ACTION_MOVE ||
+                action == AMOTION_EVENT_ACTION_UP || action == AMOTION_EVENT_ACTION_CANCEL)
+                touch_event(action, x, y);
+            return 1;
+        }
         if (death_menu_touch(action, x, y)) return 1;
-        if (map_pinch(e, action, x, y)) return 1;
+        if (map_touch(e, action, x, y, render_width, render_height)) return 1;
         if (veil_dialogue_touch(action, x, y, render_width, render_height)) return 1;
         touch_event(action, x, y);
         return 1;
     }
     if ((AInputEvent_getSource(e) & AINPUT_SOURCE_MOUSE) == AINPUT_SOURCE_MOUSE) {
+        if (action == AMOTION_EVENT_ACTION_DOWN && veil_tablet_map_open()) veil_tablet_map_gesture(0);
         mouse_event(e, action, x, y);
         return 1;
     }
@@ -572,7 +660,10 @@ void android_main(struct android_app *app)
         if (id >= 0 && source) source->process(app, source);
         oa_gamepad_poll();
         action_timeout = veil_tablet_poll_actions();
-        if (!oa_app->window) finish_touch();
+        if (!oa_app->window || !lifecycle_focused) {
+            cancel_map_touch();
+            finish_touch();
+        }
         else poll_touch();
     }
     pthread_mutex_lock(&input_looper_lock);

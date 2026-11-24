@@ -1,5 +1,7 @@
 #include <android/log.h>
 #include "touch_spell_input.h"
+#include "touch_run_pad.h"
+#include "../veil_map_gesture.h"
 #include <jni.h>
 #include <limits.h>
 #include <pthread.h>
@@ -25,6 +27,10 @@ static _Atomic bool controller_active;
 static _Atomic bool lock_splash, lock_game, lock_mouse;
 static _Atomic bool enabled;
 static _Atomic bool sprint_on_stick;
+static bool touch_run, touch_interact;
+static VeilRunSample run_sample;
+HIDDEN atomic_bool veil_run_filter_active;
+static _Atomic unsigned extra_context;
 static _Atomic unsigned menu_request;
 enum { TARGET_TOGGLE = 7, TARGET_TICK, TARGET_CANCEL };
 static _Atomic bool target_toggle, target_active, target_cancel;
@@ -44,6 +50,10 @@ static _Atomic uint64_t death_menu_update;
 static _Atomic bool death_menu_tap;
 static _Atomic bool item_radial;
 static _Atomic bool map_open;
+static _Atomic int map_zoom_steps;
+static _Atomic bool map_waypoint, map_drag;
+static _Atomic bool quantity_slider;
+static _Atomic uint64_t aggression_offer, aggression_tap;
 static _Atomic int hotbar_hud_mode;
 static _Atomic uint64_t finisher_packet;
 static _Atomic uint64_t finisher_update;
@@ -172,6 +182,7 @@ HIDDEN int veil_tablet_command(const char *section, const char *key, const char 
             __android_log_print(ANDROID_LOG_INFO, "VeilUpdates", "Title screen %c", previous);
         }
         atomic_store(&title_update, value[0] == '1' ? now_ms() : 0);
+        if (value[0] == '1') atomic_store(&quantity_slider, false);
         return 1;
     }
     if (!strcasecmp(key, "VeilTabletHud")) {
@@ -180,7 +191,11 @@ HIDDEN int veil_tablet_command(const char *section, const char *key, const char 
             last = value[0];
             __android_log_print(ANDROID_LOG_INFO, "VeilTablet", "Gameplay HUD %c", last);
         }
-        if (value[0] != '1') cancel_touch_target();
+        if (value[0] != '1') {
+            cancel_touch_target();
+            atomic_store(&aggression_offer, 0);
+            atomic_store(&aggression_tap, 0);
+        }
         atomic_store(&hud_update, value[0] == '1' ? now_ms() : 0);
         if (value[0] != '1') veil_spell_cancel();
         return 1;
@@ -266,8 +281,20 @@ HIDDEN int veil_tablet_command(const char *section, const char *key, const char 
         atomic_store(&item_radial, value[0] == '1');
         return 1;
     }
+    if (!strcasecmp(key, "VeilQuantitySlider")) {
+        bool open = value[0] == '1';
+        atomic_store(&quantity_slider, open);
+        if (open) {
+            veil_spell_cancel();
+            cancel_touch_target();
+        }
+        return 1;
+    }
     if (!strcasecmp(key, "VeilMap")) {
         atomic_store(&map_open, value[0] == '1');
+        atomic_store(&map_zoom_steps, 0);
+        atomic_store(&map_waypoint, false);
+        atomic_store(&map_drag, false);
         return 1;
     }
     if (!strcasecmp(key, "VeilTabletMash")) {
@@ -306,6 +333,14 @@ HIDDEN int veil_tablet_read(const char *section, const char *key, char *value)
         }
     } else if (!strcasecmp(key, "VeilTabletTutorialTap")) {
         result = atomic_exchange(&tutorial_tap, false);
+    } else if (!strcasecmp(key, "VeilMapGesture")) {
+        if (atomic_exchange(&map_waypoint, false)) result = MAP_WAYPOINT_COMMAND;
+        else {
+            int steps = atomic_exchange(&map_zoom_steps, 0);
+            result = steps < 0 ? MAP_MAX_ZOOM_STEPS - steps : steps;
+        }
+    } else if (!strcasecmp(key, "VeilMapDrag")) {
+        result = atomic_exchange(&map_drag, false);
     } else if (!strcasecmp(key, "VeilDeathMenuTap")) {
         result = atomic_exchange(&death_menu_tap, false);
     } else if (!strcasecmp(key, "VeilLockTouch")) {
@@ -319,6 +354,12 @@ HIDDEN int veil_tablet_read(const char *section, const char *key, char *value)
         result = read_camera_setting();
     } else if (!strcasecmp(key, "VeilCameraBoundingLive")) {
         result = atomic_load(&camera_bounding);
+    } else if (!strcasecmp(key, "VeilAggressionTouch")) {
+        uint64_t now = now_ms();
+        uint64_t previous = atomic_exchange(&aggression_offer, now);
+        uint64_t tap = atomic_exchange(&aggression_tap, 0);
+        result = previous && now - previous < 300 && tap && now - tap < 300 &&
+                 atomic_load(&enabled) && !atomic_load(&controller_active) && veil_tablet_gameplay_active();
     } else if (!strcasecmp(key, "VeilTabletSlot")) {
         result = veil_tablet_gameplay_active() && !atomic_load(&controller_active)
             ? veil_spell_take_request() : 0;
@@ -354,7 +395,8 @@ JNI_API(mode)(JNIEnv *env, jclass type)
     (void)type;
     uint64_t now = now_ms();
     // The original name window handles its own OK, Cancel, and edit-field taps.
-    if (atomic_load(&name_dialog) || atomic_load(&item_radial))
+    if (atomic_load(&name_dialog) || atomic_load(&item_radial) ||
+        atomic_load(&map_open) || atomic_load(&quantity_slider))
         return 0;
     if (atomic_exchange(&ui_request, 0))
         return 2;
@@ -439,6 +481,14 @@ JNI_API(hotbarHudMode)(JNIEnv *env, jclass type)
     return atomic_load(&hotbar_hud_mode);
 }
 
+JNI_API(aggressionOffered)(JNIEnv *env, jclass type)
+{
+    (void)env;
+    (void)type;
+    uint64_t offered = atomic_load(&aggression_offer);
+    return offered && now_ms() - offered < 300;
+}
+
 JNI_API(aspect)(JNIEnv *env, jclass type)
 {
     (void)env;
@@ -485,11 +535,16 @@ JNI_API(input)(JNIEnv *env, jclass type, jint on, jint buttons, jint lt, jint rt
 {
     (void)env;
     (void)type;
-    if (buttons & 0x40) {
-        buttons &= ~0x40;
-        buttons |= atomic_load(&sprint_on_stick) ? 0x40 : 0x1000;
-    }
     pthread_mutex_lock(&pad_mutex);
+    touch_run = on && (buttons & VEIL_TOUCH_RUN);
+    touch_interact = on && (buttons & VEIL_PAD_A);
+    buttons &= ~VEIL_TOUCH_RUN;
+    if (touch_run) buttons |= atomic_load(&sprint_on_stick) ? VEIL_PAD_LS : VEIL_PAD_A;
+    if (!on) {
+        run_sample = (VeilRunSample){0};
+        atomic_store(&veil_run_filter_active, false);
+        atomic_store(&extra_context, VEIL_NO_CONTEXT);
+    }
     if (!on) cancel_touch_target();
     else if ((buttons & 0x80) && !(pad.buttons & 0x80) && veil_tablet_gameplay_active())
         atomic_store(&target_toggle, true);
@@ -517,6 +572,12 @@ JNI_API(menu)(JNIEnv *env, jclass type, jint destination)
     (void)type;
     if ((destination >= 1 && destination <= 6) || destination == 10)
         atomic_store(&menu_request, destination);
+    else if (destination == 21) {
+        uint64_t now = now_ms(), offered = atomic_load(&aggression_offer);
+        if (offered && now - offered < 300 && veil_tablet_gameplay_active() &&
+            atomic_load(&enabled) && !atomic_load(&controller_active))
+            atomic_store(&aggression_tap, now);
+    }
     else if (destination >= 11 && destination <= 20) {
         __android_log_print(ANDROID_LOG_INFO, "VeilTablet", "Touch ability slot %d", destination - 10);
         veil_spell_tap_slot(destination - 10);
@@ -557,9 +618,29 @@ HIDDEN int veil_tablet_poll_actions(void)
     return 1000;
 }
 
+HIDDEN void veil_tablet_map_gesture(int command)
+{
+    if (!atomic_load(&map_open)) return;
+    if (command == MAP_WAYPOINT_COMMAND) atomic_store(&map_waypoint, true);
+    else if (command == MAP_DRAG_COMMAND || command == 0) atomic_store(&map_drag, command != 0);
+    else {
+        int old = atomic_load(&map_zoom_steps), next;
+        do {
+            next = old + command;
+            if (next > MAP_MAX_ZOOM_STEPS) next = MAP_MAX_ZOOM_STEPS;
+            if (next < -MAP_MAX_ZOOM_STEPS) next = -MAP_MAX_ZOOM_STEPS;
+        } while (!atomic_compare_exchange_weak(&map_zoom_steps, &old, next));
+    }
+}
+
 HIDDEN int veil_tablet_map_open(void)
 {
     return atomic_load(&map_open);
+}
+
+HIDDEN int veil_tablet_quantity_slider_open(void)
+{
+    return atomic_load(&quantity_slider);
 }
 
 HIDDEN int veil_tablet_death_menu_active(void)
@@ -576,7 +657,7 @@ HIDDEN void veil_tablet_death_menu_tap(void)
 HIDDEN int veil_tablet_gameplay_active(void)
 {
     return now_ms() - atomic_load(&hud_update) < 300 &&
-           !atomic_load(&item_radial) && !atomic_load(&map_open) &&
+           !atomic_load(&item_radial) && !atomic_load(&map_open) && !atomic_load(&quantity_slider) &&
            !atomic_load(&options_visible) && !atomic_load(&tutorial_mode) &&
            !atomic_load(&lock_splash) && !atomic_load(&lock_game);
 }
@@ -600,6 +681,11 @@ JNI_API(lockMouse)(JNIEnv *env, jclass type)
     return 0;
 }
 
+HIDDEN unsigned veil_take_touch_context(void)
+{
+    return atomic_exchange(&extra_context, VEIL_NO_CONTEXT);
+}
+
 HIDDEN uint32_t veil_stock_pad_get(uint32_t index, uint8_t state[16]);
 HIDDEN uint32_t veil_trace_pad_get(uint32_t index, uint8_t state[16])
 {
@@ -614,7 +700,14 @@ HIDDEN uint32_t veil_trace_pad_get(uint32_t index, uint8_t state[16])
         if (buttons || state[6] > 32 || state[7] > 32 ||
             sticks[0] < -4096 || sticks[0] > 4096 || sticks[1] < -4096 || sticks[1] > 4096 ||
             sticks[2] < -4096 || sticks[2] > 4096 || sticks[3] < -4096 || sticks[3] > 4096) {
-            if (!atomic_exchange(&controller_active, true)) cancel_touch_target();
+            if (!atomic_exchange(&controller_active, true)) {
+                cancel_touch_target();
+                pthread_mutex_lock(&pad_mutex);
+                run_sample = (VeilRunSample){0};
+                atomic_store(&veil_run_filter_active, false);
+                atomic_store(&extra_context, VEIL_NO_CONTEXT);
+                pthread_mutex_unlock(&pad_mutex);
+            }
             return status;
         }
         if (!atomic_load(&enabled) || atomic_load(&controller_active))
@@ -622,6 +715,10 @@ HIDDEN uint32_t veil_trace_pad_get(uint32_t index, uint8_t state[16])
     }
     // Present a neutral virtual pad even before the touch overlay starts.
     pthread_mutex_lock(&pad_mutex);
+    VeilContextRequest context = veil_sample_run(&run_sample, touch_run, touch_interact,
+                                                (pad.buttons & VEIL_PAD_LS) != 0, finisher_active);
+    atomic_store(&veil_run_filter_active, run_sample.run_owns_face);
+    if (context != VEIL_NO_CONTEXT) atomic_store(&extra_context, context);
     // Let an explicit camera drag take priority, then resume tracking when released.
     static int16_t previous_rx;
     int16_t rx = pad.rx;

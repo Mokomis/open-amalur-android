@@ -13,4 +13,6 @@ typedef enum {
 uint32_t veil_spell_player(X86Ctx *ctx);
 uint32_t veil_spell_hold_delay(X86Ctx *ctx, unsigned slot);
 bool veil_spell_emit(X86Ctx *ctx, uint32_t player, unsigned slot, VeilSpellPhase phase);
+void veil_context_frame_begin(void);
+void veil_context_after_input(X86Ctx *ctx);
 #endif

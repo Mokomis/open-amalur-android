@@ -2667,7 +2667,7 @@
         "-I",
         "native/."
       ],
-      "inline": true
+      "inline": false
     },
     {
       "output": "shard_127.o",
