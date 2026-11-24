@@ -58,6 +58,8 @@ enum { COMPONENT_FLAG_ACTIVE = 0x01 };
 
 /* Player object (returned by f_00DBAC90). */
 enum {
+    PLAYER_INPUT_STACK = 0x18,
+    PLAYER_LOCAL_SLOT = 0x100,
     PLAYER_ACTOR = 0x1ec, /* entity id of the player's actor */
 };
 
@@ -114,6 +116,52 @@ enum {
     PORTRAIT_WINDOW_VIEW  = 0x410, /* portrait object passed to the refresh calls */
     PORTRAIT_WINDOW_FAB   = 0x470, /* handle of the portrait's root fab; >= 2 when valid */
     PORTRAIT_WINDOW_SCENE = 0x928, /* scene used when creating a replacement mount */
+};
+
+
+/* cs:15032 input binding resources. The original input matcher f_00B97900
+ * publishes UI events. Flag 4 also publishes the matched action handles to
+ * the player animation graph through f_00B8A350. */
+enum {
+    SPELL_SYSTEM_MANAGER = 0x19fd5e4,
+    SPELL_ACTION_MANAGER = 0x19f4d94,
+    SPELL_SEQUENCE_MANAGER = 0x19f4d90,
+    SPELL_ACTION_MANAGER_VTABLE = 0x173607c,
+    SPELL_SEQUENCE_MANAGER_VTABLE = 0x17342ac,
+    SPELL_ACTION_VTABLE = 0x1736458,
+    SPELL_ASSET_COUNT = 0x5c,
+    SPELL_ASSET_FLAGS = 0x28,
+    SPELL_ASSET_LOADED = 4,
+    SPELL_ASSET_INVALID = 16,
+    SPELL_ACTION_EVENTS = 0x0c,
+    SPELL_ACTION_EVENT_COUNT = 0x10,
+    SPELL_ACTION_BINDINGS = 0x1c,
+    SPELL_ACTION_BINDING_COUNT = 0x20,
+    SPELL_ACTION_FLAGS = 0x2c,
+    SPELL_PUBLISH_TO_ACTOR = 4,
+    SPELL_EVENT_RECORD_SIZE = 0x18,
+    SPELL_EVENT_PRIMARY_STRINGS = 0,
+    SPELL_EVENT_STRING_COUNT = 4,
+    SPELL_EVENT_INSTANCE = 0x14,
+    SPELL_INPUT_STACK_VTABLE = 0x17369a4,
+    SPELL_BROADCASTER = 0x44,
+    SPELL_BROADCAST_LISTENERS = 4,
+    SPELL_BROADCAST_COUNT = 8,
+    SPELL_SEQUENCE_MATCHED_BINDING = 0x10,
+    SPELL_MODE_EVENT_VTABLE = 0x1735a84,
+    SPELL_MODE_EVENT_CONSUMED = 4,
+    SPELL_MODE_EVENT_DATA = 8,
+    SPELL_MODE_EVENT_COUNT = 12,
+    SPELL_MODE_EVENT_CAPACITY = 16,
+    SPELL_MODE_EVENT_ALLOCATOR = 20,
+    SPELL_MODE_EVENT_GROWTH = 22,
+    SPELL_SEQUENCE_VTABLE = 0x1736440,
+    SPELL_SEQUENCE_CHORD_COUNT = 4,
+    SPELL_SEQUENCE_CHORDS = 8,
+    SPELL_SEQUENCE_HOLD_MILLISECONDS = 0x14,
+    SPELL_CHORD_CONDITION_COUNT = 0,
+    SPELL_CHORD_CONDITIONS = 4,
+    SPELL_CONDITION_TIMED_HOLD = 4
 };
 
 #endif

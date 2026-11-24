@@ -611,5 +611,24 @@
         ]
       ]
     ]
+  ],
+  "shard_134.o": [
+    [
+      1,
+      1,
+      "eaa48f34471c4b1a2ac6b07283526e7b86cdafa3de22d32e2f8b7aac4bcb2696",
+      [
+        "#include \"oa_probe_fast.h\"\n",
+        "void veil_spell_after_input(X86Ctx *ctx);\n"
+      ]
+    ],
+    [
+      20893,
+      1,
+      "b6e7272f218cd888089cabee3a3cda827e63b81052266a5475e8356eff5aabaa",
+      [
+        "    esp -= 4; sts32(esp, 0xC165FAu); X86_SPILL; veil_spell_after_input(ctx); X86_RELOAD;\n"
+      ]
+    ]
   ]
 }

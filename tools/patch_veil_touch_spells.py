@@ -1,6 +1,6 @@
 """Map a learned spell to a numbered slot by touch and use the game's Quick Save."""
 from pathlib import Path
-from struct import iter_unpack, pack, unpack_from
+from struct import iter_unpack, pack, pack_into, unpack_from
 from hashlib import sha256
 import argparse
 
@@ -100,6 +100,66 @@ def finish_drop(fn):
     return c, r + 2
 
 
+# The touch movement stick is a virtual gamepad. Mark only the HUD's explicit
+# touch call so a held stick cannot veto selection of a numbered spell.
+TOUCH_HOTBAR = "VeilTouchHotbar"
+
+
+def mark_touch_selection(script, fn):
+    instructions = fn["instructions"]
+    field, = (op["pc"] for op in instructions if op["opcode_name"] == "GETFIELD" and
+              constant_value(fn["constants"][op["C_raw"]]) == "select_pc_magic_mode")
+    call = instructions[field + 4]
+    if (call["opcode_name"], call["A"], call["B_raw"], call["C_raw"]) != ("CALL_I", 4, 2, 1):
+        raise ValueError("Unexpected touch spell selection call")
+    patched = bytearray(script)
+    code = Code(fn)
+    code.op("CALL_I", 4, 3, 1)  # player input mode, touch marker
+    patched[call["file_offset"]:call["file_offset"] + 4] = code.finish()
+
+    def mark_call(function):
+        args = Code(function)
+        args.load(6, TOUCH_HOTBAR)
+        return args, function["maximum_stack_size"]
+
+    return insert_callback(bytes(patched), 14, call["pc"], mark_call)
+
+
+def accept_touch_selection(script):
+    fn = parse_bytes(script)["chunk"]["root_function"]["children"][9]
+    ins = fn["instructions"]
+    body, = (op["pc"] for op in ins if op["opcode_name"] == "GETGLOBAL_MEM" and
+             constant_value(fn["constants"][op["Bx_raw"]]) == "retrieve_cur_pc_magic_mode")
+    if (fn["parameter_count"] != 1 or body != 8 or
+            constant_value(fn["constants"][ins[2]["C_raw"]]) != "is_gamepad_active"):
+        raise ValueError("Unexpected original spell selection guard")
+    patched = bytearray(script)
+    # Havok Lua stores parameter count just before vararg flags, stack size and code count.
+    pack_into(">I", patched, fn["code_file_offset"] - 13, 2)
+
+    def touch_entry(function):
+        code = Code(function)
+        code.op("EQ", 1, 1, 256 + code.index(TOUCH_HOTBAR))
+        # An explicit touch skips the eight-instruction keyboard-only gate. All
+        # callers still use the original equipped-slot check and input mode stack.
+        code.wide("JMP", 0, 65535 + body)
+        return code, function["maximum_stack_size"]
+
+    return insert_callback(bytes(patched), 9, 0, touch_entry)
+
+
+def resolve_repeat_cast(fn):
+    # Cast asks the loaded character for its selected slot. This also handles
+    # the first press after loading a save, before any numbered button was used.
+    c = Code(fn)
+    c.op("EQ", 0, 2, 256 + c.index(11))
+    c.jump("end")
+    method(c, 2, "PlayerInput", "get_pc_equipped_magic_slot")
+    c.op("CALL_I", 2, 1, 2)
+    c.mark("end")
+    return c, fn["maximum_stack_size"]
+
+
 def cast_selected_slot(fn):
     c = Code(fn)
     r = fn["maximum_stack_size"]
@@ -156,6 +216,7 @@ def publish_hud_mode(fn, mode, on_update=False):
 
 def patch_batch(data):
     patches = {
+        13172: [],  # Original PlayerInput.select_pc_magic_mode.
         # The tree's valid drag source also works as the source for a two-tap assignment.
         13511: [(45, 147, remember_spell), (45, 109, select_touched),
                 (10, 192, assignment_hint), (16, 0, clear_pending),
@@ -174,6 +235,8 @@ def patch_batch(data):
             changes = patches.pop(key)
             if sha256(script).hexdigest() != HASHES[key]:
                 raise ValueError(f"Unrecognized Veil touch script {key}")
+            if key == 13172:
+                script = accept_touch_selection(script)
             if key == 1402689:
                 fn = parse_bytes(script)["chunk"]["root_function"]["children"][14]
                 constants = [constant_value(v) for v in fn["constants"]]
@@ -185,8 +248,17 @@ def patch_batch(data):
                 ack, = (op["pc"] for op in fn["instructions"] if op["opcode_name"] == "GETFIELD"
                         and constants[op["C_raw"]] == "get_pc_equipped_magic_slot")
                 changes.append((14, ack + 4, cast_selected_slot))
+                slot, = (op["pc"] for op in fn["instructions"] if op["opcode_name"] == "LOADK"
+                         and constants[op["Bx_raw"]] == "VeilTabletSlot")
+                consumed = fn["instructions"][slot + 7]
+                if (consumed["opcode_name"], consumed["A"], consumed["B_raw"]) != ("MOVE", 2, 3):
+                    raise ValueError("Unexpected touch request conversion")
+                changes.append((14, consumed["pc"] + 1, resolve_repeat_cast))
             for child, site, writer in changes:
                 script = insert_callback(script, child, site, writer)
+            if key == 1402689:
+                fn = parse_bytes(script)["chunk"]["root_function"]["children"][14]
+                script = mark_touch_selection(script, fn)
             parse_bytes(script)
         scripts.append(script)
         headers.append(pack("<II", key, len(script)))
@@ -196,6 +268,7 @@ def patch_batch(data):
 
 
 HASHES = {
+    13172: "4b26af0058a0e9bd91ea2719f62fe648925eb32ca5ae4f62217a312edb9bcb07",
     13511: "40417d8ce700b516cc1cb2c164a05f5a0563a95e5e2fd5e49725d714d82c5abc",
     13523: "b7df3cc6f9f9de6b9d0feb0e73714aad4e03bfb80984d454220313776946e040",
     1366961: "73f41e494e2559289832917c7dbb4a9028a163da080f1187a61addc1766d7a6f",

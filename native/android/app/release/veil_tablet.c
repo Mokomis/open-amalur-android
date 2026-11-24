@@ -1,4 +1,5 @@
 #include <android/log.h>
+#include "touch_spell_input.h"
 #include <jni.h>
 #include <limits.h>
 #include <pthread.h>
@@ -43,11 +44,7 @@ static _Atomic uint64_t death_menu_update;
 static _Atomic bool death_menu_tap;
 static _Atomic bool item_radial;
 static _Atomic bool map_open;
-static _Atomic unsigned touch_ability_slot;
-static _Atomic unsigned armed_hotbar_slot;
-static _Atomic bool hotbar_cast;
 static _Atomic int hotbar_hud_mode;
-static _Atomic bool touch_cast;
 static _Atomic uint64_t finisher_packet;
 static _Atomic uint64_t finisher_update;
 static _Atomic bool finisher_request;
@@ -185,17 +182,7 @@ HIDDEN int veil_tablet_command(const char *section, const char *key, const char 
         }
         if (value[0] != '1') cancel_touch_target();
         atomic_store(&hud_update, value[0] == '1' ? now_ms() : 0);
-        // Selection rebuilds the game's input modes. Let that frame finish
-        // before posting the Cast press against the newly selected ability.
-        if (atomic_load(&armed_hotbar_slot)) {
-            unsigned slot = atomic_exchange(&armed_hotbar_slot, 0);
-            if (slot && value[0] == '1' && atomic_load(&enabled) &&
-                !atomic_load(&controller_active) && veil_tablet_gameplay_active()) {
-                atomic_store(&hotbar_cast, true);
-                veil_tablet_wake_input();
-                __android_log_print(ANDROID_LOG_INFO, "VeilTablet", "Cast from hotbar slot %u", slot);
-            }
-        }
+        if (value[0] != '1') veil_spell_cancel();
         return 1;
     }
     if (!strcasecmp(key, "VeilTouchTarget")) {
@@ -245,7 +232,7 @@ HIDDEN int veil_tablet_command(const char *section, const char *key, const char 
         return 1;
     }
     if (!strcasecmp(key, "VeilCastHotbarSlot")) {
-        atomic_store(&armed_hotbar_slot, (unsigned)strtoul(value, NULL, 10));
+        veil_spell_accept_slot((unsigned)strtoul(value, NULL, 10));
         return 1;
     }
     if (!strcasecmp(key, "VeilTabletSlotSelected")) {
@@ -333,17 +320,19 @@ HIDDEN int veil_tablet_read(const char *section, const char *key, char *value)
     } else if (!strcasecmp(key, "VeilCameraBoundingLive")) {
         result = atomic_load(&camera_bounding);
     } else if (!strcasecmp(key, "VeilTabletSlot")) {
-        // Finish the previous press before changing which spell it controls.
-        result = 0;
-        if (atomic_load(&touch_ability_slot) && !atomic_load(&armed_hotbar_slot) &&
-            !atomic_load(&hotbar_cast) && !atomic_load(&touch_cast))
-            result = atomic_exchange(&touch_ability_slot, 0);
+        result = veil_tablet_gameplay_active() && !atomic_load(&controller_active)
+            ? veil_spell_take_request() : 0;
     } else {
         return 0;
     }
-    value[0] = result == 10 ? '1' : ('0' + result);
-    value[1] = result == 10 ? '0' : 0;
-    if (result == 10) value[2] = 0;
+    if (result >= 10) {
+        value[0] = '1';
+        value[1] = (char)('0' + result - 10);
+        value[2] = 0;
+    } else {
+        value[0] = (char)('0' + result);
+        value[1] = 0;
+    }
     return 1;
 }
 
@@ -518,8 +507,7 @@ JNI_API(input)(JNIEnv *env, jclass type, jint on, jint buttons, jint lt, jint rt
     }
     atomic_store(&enabled, on != 0);
     pthread_mutex_unlock(&pad_mutex);
-    bool casting = on && cast;
-    if (atomic_exchange(&touch_cast, casting) != casting) veil_tablet_wake_input();
+    veil_spell_set_held(on && cast);
     return 0;
 }
 
@@ -531,28 +519,28 @@ JNI_API(menu)(JNIEnv *env, jclass type, jint destination)
         atomic_store(&menu_request, destination);
     else if (destination >= 11 && destination <= 20) {
         __android_log_print(ANDROID_LOG_INFO, "VeilTablet", "Touch ability slot %d", destination - 10);
-        atomic_store(&touch_ability_slot, destination - 10);
+        veil_spell_tap_slot(destination - 10);
     }
     return 0;
 }
 
-extern void rt_android_touch_cast(int down);
+HIDDEN int veil_touch_spell_playable(void)
+{
+    return atomic_load(&enabled) && !atomic_load(&controller_active) &&
+           veil_tablet_gameplay_active();
+}
 
 JNI_API(cancelHotbar)(JNIEnv *env, jclass type)
 {
     (void)env;
     (void)type;
-    atomic_store(&touch_ability_slot, 0);
-    atomic_store(&armed_hotbar_slot, 0);
-    if (atomic_exchange(&hotbar_cast, false)) veil_tablet_wake_input();
+    veil_spell_cancel();
     return 0;
 }
 
 HIDDEN int veil_tablet_poll_actions(void)
 {
     static uint64_t release_at;
-    static uint64_t hotbar_release_at;
-    static bool casting;
     uint64_t now = now_ms();
     pthread_mutex_lock(&pad_mutex);
     if (release_at && now >= release_at) {
@@ -566,19 +554,6 @@ HIDDEN int veil_tablet_poll_actions(void)
         ++packet;
     }
     pthread_mutex_unlock(&pad_mutex);
-    bool can_cast = !atomic_load(&controller_active) && !atomic_load(&item_radial) &&
-                    !atomic_load(&map_open) && now - atomic_load(&hud_update) < 150;
-    bool requested = atomic_load(&hotbar_cast);
-    if (requested && !hotbar_release_at) hotbar_release_at = now + 72; // Same tap length as Cast.
-    bool pulse = requested && can_cast && veil_tablet_gameplay_active() && now < hotbar_release_at;
-    bool cast = pulse || (can_cast && atomic_load(&touch_cast));
-    if (cast != casting) {
-        rt_android_touch_cast(cast);
-        casting = cast;
-    }
-    if (pulse) return (int)(hotbar_release_at - now);
-    hotbar_release_at = 0;
-    if (requested) atomic_store(&hotbar_cast, false);
     return 1000;
 }
 

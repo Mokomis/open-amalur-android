@@ -1051,7 +1051,7 @@ public final class VeilActivity extends NativeActivity {
                 if (i == BLOCK || i == FATE) lt = 255;
                 if (i == MAGIC || i == FATE) rt = 255;
                 if (i == SPRINT) buttons |= 0x40;
-                if (i == CAST) cast = 1;
+                if (i == CAST && controls[i].pointer >= 0) cast = 1;
             }
             if (cameraHoldEligible && controls[LOOK].pointer >= 0 &&
                 now - startedAt[LOOK] >= android.view.ViewConfiguration.getLongPressTimeout())

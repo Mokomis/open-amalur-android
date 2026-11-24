@@ -2835,7 +2835,7 @@
         "-I",
         "native/."
       ],
-      "inline": true
+      "inline": false
     },
     {
       "output": "shard_135.o",
@@ -7182,6 +7182,50 @@
         "--target=aarch64-linux-android29",
         "-O2",
         "-fPIC",
+        "-I",
+        "native/android/app"
+      ]
+    },
+    {
+      "output": "touch_spell_actions.o",
+      "source": "native/android/app/release/touch_spell_actions.c",
+      "flags": [
+        "--target=aarch64-linux-android29",
+        "-march=armv8-a",
+        "-fPIC",
+        "-fno-emulated-tls",
+        "-O2",
+        "-g0",
+        "-fwrapv",
+        "-ffp-contract=off",
+        "-fno-strict-aliasing",
+        "-DOA_X86_APPROX_PROFILE",
+        "-I",
+        "native/runtime",
+        "-I",
+        "native/.",
+        "-I",
+        "native/android/app"
+      ]
+    },
+    {
+      "output": "touch_spell_input.o",
+      "source": "native/android/app/release/touch_spell_input.c",
+      "flags": [
+        "--target=aarch64-linux-android29",
+        "-march=armv8-a",
+        "-fPIC",
+        "-fno-emulated-tls",
+        "-O2",
+        "-g0",
+        "-fwrapv",
+        "-ffp-contract=off",
+        "-fno-strict-aliasing",
+        "-DOA_X86_APPROX_PROFILE",
+        "-I",
+        "native/runtime",
+        "-I",
+        "native/.",
         "-I",
         "native/android/app"
       ]
