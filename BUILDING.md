@@ -92,7 +92,7 @@ The builder adds the prepared Allestar Glade loop as `assets/veil-waterfall.bc3`
 
 `tools/generate_veil_edits.py` takes your original game directory, a locally modded `patch_0.pak`, and output paths for the recipe, properties and a local reference archive. Use the original and modded archives from the same supported game version.
 
-For the touch interaction test build, start with the released 0.1.33 Veil batch. Run `python tools/patch_veil_touch_interactions.py v0.1.33/134230570_klua.batch 134230570_klua.batch`. Use the output as the replacement for `generate_veil_edits.py`, pass the 0.1.33 release properties as `--previous-metadata`, and package the recipe with the Android app and native engine from this checkout.
+For the Android 0.1.34 touch controls, start with the released 0.1.33 Veil batch. Run `python tools/patch_veil_touch_interactions.py v0.1.33/134230570_klua.batch 134230570_klua.batch`. Use the output as the replacement for `generate_veil_edits.py`, pass the 0.1.33 release properties as `--previous-metadata`, and package the recipe with the Android app and native engine from this checkout.
 
 For the Android touch inventory, spell hotbar and Quick Save changes, extract the 0.1.31 Veil script batch into a local folder named `v0.1.31`. Apply the two edits in order.
 
