@@ -88,6 +88,41 @@ int main(int argc, char **argv) {
         assert(level == OA_RESOLUTION_MEDIUM);
         return 0;
     }
+    if (!strcmp(argv[3], "vsync60")) {
+        /* A 60 Hz display delivers a frame every 16.7 ms whatever the headroom. */
+        const uint64_t vsync = 16666667, slow = 20000000;
+        OaResolutionTiming timing = {0};
+        uint64_t now = 1;
+        unsigned level = OA_RESOLUTION_LOW;
+        for (int i=0; i<60*9; ++i, now+=vsync)
+            level = oa_resolution_next(&timing, now, level);
+        assert(level == OA_RESOLUTION_LOW);
+        for (int i=0; i<60*2; ++i, now+=vsync)
+            level = oa_resolution_next(&timing, now, level);
+        assert(level == OA_RESOLUTION_MEDIUM);    /* probed up after ten steady seconds */
+        for (int i=0; i<60; ++i, now+=slow)
+            level = oa_resolution_next(&timing, now, level);
+        assert(level == OA_RESOLUTION_LOW);       /* the probe turned slow at once */
+        assert(timing.probe_windows == 2 * OA_RESOLUTION_PROBE_WINDOWS);
+        for (int i=0; i<60*15; ++i, now+=vsync)
+            level = oa_resolution_next(&timing, now, level);
+        assert(level == OA_RESOLUTION_LOW);       /* waits twice as long next time */
+        for (int i=0; i<60*7; ++i, now+=vsync)
+            level = oa_resolution_next(&timing, now, level);
+        assert(level == OA_RESOLUTION_MEDIUM);
+        for (int i=0; i<60*6; ++i, now+=vsync)
+            level = oa_resolution_next(&timing, now, level);
+        assert(timing.probe_windows == OA_RESOLUTION_PROBE_WINDOWS);  /* that probe held */
+        for (int i=0; i<60*12; ++i, now+=vsync)
+            level = oa_resolution_next(&timing, now, level);
+        assert(level == OA_RESOLUTION_FULL);
+        for (int i=0; i<60*30; ++i, now+=vsync)
+            level = oa_resolution_next(&timing, now, level);
+        assert(level == OA_RESOLUTION_FULL);      /* never past the configured size */
+        oa_resolution_reset(&timing);
+        assert(timing.probe_windows == OA_RESOLUTION_PROBE_WINDOWS);
+        return 0;
+    }
     int modes[] = {1680,2520,1680,2520,1920,1080,1280,720,2560,1440,
                    3840,2160,1600,900,2048,1152,2560,1600,2880,1800,
                    3200,1800,1920,1200,0,0};
@@ -180,5 +215,8 @@ class DisplayResolutions(unittest.TestCase):
 
     def test_dynamic_resolution_hysteresis(self):
         self.run_case('native', action='budget')
+
+    def test_dynamic_resolution_recovers_on_60hz_display(self):
+        self.run_case('native', action='vsync60')
 
 if __name__ == '__main__': unittest.main()
