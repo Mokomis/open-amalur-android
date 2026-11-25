@@ -20,7 +20,7 @@ Veil draws visual inspiration from other interfaces, including Edge for Skyrim. 
 
 ## Download and install
 
-**Open Amalur for Android v0.1.34** · [Download the latest APK](https://github.com/Mokomis/open-amalur-android/releases/latest) · [v0.1.34 release notes](https://github.com/Mokomis/open-amalur-android/releases/tag/v0.1.34)
+**Open Amalur for Android v0.1.35** · [Download the latest APK](https://github.com/Mokomis/open-amalur-android/releases/latest) · [v0.1.35 release notes](https://github.com/Mokomis/open-amalur-android/releases/tag/v0.1.35)
 
 Special thanks to **oblivium-beep for the continued help with touch ui testing!**
 
