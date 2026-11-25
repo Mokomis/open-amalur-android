@@ -37,13 +37,27 @@ int oa_fast_engine_cores=0;
 extern unsigned oa_adpf_active_mask;
 extern uint64_t oa_adpf_reports[2];
 static char engine_core_control[2048];
+/* On Android the engine speedups measured on 2026-11-24 are on by default
+ * (same save, 1260x840, 120 Hz: about 60 FPS with them, 40 without). A
+ * "<switch>-off" file turns one off; an "engine-speedups-off" file restores
+ * the old rule, where only a present switch file turns a speedup on. The
+ * measurement was on an ARM tablet (OPPO Pad), so other platforms keep that rule. */
+static int engine_speedups;
+static int switch_on(const char *path)
+{
+    char off[2100];
+    snprintf(off, sizeof off, "%s-off", path);
+    if (access(off, F_OK) == 0) return 0;
+    return engine_speedups || access(path, F_OK) == 0;
+}
 static char texture_copy_control[2048];
 extern int oa_texture_copy_mode;
 static void read_engine_cores(void) {
  FILE *file = fopen(engine_core_control,"r");
  int ch = file ? fgetc(file) : EOF;
  if (file) fclose(file);
- __atomic_store_n(&oa_fast_engine_cores, ch >= '1' && ch <= '5' ? ch - '0' : 0, __ATOMIC_RELAXED);
+ const int mode = ch == EOF ? (engine_speedups ? 5 : 0) : ch >= '1' && ch <= '5' ? ch - '0' : 0;
+ __atomic_store_n(&oa_fast_engine_cores, mode, __ATOMIC_RELAXED);
 }
 static char handwritten_draw_enable[2048];
 void oa_handwritten_draw_report(void);
@@ -91,23 +105,23 @@ static void control_read(void){
  int previous_texture_mode = __atomic_exchange_n(&oa_texture_copy_mode,texture_mode,__ATOMIC_RELAXED);
  if (previous_texture_mode!=texture_mode)
      rt_log("TEXTURE_COPY_CONTROL mode=%d ns=%llu",texture_mode,(unsigned long long)ns(CLOCK_MONOTONIC));
- oa_draw_rcpc_set_mode(access(draw_math_rcpc_path,F_OK)==0);
- oa_math_rcpc_set_mode(access(math_rcpc_path,F_OK)==0);
- unsigned vis_workers=2;FILE *vis_file=fopen(visibility_prepass_workers_path,"r");
+ oa_draw_rcpc_set_mode(switch_on(draw_math_rcpc_path));
+ oa_math_rcpc_set_mode(switch_on(math_rcpc_path));
+ unsigned vis_workers=engine_speedups?0:2;FILE *vis_file=fopen(visibility_prepass_workers_path,"r");
  if(vis_file){int requested;if(fscanf(vis_file,"%d",&requested)==1&&requested>=0&&requested<=2)vis_workers=(unsigned)requested;fclose(vis_file);}
  oa_visibility_prepass_set_workers(vis_workers);
- oa_visibility_prepass_control(access(visibility_prepass_control_path,F_OK)==0,access(visibility_prepass_validate_path,F_OK)==0);
- int sync_mode=access(sync_control,F_OK)==0;
+ oa_visibility_prepass_control(switch_on(visibility_prepass_control_path),access(visibility_prepass_validate_path,F_OK)==0);
+ int sync_mode=engine_speedups||access(sync_control,F_OK)==0;
  FILE *sync_file=fopen(sync_mode_control,"r");
  if(sync_file){int requested;if(fscanf(sync_file,"%d",&requested)==1 && requested>=0 && requested<=3)sync_mode=requested;fclose(sync_file);}
  oa_sync_set_mode(sync_mode);
- oa_sync_set_wake_one(access(semaphore_wake_one_control,F_OK)==0);
- oa_rcpc_copy_set_mode(access(rcpc_copy_control_path,F_OK)==0);
- oa_rcpc_loop_set_mode(access(rcpc_loop_control_path,F_OK)==0);
+ oa_sync_set_wake_one(switch_on(semaphore_wake_one_control));
+ oa_rcpc_copy_set_mode(switch_on(rcpc_copy_control_path));
+ oa_rcpc_loop_set_mode(switch_on(rcpc_loop_control_path));
  oa_rcpc_copy_capture_poll(access(rcpc_copy_capture_path,F_OK)==0,"rcpc-copy-capture.json");
 
  read_engine_cores();
- __atomic_store_n(&oa_fast_handwritten_draw, access(handwritten_draw_enable, F_OK)==0, __ATOMIC_RELAXED);
+ __atomic_store_n(&oa_fast_handwritten_draw, switch_on(handwritten_draw_enable), __ATOMIC_RELAXED);
 read_pass_batch_control();read_draw_control();read_upload_control();int registry=access(registry_control,F_OK)!=0;int prev_registry=__atomic_exchange_n(&oa_fast_map_registry,registry,__ATOMIC_RELAXED);if(prev_registry!=registry)rt_log("PERF active-range map registry %s",registry?"ON":"OFF");int fast=access(mapping_control,F_OK)!=0;int was=__atomic_exchange_n(&oa_fast_mapping,fast,__ATOMIC_RELAXED);if(was!=fast)rt_log("PERF fast mapping %s",fast?"ON":"OFF");
  struct stat marker;
  int wanted = stat(control, &marker) == 0 && S_ISREG(marker.st_mode);
@@ -115,6 +129,10 @@ read_pass_batch_control();read_draw_control();read_upload_control();int registry
  if (old != wanted) rt_log("PERF diagnostic instrumentation %s", wanted ? "ON" : "OFF");
 }
 void oa_perf_start(const char*root){
+#ifdef __ANDROID__
+ {char off[2100];snprintf(off,sizeof off,"%s/engine-speedups-off",root);engine_speedups=access(off,F_OK)!=0;}
+#endif
+ rt_log("PERF engine speedups default=%d",engine_speedups);
  snprintf(overlap_control,sizeof overlap_control,"%s/sim-memory-enable",root);
  snprintf(texture_copy_control,sizeof texture_copy_control,"%s/combat-texture-copy",root);
  snprintf(draw_math_rcpc_path,sizeof draw_math_rcpc_path,"%s/draw-math-rcpc",root);
@@ -154,7 +172,7 @@ void oa_perf_frame(uint64_t draws,unsigned width,unsigned height){uint64_t now=n
  static uint64_t last_overlap_poll;
  if (now-last_overlap_poll>=250000000u) {
      last_overlap_poll=now;
-     oa_present_mode(access(overlap_control,F_OK)==0);
+     oa_present_mode(switch_on(overlap_control));
  }
  if(!previous){previous=last_report=now;previous_cpu=cpu;draw_previous=draws;return;}
  double dt=(now-previous)*1e-6;previous=now;cpu_sum+=(cpu-previous_cpu)*1e-6;previous_cpu=cpu;if(count<8192)intervals[count++]=dt;frame++;
