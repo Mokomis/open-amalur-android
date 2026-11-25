@@ -11,7 +11,8 @@
     <application android:theme="@android:style/Theme.Material.NoActionBar.Fullscreen"
         android:label="Open Amalur" android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher" android:hasCode="true"
-        android:debuggable="false" android:allowBackup="false" android:extractNativeLibs="false">
+        android:debuggable="false" android:allowBackup="false" android:extractNativeLibs="false"
+        android:appCategory="game">
         <activity android:name=".VeilActivity" android:theme="@style/OpenAmalurLaunch"
             android:exported="false" android:screenOrientation="landscape"
             android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenSize|screenLayout|smallestScreenSize|density|uiMode|fontScale|layoutDirection|locale">
