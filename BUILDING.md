@@ -16,6 +16,18 @@ When preparing a new Veil recipe, run `tools/patch_veil_display_modes.py` on the
 
 For the v0.1.10 menu update, run `tools/fix_veil_menu_overlap.py` on the v0.1.9 UI script batch before regenerating the recipe with the previous release metadata. This restores the ledger's original detail-screen portrait predicate, keeping Status and inventory cards clear while retaining the full portrait on the Character summary. New builds from retail inputs no longer bypass that predicate in `tools/mark_veil_portraits.py`.
 
+## Android engine speedups
+
+On Android, the engine turns on these speedups by default: present overlap (`sim-memory-enable`), the draw and math RCpc loads (`draw-math-rcpc`, `math-loop-rcpc`), the RCpc copy and loop paths (`rcpc-copy`, `rcpc-loop`), the visibility prepass (`visibility-prepass-enable`, no helper threads), targeted sync (`sync-mode` 1) with single-waiter wakes (`semaphore-wake-one`), hand-written draw lists (`handwritten-draw-enable`), and engine-core placement (`fast-engine-cores` 5). The RCpc paths only run on CPUs that report LRCPC support. On an OPPO Pad, in the same scene at 1260×840 and 120 Hz, the game ran at about 60 FPS with them and about 40 FPS without.
+
+To isolate a problem, create a file in the game storage folder. The engine reads these every five seconds:
+
+- `<name>-off` turns off one speedup, for example `rcpc-copy-off`.
+- A value file still sets its value, for example `sync-mode` containing `0`, `fast-engine-cores` containing `0`, or `visibility-prepass-workers` containing `2`.
+- `engine-speedups-off` restores the earlier behaviour, where a speedup is on only when its file exists. It's read once at startup.
+
+Windows builds keep the earlier behaviour.
+
 ## Build from source
 
 Use these steps if you want to develop or mod the engine. The build translates the supported Windows x86 binaries to C and compiles that C to Android ARM64. It runs on a Windows x86-64 PC.
